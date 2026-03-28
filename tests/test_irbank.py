@@ -7,6 +7,7 @@ from screener.irbank import (
     _parse_code_page,
     _parse_number,
     _check_kuroten,
+    _is_seasonal_pattern,
     _find_qonq_table,
     _extract_metric_records,
     get_company_summary,
@@ -294,3 +295,55 @@ class TestGetCompanySummary:
         result = get_company_summary("1234", html="<html>provided</html>")
         assert result is not None
         assert len(fetch_called) == 0  # get_quarterly_htmlは呼ばれない
+
+
+class TestIsSeasonalPattern:
+    """季節パターン検出のテスト"""
+
+    def test_detects_seasonal_q2_pattern(self):
+        """毎年2Qが黒字のパターンを検出"""
+        df = pd.DataFrame([
+            {"period": "2024/06", "quarter": "1Q", "operating_profit": -22.0},
+            {"period": "2024/06", "quarter": "2Q", "operating_profit": 57.0},
+            {"period": "2024/06", "quarter": "3Q", "operating_profit": 27.0},
+            {"period": "2024/06", "quarter": "4Q", "operating_profit": -30.0},
+            {"period": "2025/06", "quarter": "1Q", "operating_profit": -33.0},
+            {"period": "2025/06", "quarter": "2Q", "operating_profit": 68.0},
+            {"period": "2025/06", "quarter": "3Q", "operating_profit": 27.0},
+            {"period": "2025/06", "quarter": "4Q", "operating_profit": -25.0},
+            {"period": "2026/06", "quarter": "1Q", "operating_profit": -55.0},
+            {"period": "2026/06", "quarter": "2Q", "operating_profit": 47.0},
+        ])
+        assert _is_seasonal_pattern(df, "2Q") is True
+
+    def test_no_seasonal_pattern_first_time_profit(self):
+        """初めて黒字になった四半期は季節パターンではない"""
+        df = pd.DataFrame([
+            {"period": "2024/06", "quarter": "1Q", "operating_profit": -10.0},
+            {"period": "2024/06", "quarter": "2Q", "operating_profit": -5.0},
+            {"period": "2024/06", "quarter": "3Q", "operating_profit": -8.0},
+            {"period": "2024/06", "quarter": "4Q", "operating_profit": -12.0},
+            {"period": "2025/06", "quarter": "1Q", "operating_profit": -15.0},
+            {"period": "2025/06", "quarter": "2Q", "operating_profit": -3.0},
+            {"period": "2025/06", "quarter": "3Q", "operating_profit": -7.0},
+            {"period": "2025/06", "quarter": "4Q", "operating_profit": -20.0},
+            {"period": "2026/06", "quarter": "1Q", "operating_profit": -25.0},
+            {"period": "2026/06", "quarter": "2Q", "operating_profit": 10.0},
+        ])
+        assert _is_seasonal_pattern(df, "2Q") is False
+
+    def test_genuine_turnaround_not_seasonal(self):
+        """本物の黒字転換（過去に同四半期で黒字がない）"""
+        df = pd.DataFrame([
+            {"period": "2024/06", "quarter": "3Q", "operating_profit": -5.0},
+            {"period": "2024/06", "quarter": "4Q", "operating_profit": -3.0},
+            {"period": "2025/06", "quarter": "1Q", "operating_profit": -8.0},
+            {"period": "2025/06", "quarter": "2Q", "operating_profit": -2.0},
+            {"period": "2025/06", "quarter": "3Q", "operating_profit": -10.0},
+            {"period": "2025/06", "quarter": "4Q", "operating_profit": -6.0},
+            {"period": "2026/06", "quarter": "1Q", "operating_profit": -12.0},
+            {"period": "2026/06", "quarter": "2Q", "operating_profit": -4.0},
+            {"period": "2026/06", "quarter": "3Q", "operating_profit": -7.0},
+            {"period": "2026/06", "quarter": "4Q", "operating_profit": 5.0},
+        ])
+        assert _is_seasonal_pattern(df, "4Q") is False

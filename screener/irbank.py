@@ -718,6 +718,37 @@ def screen_all_companies(progress_callback=None, limit: int = 0,
     return pd.DataFrame(kuroten_list)
 
 
+def _is_seasonal_pattern(df: pd.DataFrame, target_quarter: str, min_years: int = 2) -> bool:
+    """
+    季節パターンを検出する
+
+    同じ四半期で過去にも「前Q赤字→当Q黒字」が繰り返されている場合True。
+    例: 毎年1Qが赤字で2Qが黒字になるパターン（農業・建設など季節性ビジネス）
+
+    Args:
+        df: 四半期データ（period, quarter, operating_profit列を持つ）
+        target_quarter: 判定対象の四半期（"1Q", "2Q", "3Q", "4Q"）
+        min_years: この回数以上繰り返していれば季節パターンと判定
+    """
+    df_sorted = df.sort_values(["period", "quarter"]).reset_index(drop=True)
+
+    # 過去の同じ四半期で黒字だった回数をカウント
+    same_q_profit_count = 0
+    periods_seen = set()
+
+    for _, row in df_sorted.iterrows():
+        q = row.get("quarter", "")
+        period = row.get("period", "")
+        op = row.get("operating_profit")
+
+        if q == target_quarter and op is not None and op > 0 and period not in periods_seen:
+            same_q_profit_count += 1
+            periods_seen.add(period)
+
+    # 対象四半期が過去min_years回以上黒字なら季節パターン
+    return same_q_profit_count >= min_years
+
+
 def _check_kuroten(df: pd.DataFrame, code: str, name: str) -> dict | None:
     """
     直近の四半期データから黒字転換を判定する
@@ -758,6 +789,11 @@ def _check_kuroten(df: pd.DataFrame, code: str, name: str) -> dict | None:
         else:
             break
     if consecutive_red < MIN_CONSECUTIVE_RED:
+        return None
+
+    # 季節パターン除外: 同じ四半期が過去にも赤字→黒字を繰り返しているか
+    curr_q = curr.get("quarter", "")
+    if curr_q and _is_seasonal_pattern(df, curr_q):
         return None
 
     return {

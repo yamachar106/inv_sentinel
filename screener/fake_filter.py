@@ -158,7 +158,11 @@ def check_fake(
     flipflop = _check_repeated_kuroten(code, html)
     if flipflop:
         flags.append(flipflop)
-        score += 1
+        # 3回以上は強いフェイクシグナル（季節パターンの可能性大）
+        import re
+        m = re.search(r"(\d+)回", flipflop)
+        count = int(m.group(1)) if m else 3
+        score += 2 if count >= 4 else 1
 
     if verbose and flags:
         print(f"  [{code}] {name}: フェイク疑い (score={score}) → {', '.join(flags)}")
