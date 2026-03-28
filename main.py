@@ -121,7 +121,12 @@ def main(
                     "CompanyName", row.get("Name", "")
                 )
         diff_info = (new_additions, removals)
-        if notify_slack(df_filtered, target_date, diff_info=diff_info, code_to_name=code_to_name):
+        if notify_slack(
+            df_filtered, target_date,
+            diff_info=diff_info,
+            code_to_name=code_to_name,
+            company_summaries=company_summaries,
+        ):
             print("[OK] Slack通知送信完了")
 
     print()
