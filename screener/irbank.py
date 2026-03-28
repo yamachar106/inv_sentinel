@@ -11,6 +11,7 @@ import re
 import time
 from io import StringIO
 from pathlib import Path
+from http.client import IncompleteRead
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
@@ -57,7 +58,7 @@ def _fetch_with_retry(url: str, max_retries: int = MAX_RETRIES, backoff: float =
             else:
                 print(f"  [ERROR] HTTP {code} - リトライ上限到達: {url}")
                 return None
-        except (URLError, OSError) as e:
+        except (URLError, OSError, IncompleteRead) as e:
             if attempt < max_retries - 1:
                 wait = backoff ** attempt
                 print(f"  [RETRY] 接続エラー - {attempt + 1}/{max_retries} "
@@ -74,8 +75,14 @@ def _fetch(url: str) -> str:
     resp = _fetch_with_retry(url)
     if resp is None:
         raise URLError(f"Failed to fetch: {url}")
-    with resp:
-        return resp.read().decode("utf-8")
+    try:
+        with resp:
+            return resp.read().decode("utf-8")
+    except IncompleteRead as e:
+        # 部分的に読めたデータがあればそれを使う
+        if e.partial:
+            return e.partial.decode("utf-8", errors="replace")
+        raise URLError(f"IncompleteRead: {url}")
 
 
 def get_company_codes() -> list[dict]:
