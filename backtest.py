@@ -744,6 +744,11 @@ def main():
         df.to_csv(csv_path, index=False, encoding="utf-8-sig")
         print(f"\n結果保存: {csv_path}")
 
+        # チャート生成
+        from screener.visualizer import generate_all_charts
+        charts_dir = out_dir / "charts"
+        generate_all_charts(df.to_dict("records"), str(charts_dir))
+
 
 def _apply_fake_filter(codes_with_names: list[tuple[str, str]]) -> list[tuple[str, str]]:
     """バックテスト用のフェイクフィルタ"""

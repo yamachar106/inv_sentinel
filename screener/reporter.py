@@ -3,6 +3,7 @@
 スクリーニング結果をMarkdownファイルとして出力する
 """
 
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -18,7 +19,85 @@ def _quarter_label(date_str: str) -> str:
     return f"{dt.year}-Q{quarter}"
 
 
-def generate_watchlist(df: pd.DataFrame, date: str) -> str:
+def load_previous_watchlist(current_date: str) -> set[str]:
+    """
+    現在日付より前の最新ウォッチリスト.mdから銘柄コードを抽出する
+
+    Args:
+        current_date: 対象日付 (YYYYMMDD)
+
+    Returns:
+        前回ウォッチリストの銘柄コードのset
+    """
+    current_label = _quarter_label(current_date)
+
+    # data/watchlist/ 内の .md ファイルを列挙し、現在ラベルより前のものを探す
+    if not DATA_DIR.exists():
+        return set()
+
+    candidates = []
+    for p in DATA_DIR.glob("*.md"):
+        label = p.stem  # e.g. "2026-Q1"
+        if label < current_label:
+            candidates.append(p)
+
+    if not candidates:
+        return set()
+
+    # ファイル名(ラベル)で降順ソートし、最新を取得
+    candidates.sort(key=lambda p: p.stem, reverse=True)
+    prev_path = candidates[0]
+
+    # Markdownテーブルから銘柄コードを抽出
+    codes: set[str] = set()
+    content = prev_path.read_text(encoding="utf-8")
+    for line in content.split("\n"):
+        if not line.startswith("|"):
+            continue
+        # ヘッダ行・セパレータ行をスキップ
+        if "---" in line or "コード" in line:
+            continue
+        # テーブル行からコードを抽出 (4桁数字)
+        cells = [c.strip() for c in line.split("|")]
+        for cell in cells:
+            # "**A**" などの推奨度セルを飛ばし、4桁の数字セルを探す
+            clean = cell.strip("* ")
+            if re.fullmatch(r"\d{4}", clean):
+                codes.add(clean)
+                break
+    return codes
+
+
+def compute_diff(
+    current_codes: set[str], previous_codes: set[str]
+) -> tuple[set[str], set[str]]:
+    """
+    現在と前回のウォッチリストの差分を計算する
+
+    Returns:
+        (new_additions, removals)
+    """
+    new_additions = current_codes - previous_codes
+    removals = previous_codes - current_codes
+    return new_additions, removals
+
+
+def _format_trend(values: list[float], unit: str = "億") -> str:
+    """数値リストを「10.5億 → 11.2億 → ...」形式の文字列に変換する"""
+    if not values:
+        return "データなし"
+    parts = []
+    for v in values:
+        if v is None:
+            parts.append("-")
+        else:
+            parts.append(f"{v:,.1f}{unit}")
+    return " → ".join(parts)
+
+
+def generate_watchlist(
+    df: pd.DataFrame, date: str, company_summaries: dict[str, dict] | None = None,
+) -> tuple[str, set[str], set[str]]:
     """
     ウォッチリストをMarkdownファイルとして生成する
 
@@ -27,11 +106,24 @@ def generate_watchlist(df: pd.DataFrame, date: str) -> str:
         date: 対象日付 (YYYYMMDD)
 
     Returns:
-        出力ファイルパス
+        (出力ファイルパス, 新規追加コードset, 脱落コードset)
     """
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     label = _quarter_label(date)
     output_path = DATA_DIR / f"{label}.md"
+
+    # 前回ウォッチリストとの差分を計算
+    current_codes = set(df["Code"].astype(str).tolist()) if not df.empty else set()
+    previous_codes = load_previous_watchlist(date)
+    new_additions, removals = compute_diff(current_codes, previous_codes)
+
+    # コード→銘柄名マッピング (現在のdf内)
+    code_to_name: dict[str, str] = {}
+    if not df.empty:
+        for _, row in df.iterrows():
+            code_to_name[str(row.get("Code", ""))] = row.get(
+                "CompanyName", row.get("Name", "")
+            )
 
     has_fake = "fake_flags" in df.columns if not df.empty else False
     has_rec = "Recommendation" in df.columns if not df.empty else False
@@ -122,6 +214,56 @@ def generate_watchlist(df: pd.DataFrame, date: str) -> str:
                 f"[Yahoo](https://finance.yahoo.co.jp/quote/{code}.T)"
             )
 
+    # 銘柄詳細セクション
+    if not df.empty and company_summaries:
+        lines.extend(["", "## 銘柄詳細", ""])
+        for _, row in df.iterrows():
+            code = str(row.get("Code", ""))
+            name = row.get("CompanyName", row.get("Name", ""))
+            rec = f" [{row.get('Recommendation', '-')}]" if has_rec else ""
+            summary = company_summaries.get(code)
+            if summary is None:
+                continue
+
+            lines.append(f"### {code} {name}{rec}")
+
+            rev_trend = summary.get("revenue_trend", [])
+            op_trend = summary.get("op_trend", [])
+            yoy_revenue = summary.get("yoy_revenue")
+            yoy_op = summary.get("yoy_op")
+
+            if rev_trend:
+                lines.append(f"- 売上推移(直近{len(rev_trend)}Q): {_format_trend(rev_trend)}")
+            if op_trend:
+                # 黒字転換を強調表示
+                op_str = _format_trend(op_trend)
+                if op_trend and op_trend[-1] is not None and op_trend[-1] > 0:
+                    # 直前が赤字なら黒字転換マークを付ける
+                    if len(op_trend) >= 2 and op_trend[-2] is not None and op_trend[-2] < 0:
+                        op_str += " (黒字転換!)"
+                lines.append(f"- 営業利益推移: {op_str}")
+            if yoy_revenue:
+                lines.append(f"- 前年同期比売上: {yoy_revenue}")
+            if yoy_op:
+                lines.append(f"- 前年同期比営業利益: {yoy_op}")
+            lines.append("")
+
+    # 変動セクション (前回との差分)
+    if previous_codes:
+        lines.extend(["", "## 変動", ""])
+        if new_additions:
+            names = [
+                f"{c} {code_to_name.get(c, '')}" for c in sorted(new_additions)
+            ]
+            lines.append(f"**新規追加:** {', '.join(names)}")
+        else:
+            lines.append("**新規追加:** なし")
+        if removals:
+            names = [f"{c}" for c in sorted(removals)]
+            lines.append(f"**脱落:** {', '.join(names)}")
+        else:
+            lines.append("**脱落:** なし")
+
     lines.extend([
         "",
         "---",
@@ -133,4 +275,4 @@ def generate_watchlist(df: pd.DataFrame, date: str) -> str:
 
     content = "\n".join(lines) + "\n"
     output_path.write_text(content, encoding="utf-8")
-    return str(output_path)
+    return str(output_path), new_additions, removals

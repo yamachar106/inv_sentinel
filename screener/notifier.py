@@ -11,13 +11,20 @@ from urllib.error import URLError
 import pandas as pd
 
 
-def notify_slack(df: pd.DataFrame, date: str) -> bool:
+def notify_slack(
+    df: pd.DataFrame,
+    date: str,
+    diff_info: tuple[set[str], set[str]] | None = None,
+    code_to_name: dict[str, str] | None = None,
+) -> bool:
     """
     スクリーニング結果をSlackに通知する
 
     Args:
         df: フィルタ済みのDataFrame
         date: 対象日付 (YYYYMMDD)
+        diff_info: (new_additions, removals) の組。Noneなら差分表示なし
+        code_to_name: コード→銘柄名マッピング（差分表示用）
 
     Returns:
         送信成功ならTrue
@@ -27,7 +34,7 @@ def notify_slack(df: pd.DataFrame, date: str) -> bool:
         print("[WARN] SLACK_WEBHOOK_URL が未設定のため通知をスキップ")
         return False
 
-    message = _build_message(df, date)
+    message = _build_message(df, date, diff_info=diff_info, code_to_name=code_to_name)
     payload = json.dumps({"text": message}).encode("utf-8")
 
     req = Request(webhook_url, data=payload, headers={"Content-Type": "application/json"})
@@ -39,7 +46,12 @@ def notify_slack(df: pd.DataFrame, date: str) -> bool:
         return False
 
 
-def _build_message(df: pd.DataFrame, date: str) -> str:
+def _build_message(
+    df: pd.DataFrame,
+    date: str,
+    diff_info: tuple[set[str], set[str]] | None = None,
+    code_to_name: dict[str, str] | None = None,
+) -> str:
     """Slack通知メッセージを組み立てる"""
     header = f"*黒字転換スクリーニング結果* ({date})\n"
 
@@ -72,9 +84,29 @@ def _build_message(df: pd.DataFrame, date: str) -> str:
 
     body = "\n".join(rows)
 
+    # 差分情報
+    diff_section = ""
+    if diff_info is not None:
+        new_additions, removals = diff_info
+        name_map = code_to_name or {}
+        if new_additions or removals:
+            diff_section = "\n\n*前回からの変動:*\n"
+            if new_additions:
+                names = [
+                    f"{c} {name_map.get(c, '')}".strip()
+                    for c in sorted(new_additions)
+                ]
+                diff_section += f"新規追加: {', '.join(names)}\n"
+            if removals:
+                names = [
+                    f"{c} {name_map.get(c, '')}".strip()
+                    for c in sorted(removals)
+                ]
+                diff_section += f"脱落: {', '.join(names)}\n"
+
     footer = (
         "\n\n[!] _投資判断は必ず人間がレビューしてください。_\n"
         "_マネックス銘柄スカウターでクロスチェック推奨_"
     )
 
-    return header + body + footer
+    return header + body + diff_section + footer

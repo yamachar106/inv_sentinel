@@ -173,7 +173,7 @@ class TestReporterOutput:
                 "Recommendation": "A", "RecScore": 6, "RecReasons": "テスト理由",
             }])
 
-            path = reporter.generate_watchlist(df, "20260328")
+            path, new_adds, removed = reporter.generate_watchlist(df, "20260328")
             content = open(path, encoding="utf-8").read()
 
             assert "黒字転換ウォッチリスト" in content
@@ -182,5 +182,67 @@ class TestReporterOutput:
             assert "IR Bank" in content
             assert "銘柄スカウター" in content
             assert "Yahoo" in content
+        finally:
+            reporter.DATA_DIR = original_dir
+
+    def test_generates_markdown_with_company_summaries(self, tmp_path):
+        """銘柄詳細セクションが生成される"""
+        import screener.reporter as reporter
+        original_dir = reporter.DATA_DIR
+        reporter.DATA_DIR = tmp_path
+
+        try:
+            df = pd.DataFrame([{
+                "Code": "1000", "CompanyName": "テスト株式会社",
+                "Close": 1000, "MarketCapitalization": 10_000_000_000,
+                "OperatingProfit": 5, "OrdinaryProfit": 4,
+                "prev_operating_profit": -3, "prev_ordinary_profit": -2,
+                "Recommendation": "A", "RecScore": 6, "RecReasons": "テスト理由",
+            }])
+
+            summaries = {
+                "1000": {
+                    "revenue_trend": [10.5, 11.2, 12.0, 13.1],
+                    "op_trend": [-0.5, -0.3, -0.1, 0.8],
+                    "yoy_revenue": "+15.0%",
+                    "yoy_op": "黒字転換",
+                },
+            }
+
+            path, _, _ = reporter.generate_watchlist(df, "20260328", company_summaries=summaries)
+            content = open(path, encoding="utf-8").read()
+
+            assert "銘柄詳細" in content
+            assert "1000 テスト株式会社 [A]" in content
+            assert "売上推移" in content
+            assert "10.5億" in content
+            assert "13.1億" in content
+            assert "営業利益推移" in content
+            assert "-0.5億" in content
+            assert "0.8億" in content
+            assert "黒字転換!" in content
+            assert "前年同期比売上: +15.0%" in content
+            assert "前年同期比営業利益: 黒字転換" in content
+        finally:
+            reporter.DATA_DIR = original_dir
+
+    def test_no_detail_section_without_summaries(self, tmp_path):
+        """company_summariesがNoneの場合、銘柄詳細セクションは出力されない"""
+        import screener.reporter as reporter
+        original_dir = reporter.DATA_DIR
+        reporter.DATA_DIR = tmp_path
+
+        try:
+            df = pd.DataFrame([{
+                "Code": "1000", "CompanyName": "テスト",
+                "Close": 1000, "MarketCapitalization": 10_000_000_000,
+                "OperatingProfit": 5, "OrdinaryProfit": 4,
+                "prev_operating_profit": -3, "prev_ordinary_profit": -2,
+            }])
+
+            path, _, _ = reporter.generate_watchlist(df, "20260328")
+            content = open(path, encoding="utf-8").read()
+
+            assert "銘柄詳細" not in content
         finally:
             reporter.DATA_DIR = original_dir

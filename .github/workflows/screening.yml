@@ -1,0 +1,122 @@
+name: Quarterly Screening
+
+on:
+  schedule:
+    # Feb 15, May 15, Aug 15, Nov 15 00:00 JST = 前日 15:00 UTC
+    - cron: "0 15 14 2,5,8,11 *"
+
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Target date (YYYYMMDD format, e.g. 20260315)"
+        required: false
+        type: string
+      limit:
+        description: "Limit number of companies to process (0 = all)"
+        required: false
+        type: number
+        default: 0
+      skip-fake-filter:
+        description: "Skip fake filter"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
+  PYTHONIOENCODING: utf-8
+
+jobs:
+  screening:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore IR Bank cache
+        uses: actions/cache@v4
+        with:
+          path: data/cache
+          key: irbank-cache-${{ github.run_id }}
+          restore-keys: |
+            irbank-cache-
+
+      - name: Run screening
+        run: |
+          ARGS="--no-notify"
+
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            ARGS="$ARGS --date ${{ github.event.inputs.date }}"
+          fi
+
+          if [ "${{ github.event.inputs.limit }}" != "0" ] && [ -n "${{ github.event.inputs.limit }}" ]; then
+            ARGS="$ARGS --limit ${{ github.event.inputs.limit }}"
+          fi
+
+          if [ "${{ github.event.inputs.skip-fake-filter }}" = "true" ]; then
+            ARGS="$ARGS --no-fake-filter"
+          fi
+
+          echo "Running: python main.py $ARGS"
+          python main.py $ARGS
+
+      - name: Send Slack notification
+        if: env.SLACK_WEBHOOK_URL != ''
+        continue-on-error: true
+        run: |
+          python -c "
+          from screener.notifier import notify_slack
+          from screener.reporter import load_previous_watchlist
+          import pandas as pd, glob, os
+          files = sorted(glob.glob('data/watchlist/*.md'))
+          if files:
+              print(f'Latest watchlist: {files[-1]}')
+          # Slack notification is already handled by main.py if --no-notify is removed
+          # For CI, we send a simple notification
+          import json
+          from urllib.request import Request, urlopen
+          url = os.getenv('SLACK_WEBHOOK_URL', '')
+          if url:
+              msg = 'Quarterly screening completed. Check the repository for results.'
+              payload = json.dumps({'text': msg}).encode('utf-8')
+              req = Request(url, data=payload, headers={'Content-Type': 'application/json'})
+              urlopen(req)
+          "
+
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/watchlist/ data/backtest/
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update screening results $(date -u +%Y-%m-%d)"
+            git push
+          fi
+
+      - name: Upload logs as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screening-logs-${{ github.run_id }}
+          path: data/logs/
+          retention-days: 30
+          if-no-files-found: ignore

@@ -5,6 +5,8 @@ IR Bank (irbank.net) スクレイピングクライアント
 値の単位: 億円（IR Bankの表示単位そのまま）
 """
 
+import json
+import os
 import re
 import time
 from io import StringIO
@@ -14,12 +16,16 @@ from urllib.error import URLError, HTTPError
 
 import pandas as pd
 
-from screener.config import MIN_CONSECUTIVE_RED, REQUEST_INTERVAL, MAX_RETRIES, RETRY_BACKOFF
+from screener.config import (
+    MIN_CONSECUTIVE_RED, REQUEST_INTERVAL, MAX_RETRIES, RETRY_BACKOFF,
+    IRBANK_CACHE_DAYS,
+)
 
 BASE_URL = "https://irbank.net"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "data" / "cache"
+IRBANK_CACHE_DIR = CACHE_DIR / "irbank"
 
 
 def _fetch_with_retry(url: str, max_retries: int = MAX_RETRIES, backoff: float = RETRY_BACKOFF):
@@ -369,6 +375,110 @@ def _parse_typical_range(s: str) -> tuple[float, float] | None:
     return None
 
 
+def get_company_summary(code: str, html: str = None) -> dict | None:
+    """
+    IR Bankの四半期ページから銘柄の売上・営業利益トレンドを抽出する
+
+    Args:
+        code: 証券コード
+        html: 四半期ページのHTML（省略時は取得する）
+
+    Returns:
+        {
+            "revenue_trend": [Q1値, Q2値, Q3値, Q4値],  # 直近4Qの売上高(億円)
+            "op_trend": [Q1値, Q2値, Q3値, Q4値],        # 直近4Qの営業利益(億円)
+            "yoy_revenue": "+15%" or None,               # 前年同期比売上
+            "yoy_op": "黒字転換" or "+25%" or None,      # 前年同期比営業利益
+        }
+        取得失敗時はNone
+    """
+    if html is None:
+        html = get_quarterly_html(code)
+        if html is None:
+            return None
+
+    try:
+        tables = pd.read_html(StringIO(html))
+    except ValueError:
+        return None
+
+    qonq = _find_qonq_table(tables)
+    if qonq is None:
+        return None
+
+    # 売上高の四半期レコードを抽出
+    rev_records = _extract_metric_records(qonq, "売上高", "revenue")
+    op_records = _extract_metric_records(qonq, "営業利益", "operating_profit")
+
+    if not op_records:
+        return None
+
+    # 直近4Qを取得（period+quarterでソートして末尾4件）
+    op_sorted = sorted(op_records, key=lambda r: (r["period"], r["quarter"]))
+    op_trend = [r["operating_profit"] for r in op_sorted[-4:]]
+
+    rev_trend = []
+    if rev_records:
+        rev_sorted = sorted(rev_records, key=lambda r: (r["period"], r["quarter"]))
+        rev_trend = [r["revenue"] for r in rev_sorted[-4:]]
+
+    # 前年同期比を計算
+    yoy_revenue = _calc_yoy(rev_records, "revenue") if rev_records else None
+    yoy_op = _calc_yoy_op(op_records)
+
+    return {
+        "revenue_trend": rev_trend,
+        "op_trend": op_trend,
+        "yoy_revenue": yoy_revenue,
+        "yoy_op": yoy_op,
+    }
+
+
+def _calc_yoy(records: list[dict], value_key: str) -> str | None:
+    """直近四半期の前年同期比を計算する"""
+    if len(records) < 5:
+        return None
+
+    sorted_recs = sorted(records, key=lambda r: (r["period"], r["quarter"]))
+    latest = sorted_recs[-1]
+    latest_q = latest["quarter"]
+
+    # 同じ四半期の1年前を探す
+    for r in reversed(sorted_recs[:-1]):
+        if r["quarter"] == latest_q and r["period"] != latest["period"]:
+            prev_val = r[value_key]
+            curr_val = latest[value_key]
+            if prev_val and prev_val != 0:
+                pct = (curr_val - prev_val) / abs(prev_val) * 100
+                sign = "+" if pct >= 0 else ""
+                return f"{sign}{pct:.1f}%"
+            break
+    return None
+
+
+def _calc_yoy_op(records: list[dict]) -> str | None:
+    """営業利益の前年同期比を計算する（赤字→黒字転換の場合は特別表記）"""
+    if len(records) < 5:
+        return None
+
+    sorted_recs = sorted(records, key=lambda r: (r["period"], r["quarter"]))
+    latest = sorted_recs[-1]
+    latest_q = latest["quarter"]
+
+    for r in reversed(sorted_recs[:-1]):
+        if r["quarter"] == latest_q and r["period"] != latest["period"]:
+            prev_val = r["operating_profit"]
+            curr_val = latest["operating_profit"]
+            if prev_val is not None and prev_val < 0 and curr_val is not None and curr_val > 0:
+                return "黒字転換"
+            if prev_val and prev_val != 0:
+                pct = (curr_val - prev_val) / abs(prev_val) * 100
+                sign = "+" if pct >= 0 else ""
+                return f"{sign}{pct:.1f}%"
+            break
+    return None
+
+
 def _parse_quarter_page(html: str, code: str) -> pd.DataFrame | None:
     """
     四半期ページのHTMLから営業利益・経常利益を抽出
@@ -486,13 +596,44 @@ def _parse_number(s: str) -> float | None:
         return None
 
 
-def screen_all_companies(progress_callback=None, limit: int = 0) -> pd.DataFrame:
+def _load_cache(code: str, cache_days: int = IRBANK_CACHE_DAYS) -> dict | None:
+    """
+    キャッシュファイルを読み込む。有効期限内であればdictを返す。
+    期限切れまたは存在しない場合はNoneを返す。
+    """
+    cache_path = IRBANK_CACHE_DIR / f"{code}.json"
+    if not cache_path.exists():
+        return None
+    try:
+        age_days = (time.time() - os.path.getmtime(cache_path)) / 86400
+        if age_days > cache_days:
+            return None
+        with open(cache_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _save_cache(code: str, data: dict) -> None:
+    """スクリーニング結果をキャッシュファイルに保存する"""
+    IRBANK_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_path = IRBANK_CACHE_DIR / f"{code}.json"
+    try:
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+    except OSError:
+        pass
+
+
+def screen_all_companies(progress_callback=None, limit: int = 0,
+                         force_refresh: bool = False) -> pd.DataFrame:
     """
     全上場企業をスクリーニングし、直近四半期で黒字転換した銘柄を返す
 
     Args:
         progress_callback: 進捗コールバック関数
         limit: 処理企業数の上限（0=全件）
+        force_refresh: Trueの場合、キャッシュを無視してIR Bankから再取得する
 
     Returns:
         黒字転換銘柄のDataFrame
@@ -509,6 +650,8 @@ def screen_all_companies(progress_callback=None, limit: int = 0) -> pd.DataFrame
     kuroten_list = []
     fetch_failures = 0
     parse_failures = 0
+    cache_hits = 0
+    cache_misses = 0
 
     for i, company in enumerate(companies):
         code = company["code"]
@@ -518,8 +661,19 @@ def screen_all_companies(progress_callback=None, limit: int = 0) -> pd.DataFrame
             progress_callback(i + 1, total)
         elif (i + 1) % 100 == 0:
             print(f"  進捗: {i + 1}/{total} (黒字転換: {len(kuroten_list)} 件, "
-                  f"取得失敗: {fetch_failures} 件)")
+                  f"取得失敗: {fetch_failures} 件, "
+                  f"cache: {cache_hits} hit / {cache_misses} miss)")
 
+        # キャッシュチェック
+        if not force_refresh:
+            cached = _load_cache(code)
+            if cached is not None:
+                cache_hits += 1
+                if cached.get("is_kuroten"):
+                    kuroten_list.append(cached["result"])
+                continue
+
+        cache_misses += 1
         df = get_quarterly_data(code)
         if df is None:
             fetch_failures += 1
@@ -527,12 +681,17 @@ def screen_all_companies(progress_callback=None, limit: int = 0) -> pd.DataFrame
             continue
         if df.empty:
             parse_failures += 1
+            # キャッシュ: パース失敗も記録（再取得を避ける）
+            _save_cache(code, {"is_kuroten": False, "result": None})
             time.sleep(REQUEST_INTERVAL)
             continue
 
         kuroten = _check_kuroten(df, code, name)
         if kuroten:
             kuroten_list.append(kuroten)
+            _save_cache(code, {"is_kuroten": True, "result": kuroten})
+        else:
+            _save_cache(code, {"is_kuroten": False, "result": None})
 
         time.sleep(REQUEST_INTERVAL)
 
@@ -543,6 +702,7 @@ def screen_all_companies(progress_callback=None, limit: int = 0) -> pd.DataFrame
         print(f"  [WARN] 取得失敗(HTTP/接続エラー): {fetch_failures} 件")
     if parse_failures:
         print(f"  [WARN] パース失敗(テーブル構造不一致): {parse_failures} 件")
+    print(f"  Cache: {cache_hits} hit / {cache_misses} miss")
     print(f"  黒字転換検出: {len(kuroten_list)} 件")
 
     if not kuroten_list:

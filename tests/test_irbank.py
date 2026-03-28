@@ -9,6 +9,9 @@ from screener.irbank import (
     _check_kuroten,
     _find_qonq_table,
     _extract_metric_records,
+    get_company_summary,
+    _calc_yoy,
+    _calc_yoy_op,
 )
 
 
@@ -166,3 +169,128 @@ class TestCheckKuroten:
         ])
         result = _check_kuroten(df, "6000", "テスト6")
         assert result is None
+
+
+class TestCalcYoy:
+    def _make_records(self, value_key="revenue"):
+        """2年分(8Q)のレコードを作成"""
+        return [
+            {"period": "2024/03", "quarter": "1Q", value_key: 100.0},
+            {"period": "2024/03", "quarter": "2Q", value_key: 110.0},
+            {"period": "2024/03", "quarter": "3Q", value_key: 120.0},
+            {"period": "2024/03", "quarter": "4Q", value_key: 130.0},
+            {"period": "2025/03", "quarter": "1Q", value_key: 115.0},
+            {"period": "2025/03", "quarter": "2Q", value_key: 125.0},
+            {"period": "2025/03", "quarter": "3Q", value_key: 138.0},
+        ]
+
+    def test_yoy_positive(self):
+        """前年同期比プラス"""
+        records = self._make_records()
+        result = _calc_yoy(records, "revenue")
+        # 3Q: 138 vs 120 = +15.0%
+        assert result == "+15.0%"
+
+    def test_yoy_negative(self):
+        """前年同期比マイナス"""
+        records = self._make_records()
+        records[-1]["revenue"] = 100.0  # 3Q: 100 vs 120 = -16.7%
+        result = _calc_yoy(records, "revenue")
+        assert result == "-16.7%"
+
+    def test_yoy_insufficient_data(self):
+        """データが4Q以下の場合はNone"""
+        records = [
+            {"period": "2025/03", "quarter": "1Q", "revenue": 100.0},
+            {"period": "2025/03", "quarter": "2Q", "revenue": 110.0},
+        ]
+        result = _calc_yoy(records, "revenue")
+        assert result is None
+
+
+class TestCalcYoyOp:
+    def test_kuroten_label(self):
+        """赤字→黒字転換は「黒字転換」と表記"""
+        records = [
+            {"period": "2024/03", "quarter": "1Q", "operating_profit": -50.0},
+            {"period": "2024/03", "quarter": "2Q", "operating_profit": -30.0},
+            {"period": "2024/03", "quarter": "3Q", "operating_profit": -20.0},
+            {"period": "2024/03", "quarter": "4Q", "operating_profit": -10.0},
+            {"period": "2025/03", "quarter": "1Q", "operating_profit": -40.0},
+            {"period": "2025/03", "quarter": "2Q", "operating_profit": -25.0},
+            {"period": "2025/03", "quarter": "3Q", "operating_profit": 5.0},
+        ]
+        result = _calc_yoy_op(records)
+        assert result == "黒字転換"
+
+    def test_yoy_normal(self):
+        """黒字→黒字の通常増益"""
+        records = [
+            {"period": "2024/03", "quarter": "1Q", "operating_profit": 10.0},
+            {"period": "2024/03", "quarter": "2Q", "operating_profit": 20.0},
+            {"period": "2024/03", "quarter": "3Q", "operating_profit": 30.0},
+            {"period": "2024/03", "quarter": "4Q", "operating_profit": 40.0},
+            {"period": "2025/03", "quarter": "1Q", "operating_profit": 12.0},
+            {"period": "2025/03", "quarter": "2Q", "operating_profit": 25.0},
+            {"period": "2025/03", "quarter": "3Q", "operating_profit": 39.0},
+        ]
+        result = _calc_yoy_op(records)
+        assert result == "+30.0%"
+
+
+class TestGetCompanySummary:
+    def _make_html_tables(self):
+        """pd.read_htmlが返すテーブルをシミュレートするためのHTML生成"""
+        # QonQテーブル (科目, 年度, 1Q, 2Q, 3Q, 4Q)
+        return pd.DataFrame([
+            {"科目": "売上高", "年度": "2024/03", "1Q": "100億", "2Q": "110億", "3Q": "120億", "4Q": "130億"},
+            {"科目": "売上高", "年度": "2025/03", "1Q": "115億", "2Q": "125億", "3Q": "138億", "4Q": "-"},
+            {"科目": "営業利益", "年度": "2024/03", "1Q": "△10億", "2Q": "△5億", "3Q": "△3億", "4Q": "△8億"},
+            {"科目": "営業利益", "年度": "2025/03", "1Q": "△7億", "2Q": "△2億", "3Q": "5億", "4Q": "-"},
+            {"科目": "経常利益", "年度": "2024/03", "1Q": "△8億", "2Q": "△4億", "3Q": "△2億", "4Q": "△6億"},
+            {"科目": "経常利益", "年度": "2025/03", "1Q": "△5億", "2Q": "△1億", "3Q": "4億", "4Q": "-"},
+        ])
+
+    def test_returns_trends(self, monkeypatch):
+        """売上・営業利益のトレンドが取得できる"""
+        tbl = self._make_html_tables()
+
+        # get_quarterly_htmlとpd.read_htmlをモック
+        monkeypatch.setattr("screener.irbank.get_quarterly_html", lambda code: "<html></html>")
+        monkeypatch.setattr("screener.irbank.pd.read_html", lambda _: [tbl])
+
+        result = get_company_summary("1234")
+        assert result is not None
+        assert len(result["op_trend"]) == 4  # 直近4Q
+        assert len(result["revenue_trend"]) == 4
+        # 直近4Qの営業利益: △8, △7, △2, 5
+        assert result["op_trend"][-1] == 5.0
+        assert result["op_trend"][0] == -8.0
+
+    def test_yoy_op_kuroten(self, monkeypatch):
+        """営業利益の前年同期比が黒字転換と判定される"""
+        tbl = self._make_html_tables()
+        monkeypatch.setattr("screener.irbank.get_quarterly_html", lambda code: "<html></html>")
+        monkeypatch.setattr("screener.irbank.pd.read_html", lambda _: [tbl])
+
+        result = get_company_summary("1234")
+        assert result is not None
+        assert result["yoy_op"] == "黒字転換"
+
+    def test_returns_none_on_no_html(self, monkeypatch):
+        """HTML取得失敗でNone"""
+        monkeypatch.setattr("screener.irbank.get_quarterly_html", lambda code: None)
+        result = get_company_summary("9999")
+        assert result is None
+
+    def test_with_provided_html(self, monkeypatch):
+        """HTMLが渡された場合は再取得しない"""
+        tbl = self._make_html_tables()
+        fetch_called = []
+        monkeypatch.setattr("screener.irbank.get_quarterly_html",
+                            lambda code: fetch_called.append(1) or "<html></html>")
+        monkeypatch.setattr("screener.irbank.pd.read_html", lambda _: [tbl])
+
+        result = get_company_summary("1234", html="<html>provided</html>")
+        assert result is not None
+        assert len(fetch_called) == 0  # get_quarterly_htmlは呼ばれない

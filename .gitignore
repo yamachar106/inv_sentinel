@@ -13,11 +13,13 @@ build/
 venv/
 .venv/
 
-# Data (generated)
+# Data (generated) - cache and logs are ephemeral
 data/cache/
 data/logs/
-data/watchlist/
-data/backtest/
+
+# Watchlist and backtest results are committed as project outputs
+# data/watchlist/  ← tracked (screening results)
+# data/backtest/   ← tracked (backtest results + charts)
 
 # IDE
 .vscode/

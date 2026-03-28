@@ -19,7 +19,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 
 from dotenv import load_dotenv
 
-from screener.irbank import screen_all_companies
+from screener.irbank import screen_all_companies, get_company_summary, get_quarterly_html
 from screener.yfinance_client import get_price_data
 from screener.filters import add_price_filters
 from screener.fake_filter import apply_fake_filter
@@ -82,13 +82,46 @@ def main(
             print(f"{g}={cnt} ", end="")
     print()
 
-    # 5. ウォッチリスト生成
-    output_path = generate_watchlist(df_filtered, target_date)
-    print(f"[OK] ウォッチリスト生成完了: {output_path}")
+    # 5. 銘柄詳細取得（ウォッチリスト候補のみ）
+    import time
+    from screener.config import REQUEST_INTERVAL
+    company_summaries = {}
+    watchlist_codes = df_filtered["Code"].tolist()
+    if watchlist_codes:
+        print(f"  [5/6] 銘柄詳細取得 ({len(watchlist_codes)} 銘柄)...")
+        for code in watchlist_codes:
+            try:
+                html = get_quarterly_html(code)
+                if html:
+                    summary = get_company_summary(code, html=html)
+                    if summary:
+                        company_summaries[code] = summary
+                time.sleep(REQUEST_INTERVAL)
+            except Exception as e:
+                print(f"  [WARN] {code} 詳細取得失敗: {e}")
+        print(f"  詳細取得完了: {len(company_summaries)}/{len(watchlist_codes)} 件")
 
-    # 5. Slack通知
+    # 6. ウォッチリスト生成 (前回との差分も計算)
+    output_path, new_additions, removals = generate_watchlist(
+        df_filtered, target_date, company_summaries=company_summaries,
+    )
+    print(f"[OK] ウォッチリスト生成完了: {output_path}")
+    if new_additions:
+        print(f"  新規追加: {', '.join(sorted(new_additions))}")
+    if removals:
+        print(f"  脱落: {', '.join(sorted(removals))}")
+
+    # 7. Slack通知
     if not skip_notify:
-        if notify_slack(df_filtered, target_date):
+        # コード→銘柄名マッピングを構築
+        code_to_name = {}
+        if not df_filtered.empty:
+            for _, row in df_filtered.iterrows():
+                code_to_name[str(row.get("Code", ""))] = row.get(
+                    "CompanyName", row.get("Name", "")
+                )
+        diff_info = (new_additions, removals)
+        if notify_slack(df_filtered, target_date, diff_info=diff_info, code_to_name=code_to_name):
             print("[OK] Slack通知送信完了")
 
     print()
