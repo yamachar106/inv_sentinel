@@ -77,6 +77,37 @@ class TestParseTypicalRange:
         assert _parse_typical_range("-") is None
 
 
+class TestCategoryFilter:
+    """業種フィルタのテスト（書籍第2章: バイオ・創薬・ゲーム除外）"""
+
+    def test_pharma_excluded(self):
+        """医薬品業種はscore+2"""
+        from screener.fake_filter import check_fake
+        flags, score = check_fake("4502", "武田薬品工業", "<html></html>", category="医薬品")
+        assert score >= 2
+        assert any("除外業種" in f for f in flags)
+
+    def test_bio_keyword_excluded(self):
+        """銘柄名にバイオを含む場合はscore+2"""
+        from screener.fake_filter import check_fake
+        flags, score = check_fake("9999", "ABCバイオ", "<html></html>", category="サービス業")
+        assert score >= 2
+        assert any("除外キーワード" in f for f in flags)
+
+    def test_game_keyword_excluded(self):
+        """銘柄名にゲームを含む場合はscore+2"""
+        from screener.fake_filter import check_fake
+        flags, score = check_fake("9999", "テストゲームス", "<html></html>", category="情報・通信業")
+        assert score >= 2
+
+    def test_normal_category_ok(self):
+        """通常業種はフラグなし"""
+        from screener.fake_filter import check_fake
+        flags, score = check_fake("9999", "テスト電機", "<html></html>", category="電気機器")
+        assert not any("除外業種" in f for f in flags)
+        assert not any("除外キーワード" in f for f in flags)
+
+
 class TestRepeatedKuroten:
     """繰り返し黒字転換（ココナラ型）検出テスト"""
 

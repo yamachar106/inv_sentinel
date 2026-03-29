@@ -7,7 +7,10 @@ from unittest.mock import patch, MagicMock
 import pandas as pd
 import pytest
 
-from screener.notifier import notify_slack, _build_message, _build_stock_section
+from screener.notifier import (
+    notify_slack, _build_message, _build_stock_section,
+    _build_breakout_message, _resolve_webhook_url, notify_breakout,
+)
 
 
 class TestBuildMessage:
@@ -246,3 +249,79 @@ class TestNotifySlack:
             }])
             result = notify_slack(df, "20260401")
             assert result is False
+
+
+class TestResolveWebhookUrl:
+    """通知ルーティングのテスト"""
+
+    def test_specific_channel(self):
+        """strategy:market に専用Webhookが設定されている場合"""
+        with patch.dict(os.environ, {
+            "SLACK_WEBHOOK_BREAKOUT_US": "https://hooks.slack.com/breakout-us",
+            "SLACK_WEBHOOK_URL": "https://hooks.slack.com/default",
+        }):
+            url = _resolve_webhook_url("breakout", "US")
+            assert url == "https://hooks.slack.com/breakout-us"
+
+    def test_fallback_to_default(self):
+        """専用Webhookが未設定ならフォールバック"""
+        with patch.dict(os.environ, {
+            "SLACK_WEBHOOK_URL": "https://hooks.slack.com/default",
+        }, clear=True):
+            url = _resolve_webhook_url("breakout", "US")
+            assert url == "https://hooks.slack.com/default"
+
+    def test_no_webhook_at_all(self):
+        """どのWebhookも未設定ならNone"""
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop("SLACK_WEBHOOK_URL", None)
+            url = _resolve_webhook_url("breakout", "US")
+            assert url is None
+
+    def test_kuroten_jp_routing(self):
+        """黒字転換JPが専用チャンネルにルーティングされる"""
+        with patch.dict(os.environ, {
+            "SLACK_WEBHOOK_KUROTEN_JP": "https://hooks.slack.com/kuroten",
+            "SLACK_WEBHOOK_URL": "https://hooks.slack.com/default",
+        }):
+            url = _resolve_webhook_url("kuroten", "JP")
+            assert url == "https://hooks.slack.com/kuroten"
+
+
+class TestBuildBreakoutMessage:
+    """ブレイクアウト通知メッセージのテスト"""
+
+    def _make_breakout_df(self):
+        return pd.DataFrame([{
+            "code": "AAPL", "ticker": "AAPL", "signal": "breakout",
+            "close": 195.50, "high_52w": 195.0,
+            "distance_pct": 0.3, "volume_ratio": 2.5,
+            "rsi": 72.0, "above_sma_50": True, "above_sma_200": True,
+        }])
+
+    def test_us_format_dollar(self):
+        """US市場はドル表記"""
+        df = self._make_breakout_df()
+        msg = _build_breakout_message(df, "2026-03-29", market="US")
+        assert "$195.50" in msg
+        assert "[US]" in msg
+
+    def test_us_links(self):
+        """US市場は英語サイトのリンク"""
+        df = self._make_breakout_df()
+        msg = _build_breakout_message(df, "2026-03-29", market="US")
+        assert "finance.yahoo.com" in msg
+        assert "finviz.com" in msg
+
+    def test_jp_format_yen(self):
+        """JP市場は円表記"""
+        df = pd.DataFrame([{
+            "code": "7974", "ticker": "7974.T", "signal": "breakout",
+            "close": 8500.0, "high_52w": 8400.0,
+            "distance_pct": 0.2, "volume_ratio": 2.3,
+            "rsi": 68.5, "above_sma_50": True, "above_sma_200": True,
+        }])
+        msg = _build_breakout_message(df, "2026-03-29", market="JP")
+        assert "8,500円" in msg
+        assert "[JP]" in msg
+        assert "irbank.net" in msg

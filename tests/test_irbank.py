@@ -18,18 +18,33 @@ from screener.irbank import (
 
 class TestParseCodePage:
     def test_extracts_codes(self):
-        """HTMLから証券コードと企業名を抽出する"""
+        """HTMLから証券コード・企業名・業種を抽出し、ETFを除外する"""
         html = '''
-        <html><body>
-        <a href="/7974">任天堂</a>
-        <a href="/6758">ソニーグループ</a>
-        <a href="/abcd">無効</a>
-        </body></html>
+        <html><body><table>
+        <tr class="odd">
+          <td><a title="7974 任天堂 | 株式情報" href="/7974">7974</a></td>
+          <td><a href="/E12345">任天堂</a></td>
+          <td>8兆</td><td>20</td><td>30</td><td>10</td>
+          <td><a title="その他製品" href="/category/other">その他製品</a></td>
+        </tr>
+        <tr class="obb">
+          <td><a title="6758 ソニーグループ | 株式情報" href="/6758">6758</a></td>
+          <td><a href="/E67890">ソニーグループ</a></td>
+          <td>16兆</td><td>15</td><td>25</td><td>8</td>
+          <td><a title="電気機器" href="/category/denki">電気機器</a></td>
+        </tr>
+        <tr class="odd">
+          <td><a title="1305 ETF名 | 株式情報" href="/1305">1305</a></td>
+          <td><a href="/G99999">ETF名</a></td>
+          <td></td><td></td><td></td><td></td>
+          <td><a title="" href="/category/"></a></td>
+        </tr>
+        </table></body></html>
         '''
         result = _parse_code_page(html)
         assert len(result) == 2
-        assert result[0] == {"code": "7974", "name": "任天堂"}
-        assert result[1] == {"code": "6758", "name": "ソニーグループ"}
+        assert result[0] == {"code": "7974", "name": "任天堂", "category": "その他製品"}
+        assert result[1] == {"code": "6758", "name": "ソニーグループ", "category": "電気機器"}
 
     def test_empty_html(self):
         """空のHTMLでは空リストを返す"""

@@ -9,9 +9,9 @@
 # スクリーニング条件（書籍準拠）
 # =============================================================================
 
-# 株価フィルタ（スクリーナー用: 書籍の推奨範囲）
-MIN_PRICE = 500                     # 株価下限（円）
-MAX_PRICE = 2_500                   # 株価上限（円）
+# 株価フィルタ（書籍推奨500-2500を実証検証のため拡大）
+MIN_PRICE = 300                     # 株価下限（円）
+MAX_PRICE = 3_000                   # 株価上限（円）
 MAX_MARKET_CAP = 50_000_000_000     # 時価総額上限（500億円）
 
 # 連続赤字四半期数（ノイズ除去の核心パラメータ）
@@ -51,6 +51,12 @@ RETRY_BACKOFF = 5.0                 # リトライ間隔の基数（秒、指数
 FAKE_SCORE_THRESHOLD = 2            # フェイク判定の閾値（この値以上でフェイク）
 PROGRESS_RATIO_THRESHOLD = 0.7      # 進捗率の例年レンジに対する下限倍率
 
+# 業種フィルタ（書籍推奨: バイオ・創薬・ゲーム関連は不確定要素多く除外）
+RISKY_CATEGORIES = {"医薬品"}       # 東証業種分類で除外対象
+RISKY_NAME_KEYWORDS = [             # 銘柄名に含まれるキーワードで除外対象
+    "バイオ", "創薬", "ゲーム", "ゲームス",
+]
+
 # =============================================================================
 # 推奨度スコアリング設定
 # =============================================================================
@@ -61,3 +67,39 @@ REC_SMALL_CAP_THRESHOLD = 200       # 小型株判定: 時価総額がこの値(
 REC_GRADE_S = 8                     # Sランク: この点数以上
 REC_GRADE_A = 5                     # Aランク: この点数以上
 REC_GRADE_B = 3                     # Bランク: この点数以上
+
+# =============================================================================
+# ブレイクアウト監視設定
+# =============================================================================
+
+BREAKOUT_52W_WINDOW = 252            # ルックバック期間（営業日）
+BREAKOUT_SMA_SHORT = 20
+BREAKOUT_SMA_MID = 50
+BREAKOUT_SMA_LONG = 200
+BREAKOUT_VOLUME_RATIO = 1.5          # JP高出来高判定
+BREAKOUT_PREBREAK_VOL = 1.2          # JPプレブレイクアウト出来高
+BREAKOUT_NEAR_HIGH_UPPER = -2        # 近接上限(%)
+BREAKOUT_NEAR_HIGH_LOWER = -5        # 近接下限(%) ※-8%→-5%に縮小（ノイズ削減）
+BREAKOUT_HISTORY_PERIOD = "1y"
+TICKER_SUFFIX_JP = ".T"
+TICKER_SUFFIX_US = ""
+
+# US固有の閾値（米国株は流動性が高いため出来高閾値を引き上げ）
+BREAKOUT_VOLUME_RATIO_US = 3.0       # USブレイクアウト出来高 ※2.0→3.0（勝率57%帯に絞る）
+BREAKOUT_PREBREAK_VOL_US = 1.5       # USプレブレイクアウト出来高
+
+# BREAKOUTシグナルの押し目フィルタ（高値掴み回避）
+BREAKOUT_PULLBACK_ENABLED = True     # 押し目フィルタを有効にするか
+BREAKOUT_PULLBACK_RSI_MAX = 75       # RSIがこれ以上は過熱と見なし通知のみ
+
+# =============================================================================
+# 通知ルーティング設定
+# =============================================================================
+# strategy:market → SLACK_WEBHOOK_URL 環境変数名のマッピング
+# 環境変数が未設定の場合は SLACK_WEBHOOK_URL にフォールバック
+NOTIFY_CHANNELS = {
+    "kuroten:JP":       "SLACK_WEBHOOK_KUROTEN_JP",
+    "breakout:JP":      "SLACK_WEBHOOK_BREAKOUT_JP",
+    "breakout:US":      "SLACK_WEBHOOK_BREAKOUT_US",
+}
+NOTIFY_FALLBACK_ENV = "SLACK_WEBHOOK_URL"

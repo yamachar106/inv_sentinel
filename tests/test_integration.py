@@ -61,12 +61,12 @@ class TestPipelineIntegration:
         df_kuroten = self._make_kuroten_df()
         df_price = pd.DataFrame([
             {"Code": "1000", "Close": 1000.0, "MarketCapitalization": 10_000_000_000},
-            {"Code": "2000", "Close": 300.0, "MarketCapitalization": 5_000_000_000},
+            {"Code": "2000", "Close": 100.0, "MarketCapitalization": 5_000_000_000},
             {"Code": "3000", "Close": 1500.0, "MarketCapitalization": 80_000_000_000},
         ])
 
         result = add_price_filters(df_kuroten, df_price)
-        # 2000: 株価300 < 500 -> 除外
+        # 2000: 株価100 < 300 -> 除外
         # 3000: 時価総額800億 > 500億 -> 除外
         # 1000: 株価1000, 時価総額100億 -> 通過
         assert len(result) == 1

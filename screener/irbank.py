@@ -135,16 +135,39 @@ def get_company_codes() -> list[dict]:
 
 
 def _parse_code_page(html: str) -> list[dict]:
-    """銘柄一覧ページのHTMLから証券コードと企業名を抽出"""
+    """銘柄一覧ページのHTMLから証券コードと企業名を抽出
+
+    IR Bankの構造:
+      <a title="1301 極洋 | 株式情報" href="/1301">1301</a>
+      ...隣セル...
+      <a title="水産・農林業" href="/category/...">水産・農林業</a>
+    ETF/投信は業種セルが空なので除外できる。
+    """
     results = []
+    # title属性からコードと企業名を取得
     pattern = re.compile(
-        r'href="/(\d{4})"\s*>(.*?)</a>', re.DOTALL
+        r'<a\s+title="(\d{4})\s+(.+?)\s*\|\s*株式情報"\s+href="/\1">'
     )
-    for match in pattern.finditer(html):
-        code = match.group(1)
-        name = re.sub(r'<[^>]+>', '', match.group(2)).strip()
-        if name:
-            results.append({"code": code, "name": name})
+    # 業種セルがあるか確認（ETF/投信除外用）
+    # 各行は<tr>で囲まれているので、行単位で処理
+    row_pattern = re.compile(r'<tr[^>]*>(.*?)</tr>', re.DOTALL)
+
+    for row_match in row_pattern.finditer(html):
+        row_html = row_match.group(1)
+        code_match = pattern.search(row_html)
+        if not code_match:
+            continue
+        code = code_match.group(1)
+        name = code_match.group(2).strip()
+
+        # 業種リンクから業種名を取得（ETF/投信は業種が空）
+        cat_match = re.search(
+            r'href="/category/[^"]+"\s*[^>]*>([^<]+)</a>', row_html
+        )
+        if cat_match and cat_match.group(1).strip():
+            category = cat_match.group(1).strip()
+            results.append({"code": code, "name": name, "category": category})
+
     return results
 
 
@@ -632,6 +655,13 @@ def _save_cache(code: str, data: dict) -> None:
         pass
 
 
+def _invalidate_cache(code: str) -> None:
+    """指定銘柄のキャッシュを無効化する（日次チェック用）"""
+    cache_path = IRBANK_CACHE_DIR / f"{code}.json"
+    if cache_path.exists():
+        cache_path.unlink()
+
+
 def screen_all_companies(progress_callback=None, limit: int = 0,
                          force_refresh: bool = False) -> pd.DataFrame:
     """
@@ -648,7 +678,13 @@ def screen_all_companies(progress_callback=None, limit: int = 0,
                   prev_operating_profit, prev_ordinary_profit, period, quarter]
         利益値の単位: 億円
     """
+    from screener.exclusion import filter_jp_companies
+
     companies = get_company_codes()
+    pre_filter_count = len(companies)
+    companies = filter_jp_companies(companies)
+    if pre_filter_count != len(companies):
+        print(f"  全銘柄: {pre_filter_count} → 対象: {len(companies)} (除外: {pre_filter_count - len(companies)})")
     if limit > 0:
         companies = companies[:limit]
     total = len(companies)
@@ -663,6 +699,7 @@ def screen_all_companies(progress_callback=None, limit: int = 0,
     for i, company in enumerate(companies):
         code = company["code"]
         name = company["name"]
+        category = company.get("category", "")
 
         if progress_callback:
             progress_callback(i + 1, total)
@@ -693,7 +730,7 @@ def screen_all_companies(progress_callback=None, limit: int = 0,
             time.sleep(REQUEST_INTERVAL)
             continue
 
-        kuroten = _check_kuroten(df, code, name)
+        kuroten = _check_kuroten(df, code, name, category=category)
         if kuroten:
             kuroten_list.append(kuroten)
             _save_cache(code, {"is_kuroten": True, "result": kuroten})
@@ -749,7 +786,7 @@ def _is_seasonal_pattern(df: pd.DataFrame, target_quarter: str, min_years: int =
     return same_q_profit_count >= min_years
 
 
-def _check_kuroten(df: pd.DataFrame, code: str, name: str) -> dict | None:
+def _check_kuroten(df: pd.DataFrame, code: str, name: str, category: str = "") -> dict | None:
     """
     直近の四半期データから黒字転換を判定する
 
@@ -799,6 +836,7 @@ def _check_kuroten(df: pd.DataFrame, code: str, name: str) -> dict | None:
     return {
         "Code": code,
         "CompanyName": name,
+        "Category": category,
         "OperatingProfit": curr_op,
         "OrdinaryProfit": curr_ord,
         "prev_operating_profit": prev_op,

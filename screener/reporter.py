@@ -68,6 +68,48 @@ def load_previous_watchlist(current_date: str) -> set[str]:
     return codes
 
 
+def load_latest_watchlist() -> tuple[dict[str, str], str]:
+    """
+    最新のウォッチリスト.mdから銘柄コードと銘柄名を抽出する。
+
+    Returns:
+        ({code: company_name}, label) e.g. ({"7974": "任天堂"}, "2026-Q1")
+        ウォッチリストが存在しない場合は ({}, "")
+    """
+    if not DATA_DIR.exists():
+        return {}, ""
+
+    candidates = sorted(DATA_DIR.glob("*.md"), key=lambda p: p.stem, reverse=True)
+    if not candidates:
+        return {}, ""
+
+    latest = candidates[0]
+    label = latest.stem
+    code_to_name: dict[str, str] = {}
+
+    content = latest.read_text(encoding="utf-8")
+    for line in content.split("\n"):
+        if not line.startswith("|"):
+            continue
+        if "---" in line or "コード" in line:
+            continue
+        cells = [c.strip() for c in line.split("|")]
+        code = None
+        name = None
+        for cell in cells:
+            clean = cell.strip("* ")
+            if re.fullmatch(r"\d{4}", clean):
+                code = clean
+            elif code and not name and clean and not re.fullmatch(r"[SABC]", clean):
+                # コードの次の非推奨度セルを銘柄名とみなす
+                name = clean
+                break
+        if code:
+            code_to_name[code] = name or ""
+
+    return code_to_name, label
+
+
 def compute_diff(
     current_codes: set[str], previous_codes: set[str]
 ) -> tuple[set[str], set[str]]:
@@ -207,8 +249,10 @@ def generate_watchlist(
             code = row.get("Code", "")
             name = row.get("CompanyName", row.get("Name", ""))
             rec = f"[{row.get('Recommendation', '-')}] " if has_rec else ""
+            cat = row.get("Category", "")
+            cat_str = f" ({cat})" if cat else ""
             lines.append(
-                f"- {rec}**{code} {name}**: "
+                f"- {rec}**{code} {name}**{cat_str}: "
                 f"[IR Bank](https://irbank.net/{code}) | "
                 f"[銘柄スカウター](https://monex.ifis.co.jp/index.php?sa=report_zaimu&bcode={code}) | "
                 f"[Yahoo](https://finance.yahoo.co.jp/quote/{code}.T)"

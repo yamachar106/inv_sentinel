@@ -1,0 +1,171 @@
+name: Daily Breakout Monitor
+
+on:
+  schedule:
+    # JP市場終了後: 16:00 JST = 07:00 UTC（月〜金）
+    - cron: "0 7 * * 1-5"
+    # US市場終了後: 06:00 JST = 21:00 UTC 前日（月〜金）
+    - cron: "0 21 * * 1-5"
+
+  workflow_dispatch:
+    inputs:
+      strategy:
+        description: "Strategy to run (breakout / kuroten / all)"
+        required: false
+        type: choice
+        options:
+          - all
+          - breakout
+          - kuroten
+        default: all
+      market:
+        description: "Market (JP / US / all)"
+        required: false
+        type: choice
+        options:
+          - all
+          - JP
+          - US
+        default: all
+      universe:
+        description: "US universe preset"
+        required: false
+        type: choice
+        options:
+          - us_all
+          - us_mid
+          - us_small
+          - sp500
+        default: us_all
+      limit:
+        description: "US stock limit (0 = all)"
+        required: false
+        type: number
+        default: 0
+      dry-run:
+        description: "Skip Slack notifications"
+        required: false
+        type: boolean
+        default: false
+      skip-healthcheck:
+        description: "Skip healthcheck"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  SLACK_WEBHOOK_KUROTEN_JP: ${{ secrets.SLACK_WEBHOOK_KUROTEN_JP }}
+  SLACK_WEBHOOK_BREAKOUT_JP: ${{ secrets.SLACK_WEBHOOK_BREAKOUT_JP }}
+  SLACK_WEBHOOK_BREAKOUT_US: ${{ secrets.SLACK_WEBHOOK_BREAKOUT_US }}
+  PYTHONIOENCODING: utf-8
+
+jobs:
+  daily-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/cache
+            data/universe
+          key: daily-cache-${{ github.run_id }}
+          restore-keys: |
+            daily-cache-
+
+      - name: Determine run parameters
+        id: params
+        run: |
+          # スケジュール実行時: cronの時刻でJP/USを自動判定
+          HOUR=$(date -u +%H)
+          ARGS=""
+
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            if [ "$HOUR" = "07" ]; then
+              # 07:00 UTC = 16:00 JST → JP市場終了後
+              ARGS="--market JP"
+              echo "trigger=schedule-jp" >> $GITHUB_OUTPUT
+            else
+              # 21:00 UTC = 06:00 JST → US市場終了後
+              ARGS="--market US"
+              echo "trigger=schedule-us" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "trigger=manual" >> $GITHUB_OUTPUT
+
+            # 手動実行時のパラメータ
+            STRATEGY="${{ github.event.inputs.strategy }}"
+            MARKET="${{ github.event.inputs.market }}"
+            UNIVERSE="${{ github.event.inputs.universe }}"
+            LIMIT="${{ github.event.inputs.limit }}"
+
+            if [ "$STRATEGY" != "all" ] && [ -n "$STRATEGY" ]; then
+              ARGS="$ARGS --strategy $STRATEGY"
+            fi
+            if [ "$MARKET" != "all" ] && [ -n "$MARKET" ]; then
+              ARGS="$ARGS --market $MARKET"
+            fi
+            if [ -n "$UNIVERSE" ]; then
+              ARGS="$ARGS --universe $UNIVERSE"
+            fi
+            if [ "$LIMIT" != "0" ] && [ -n "$LIMIT" ]; then
+              ARGS="$ARGS --limit $LIMIT"
+            fi
+            if [ "${{ github.event.inputs.dry-run }}" = "true" ]; then
+              ARGS="$ARGS --dry-run"
+            fi
+            if [ "${{ github.event.inputs.skip-healthcheck }}" = "true" ]; then
+              ARGS="$ARGS --skip-healthcheck"
+            fi
+          fi
+
+          echo "args=$ARGS" >> $GITHUB_OUTPUT
+          echo "Run args: $ARGS"
+
+      - name: Run daily monitor
+        run: |
+          echo "Running: python daily_run.py ${{ steps.params.outputs.args }}"
+          python daily_run.py ${{ steps.params.outputs.args }}
+
+      - name: Commit signal history
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/signals/ data/universe/ data/cache/
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Daily signals $(date -u +%Y-%m-%d) [${{ steps.params.outputs.trigger }}]"
+            git push
+          fi
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-run-${{ steps.params.outputs.trigger }}-${{ github.run_id }}
+          path: |
+            data/signals/
+            data/logs/
+          retention-days: 30
+          if-no-files-found: ignore

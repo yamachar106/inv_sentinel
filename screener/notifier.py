@@ -3,6 +3,7 @@ Slack通知
 スクリーニング結果をSlack Incoming Webhookで送信する
 
 投資判断に資する情報を銘柄ごとに構造化して通知する。
+通知ルーティング: strategy×market の組み合わせでチャンネル（Webhook URL）を切り替え。
 """
 
 import os
@@ -11,6 +12,44 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError
 
 import pandas as pd
+
+from screener.config import NOTIFY_CHANNELS, NOTIFY_FALLBACK_ENV
+
+
+def _resolve_webhook_url(strategy: str = "", market: str = "") -> str | None:
+    """
+    strategy×market に対応するSlack Webhook URLを解決する。
+
+    優先順位:
+    1. NOTIFY_CHANNELS["{strategy}:{market}"] に対応する環境変数
+    2. NOTIFY_FALLBACK_ENV (SLACK_WEBHOOK_URL)
+
+    Returns:
+        Webhook URL or None
+    """
+    key = f"{strategy}:{market}".upper() if strategy else ""
+    if key and key in {k.upper(): k for k in NOTIFY_CHANNELS}:
+        # 大文字小文字を正規化して検索
+        normalized = {k.upper(): v for k, v in NOTIFY_CHANNELS.items()}
+        env_var = normalized.get(key, "")
+        url = os.getenv(env_var)
+        if url:
+            return url
+
+    # フォールバック
+    return os.getenv(NOTIFY_FALLBACK_ENV)
+
+
+def _send_slack(webhook_url: str, message: str) -> bool:
+    """Slack Webhook にメッセージを送信する"""
+    payload = json.dumps({"text": message}).encode("utf-8")
+    req = Request(webhook_url, data=payload, headers={"Content-Type": "application/json"})
+    try:
+        with urlopen(req) as resp:
+            return resp.status == 200
+    except Exception as e:
+        print(f"[WARN] Slack通知エラー: {e}")
+        return False
 
 
 def notify_slack(
@@ -33,7 +72,7 @@ def notify_slack(
     Returns:
         送信成功ならTrue
     """
-    webhook_url = os.getenv("SLACK_WEBHOOK_URL")
+    webhook_url = _resolve_webhook_url("kuroten", "JP")
     if not webhook_url:
         print("[WARN] SLACK_WEBHOOK_URL が未設定のため通知をスキップ")
         return False
@@ -44,15 +83,97 @@ def notify_slack(
         code_to_name=code_to_name,
         company_summaries=company_summaries,
     )
-    payload = json.dumps({"text": message}).encode("utf-8")
+    return _send_slack(webhook_url, message)
 
-    req = Request(webhook_url, data=payload, headers={"Content-Type": "application/json"})
-    try:
-        with urlopen(req) as resp:
-            return resp.status == 200
-    except Exception as e:
-        print(f"[WARN] Slack通知エラー: {e}")
+
+def notify_breakout(df_breakout: pd.DataFrame, date: str, market: str = "JP") -> bool:
+    """
+    ブレイクアウト検出結果をSlackに通知する。
+
+    Args:
+        df_breakout: check_breakout_batch() の戻り値
+        date: 対象日付 (YYYY-MM-DD)
+        market: "JP" or "US"
+
+    Returns:
+        送信成功ならTrue
+    """
+    webhook_url = _resolve_webhook_url("breakout", market)
+    if not webhook_url:
+        print("[WARN] SLACK_WEBHOOK_URL が未設定のため通知をスキップ")
         return False
+
+    if df_breakout.empty:
+        return False
+
+    message = _build_breakout_message(df_breakout, date, market)
+    return _send_slack(webhook_url, message)
+
+
+def _build_breakout_message(df: pd.DataFrame, date: str, market: str = "JP") -> str:
+    """ブレイクアウト検出結果のSlack通知メッセージを組み立てる"""
+    is_us = market.upper() == "US"
+    n_breakout = len(df[df["signal"].isin(["breakout", "breakout_overheated"])])
+    n_pre = len(df[df["signal"] == "pre_breakout"])
+
+    market_label = "US" if is_us else "JP"
+    header = f"*New High Breakout [{market_label}]* ({date})\n" if is_us else f"*新高値ブレイクアウト検出 [{market_label}]* ({date})\n"
+    header += f"検出: *{len(df)}件* (ブレイクアウト: {n_breakout} | プレブレイクアウト: {n_pre})\n"
+
+    lines = [header]
+    # breakout を先に、次に pre_breakout
+    signal_order = {"breakout": 0, "pre_breakout": 1}
+    df_sorted = df.copy()
+    df_sorted["_order"] = df_sorted["signal"].map(signal_order)
+    df_sorted = df_sorted.sort_values("_order").drop(columns=["_order"])
+
+    for _, row in df_sorted.iterrows():
+        code = row.get("code", "")
+        signal = row["signal"]
+        close = row["close"]
+        dist = row["distance_pct"]
+        vol = row["volume_ratio"]
+        rsi = row["rsi"]
+        above_50 = row.get("above_sma_50", False)
+        above_200 = row.get("above_sma_200", False)
+
+        if signal == "breakout":
+            tag = "BREAKOUT"
+        elif signal == "breakout_overheated":
+            tag = "BREAKOUT (RSI過熱・押し目待ち推奨)"
+        else:
+            tag = "PRE-BREAK"
+        dist_str = f"+{dist:.1f}%" if dist >= 0 else f"{dist:.1f}%"
+
+        sma_parts = []
+        if above_50:
+            sma_parts.append("SMA50↑")
+        if above_200:
+            sma_parts.append("SMA200↑")
+        sma_str = " ".join(sma_parts) if sma_parts else ""
+
+        if is_us:
+            price_str = f"${close:,.2f}"
+            stock_line = f"[{tag}] {code} | {price_str} | 52W High {dist_str}"
+            link_line = (
+                f"  <https://finance.yahoo.com/quote/{code}|Yahoo Finance>"
+                f" | <https://finviz.com/quote.ashx?t={code}|Finviz>"
+            )
+        else:
+            price_str = f"{close:,.0f}円"
+            stock_line = f"[{tag}] {code} | {price_str} | 52W高値 {dist_str}"
+            link_line = (
+                f"  <https://finance.yahoo.co.jp/quote/{code}.T|Yahoo>"
+                f" | <https://irbank.net/{code}|IR Bank>"
+            )
+
+        detail_line = f"  Vol {vol:.1f}x | RSI {rsi:.1f} | {sma_str}"
+        lines.append(stock_line)
+        lines.append(detail_line)
+        lines.append(link_line)
+        lines.append("")
+
+    return "\n".join(lines)
 
 
 def _build_message(
@@ -127,6 +248,7 @@ def _build_stock_section(row: pd.Series, summaries: dict[str, dict]) -> str:
     mcap = row.get("MarketCapitalization", 0)
     mcap_oku = f"{mcap / 1e8:.0f}億" if mcap and mcap > 0 else "不明"
 
+    category = row.get("Category", "")
     rec = row.get("Recommendation", "-")
     curr_op = row.get("OperatingProfit", 0) or 0
     prev_op = row.get("prev_operating_profit", 0) or 0
@@ -141,10 +263,14 @@ def _build_stock_section(row: pd.Series, summaries: dict[str, dict]) -> str:
 
     # --- ヘッダ: 推奨度・銘柄名・基本データ ---
     target_price = close * 2 if close else 0
-    lines.append(
-        f"*[{rec}] {code} {name}* | {close:,.0f}円 | 時価総額{mcap_oku}"
-        + (f" | 目標{target_price:,.0f}円" if target_price else "")
-    )
+    header_parts = [f"*[{rec}] {code} {name}*"]
+    if category:
+        header_parts.append(category)
+    header_parts.append(f"{close:,.0f}円")
+    header_parts.append(f"時価���額{mcap_oku}")
+    if target_price:
+        header_parts.append(f"目標{target_price:,.0f}��")
+    lines.append(" | ".join(header_parts))
 
     # --- 1. 転換シグナル: 何が起きたか ---
     signal_parts = []

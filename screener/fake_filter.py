@@ -12,7 +12,10 @@ import time
 
 import pandas as pd
 
-from screener.config import FAKE_SCORE_THRESHOLD, PROGRESS_RATIO_THRESHOLD, REQUEST_INTERVAL
+from screener.config import (
+    FAKE_SCORE_THRESHOLD, PROGRESS_RATIO_THRESHOLD, REQUEST_INTERVAL,
+    RISKY_CATEGORIES, RISKY_NAME_KEYWORDS,
+)
 from screener.irbank import (
     get_forecast_data,
     get_quarterly_data,
@@ -61,6 +64,7 @@ def apply_fake_filter(
             code, name, html,
             signal_period=row.get("period", ""),
             signal_quarter=row.get("quarter", ""),
+            category=row.get("Category", ""),
             verbose=verbose,
         )
 
@@ -93,6 +97,7 @@ def check_fake(
     html: str,
     signal_period: str = "",
     signal_quarter: str = "",
+    category: str = "",
     verbose: bool = False,
 ) -> tuple[list[str], int]:
     """
@@ -104,6 +109,15 @@ def check_fake(
     """
     flags = []
     score = 0
+
+    # --- 0. 業種フィルタ（書籍第2章: バイオ・創薬・ゲーム関連は除外推奨） ---
+    if category and category in RISKY_CATEGORIES:
+        flags.append(f"除外業種({category})")
+        score += 2
+    elif any(kw in name for kw in RISKY_NAME_KEYWORDS):
+        matched = [kw for kw in RISKY_NAME_KEYWORDS if kw in name]
+        flags.append(f"除外キーワード({','.join(matched)})")
+        score += 2
 
     # --- 1. 通期予想チェック ---
     forecast = get_forecast_data(code, html=html)
@@ -123,6 +137,12 @@ def check_fake(
     else:
         if verbose:
             print(f"  [{code}] {name}: 通期予想黒字 ({forecast_op:.1f}億) [OK]")
+
+    # --- 1b. 通期実績チェック（予想だけでなく実績も見る） ---
+    annual_deficit = _check_annual_actual_deficit(code, html, signal_period)
+    if annual_deficit:
+        flags.append(annual_deficit)
+        score += 2  # 通期実績赤字は予想赤字と同等の重み
 
     # --- 2. 進捗率チェック ---
     progress_op = forecast.get("progress_op")
@@ -168,6 +188,41 @@ def check_fake(
         print(f"  [{code}] {name}: フェイク疑い (score={score}) → {', '.join(flags)}")
 
     return flags, score
+
+
+def _check_annual_actual_deficit(code: str, html: str, signal_period: str) -> str | None:
+    """
+    黒字転換シグナルが出た年度の通期実績が赤字かチェックする。
+
+    4Qだけ黒字だが通期では赤字、というフェイクパターンを検出する。
+    （例: ナイル 2025/12 — 4Q黒字だが通期-106百万）
+    """
+    from io import StringIO
+    try:
+        tables = pd.read_html(StringIO(html))
+    except ValueError:
+        return None
+
+    from screener.irbank import _find_qonq_table, _parse_number
+
+    qonq = _find_qonq_table(tables)
+    if qonq is None:
+        return None
+
+    op_rows = qonq[qonq["科目"] == "営業利益"]
+    if op_rows.empty or "通期" not in qonq.columns:
+        return None
+
+    # シグナル年度の通期実績を確認
+    for _, row in op_rows.iterrows():
+        period = str(row.get("年度", ""))
+        if signal_period and signal_period not in period:
+            continue
+        annual_val = _parse_number(str(row.get("通期", "")))
+        if annual_val is not None and annual_val < 0:
+            return f"通期実績赤字({annual_val:.1f}億)"
+
+    return None
 
 
 def _check_q4_bias(
