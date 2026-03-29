@@ -92,6 +92,10 @@ REC_V2_DEPTH_MISMATCH_PENALTY = -1       # 5Q+赤字で回復が弱い
 REC_V2_CONSECUTIVE_RED_BONUS = 1         # 連続赤字3Q以上: +1（旧: 最大+4）
 REC_V2_DOUBLE_TURN_BONUS = 1             # ダブル転換: +1（旧: +2）
 
+# --- F-Score連携 ---
+REC_V2_FSCORE_HIGH = 5                   # F-Score >= 5 → +1（財務健全）
+REC_V2_FSCORE_LOW = 2                    # F-Score <= 2 → -1（財務懸念）
+
 # --- グレード閾値（スコア範囲: 約-7〜+7） ---
 REC_V2_GRADE_S = 5                       # S(Top Pick): 年3-5件の厳選投資対象
 REC_V2_GRADE_A = 3                       # A(Strong): 枠があれば投資

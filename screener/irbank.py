@@ -469,6 +469,12 @@ def get_company_summary(code: str, html: str = None) -> dict | None:
         for r in op_records
     ]
 
+    # 四半期売上履歴（F-Score用）
+    revenue_history = [
+        {"period": r["period"], "quarter": r["quarter"], "revenue": r["revenue"]}
+        for r in rev_records
+    ] if rev_records else []
+
     return {
         "revenue_trend": rev_trend,
         "op_trend": op_trend,
@@ -476,6 +482,7 @@ def get_company_summary(code: str, html: str = None) -> dict | None:
         "yoy_op": yoy_op,
         "yoy_revenue_pct": yoy_revenue_pct,
         "quarterly_history": quarterly_history,
+        "revenue_history": revenue_history,
     }
 
 

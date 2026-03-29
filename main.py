@@ -80,6 +80,7 @@ def main(
     company_summaries = {}
     quarterly_histories = {}
     revenue_map = {}
+    revenue_histories = {}
     watchlist_codes = df_filtered["Code"].tolist()
     if watchlist_codes:
         print(f"  [4/6] 銘柄詳細取得 ({len(watchlist_codes)} 銘柄)...")
@@ -94,6 +95,8 @@ def main(
                             quarterly_histories[code] = summary["quarterly_history"]
                         if summary.get("yoy_revenue_pct") is not None:
                             revenue_map[code] = summary["yoy_revenue_pct"]
+                        if summary.get("revenue_history"):
+                            revenue_histories[code] = summary["revenue_history"]
                 time.sleep(REQUEST_INTERVAL)
             except Exception as e:
                 print(f"  [WARN] {code} 詳細取得失敗: {e}")
@@ -104,6 +107,7 @@ def main(
         df_filtered,
         quarterly_histories=quarterly_histories,
         revenue_map=revenue_map,
+        revenue_histories=revenue_histories,
     )
     print(f"  推奨度: ", end="")
     for g in ["S", "A", "B", "C"]:

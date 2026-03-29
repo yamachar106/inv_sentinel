@@ -42,10 +42,13 @@ from screener.config import (
     REC_V2_DEPTH_MISMATCH_PENALTY,
     REC_V2_CONSECUTIVE_RED_BONUS,
     REC_V2_DOUBLE_TURN_BONUS,
+    REC_V2_FSCORE_HIGH,
+    REC_V2_FSCORE_LOW,
     REC_V2_GRADE_S,
     REC_V2_GRADE_A,
     REC_V2_GRADE_B,
 )
+from screener.fscore import calc_fscore
 
 
 # =========================================================================
@@ -66,6 +69,7 @@ def calc_recommendation(
     yoy_revenue_pct: float | None = None,
     forecast_data: dict | None = None,
     prior_signal_failures: int = 0,
+    revenue_history: list[dict] | None = None,
     version: str = "v2",
 ) -> tuple[str, int, list[str]]:
     """
@@ -171,6 +175,22 @@ def calc_recommendation(
         elif fake_score == 1:
             pts -= 1
             reasons.append(f"注意(fake={fake_score})")
+
+    # --- 11. Piotroski F-Score（+1/-1）---
+    fscore, fscore_details = calc_fscore(
+        quarterly_history=quarterly_history,
+        revenue_history=revenue_history,
+        curr_op=curr_op,
+        prev_op=prev_op,
+        curr_ord=curr_ord,
+        signal_quarter=signal_quarter,
+    )
+    if fscore >= REC_V2_FSCORE_HIGH:
+        pts += 1
+        reasons.append(f"F-Score={fscore}/7")
+    elif fscore <= REC_V2_FSCORE_LOW:
+        pts -= 1
+        reasons.append(f"F-Score低={fscore}/7")
 
     # グレード判定
     if pts >= REC_V2_GRADE_S:
@@ -389,6 +409,7 @@ def add_recommendation_column(
     quarterly_histories: dict | None = None,
     forecast_map: dict | None = None,
     revenue_map: dict | None = None,
+    revenue_histories: dict | None = None,
     version: str = "v2",
 ) -> None:
     """
@@ -399,6 +420,7 @@ def add_recommendation_column(
         quarterly_histories: {code: [{period, quarter, op}, ...]} 四半期履歴
         forecast_map: {code: {forecast_op, progress_op, ...}} 通期予想
         revenue_map: {code: yoy_revenue_pct} 前年同期比売上成長率
+        revenue_histories: {code: [{period, quarter, revenue}, ...]} 四半期売上履歴
         version: "v1" or "v2"
     """
     grades = []
@@ -419,6 +441,7 @@ def add_recommendation_column(
             signal_quarter=row.get("quarter"),
             yoy_revenue_pct=(revenue_map or {}).get(code),
             forecast_data=(forecast_map or {}).get(code),
+            revenue_history=(revenue_histories or {}).get(code),
             version=version,
         )
         grades.append(grade)
