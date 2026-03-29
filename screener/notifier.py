@@ -181,12 +181,85 @@ def _build_breakout_message(df: pd.DataFrame, date: str, market: str = "JP") -> 
                 f" | <https://irbank.net/{code}|IR Bank>"
             )
 
-        detail_line = f"  Vol {vol:.1f}x | RSI {rsi:.1f} | {sma_str}"
+        gc = row.get("gc_status", False)
+        gc_str = "GC済" if gc else "GC待ち"
+
+        detail_line = f"  Vol {vol:.1f}x | RSI {rsi:.1f} | {sma_str} | {gc_str}"
         lines.append(stock_line)
         lines.append(detail_line)
         lines.append(link_line)
         lines.append("")
 
+    return "\n".join(lines)
+
+
+def notify_gc_entry(
+    entries: list[dict],
+    date: str,
+    market: str = "JP",
+) -> bool:
+    """
+    GC到達によるエントリー通知（2段階通知の第2段階）
+
+    Args:
+        entries: [{code, signal_date, close, ...}, ...]
+        date: 本日日付
+        market: "JP" or "US"
+    """
+    webhook_url = _resolve_webhook_url("breakout", market)
+    if not webhook_url:
+        return False
+
+    if not entries:
+        return False
+
+    message = _build_gc_entry_message(entries, date, market)
+    return _send_slack(webhook_url, message)
+
+
+def _build_gc_entry_message(
+    entries: list[dict],
+    date: str,
+    market: str = "JP",
+) -> str:
+    """GCエントリー通知メッセージを組み立てる"""
+    is_us = market.upper() == "US"
+    market_label = "US" if is_us else "JP"
+
+    lines = [
+        f"*GCエントリーシグナル [{market_label}]* ({date})",
+        f"GC到達: *{len(entries)}件* (ブレイクアウト後、SMA20がSMA50を上抜け)\n",
+    ]
+
+    for e in entries:
+        code = e.get("code", "")
+        signal_date = e.get("signal_date", "")
+        signal = e.get("signal", "breakout")
+        close = e.get("close", 0)
+        wait_days = e.get("wait_days", 0)
+
+        tag = "ENTRY" if signal == "breakout" else "ENTRY(PRE)"
+
+        if is_us:
+            price_str = f"${close:,.2f}" if close else ""
+            stock_line = f"[{tag}] {code} | シグナル: {signal_date} | 待機{wait_days}日"
+            link_line = (
+                f"  <https://finance.yahoo.com/quote/{code}|Yahoo Finance>"
+                f" | <https://finviz.com/quote.ashx?t={code}|Finviz>"
+            )
+        else:
+            price_str = f"{close:,.0f}円" if close else ""
+            stock_line = f"[{tag}] {code} | シグナル: {signal_date} | 待機{wait_days}日"
+            link_line = (
+                f"  <https://finance.yahoo.co.jp/quote/{code}.T|Yahoo>"
+                f" | <https://irbank.net/{code}|IR Bank>"
+            )
+
+        lines.append(stock_line)
+        lines.append(link_line)
+        lines.append("")
+
+    lines.append("_ブレイクアウト+GC確認済み — エントリー検討_")
     return "\n".join(lines)
 
 

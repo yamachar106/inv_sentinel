@@ -191,6 +191,10 @@ def _evaluate_signal(latest: pd.Series, ticker: str, market: str) -> dict | None
 
     vol_ratio = float(latest["volume_ratio"]) if pd.notna(latest["volume_ratio"]) else 0.0
 
+    sma20 = float(latest["sma_20"]) if pd.notna(latest.get("sma_20")) else None
+    sma50 = float(latest["sma_50"]) if pd.notna(latest.get("sma_50")) else None
+    gc_status = (sma20 is not None and sma50 is not None and sma20 > sma50)
+
     result = {
         "ticker": ticker,
         "close": float(latest["close"]),
@@ -200,6 +204,7 @@ def _evaluate_signal(latest: pd.Series, ticker: str, market: str) -> dict | None
         "rsi": float(latest["rsi"]) if pd.notna(latest["rsi"]) else 0.0,
         "above_sma_50": bool(latest["above_sma_50"]) if pd.notna(latest["above_sma_50"]) else False,
         "above_sma_200": bool(latest["above_sma_200"]) if pd.notna(latest["above_sma_200"]) else False,
+        "gc_status": gc_status,
     }
 
     is_new_high = bool(latest["is_new_high"])
@@ -227,6 +232,36 @@ def _evaluate_signal(latest: pd.Series, ticker: str, market: str) -> dict | None
         return result
 
     return None
+
+
+def check_gc_status(codes: list[str], market: str = "JP") -> dict[str, bool]:
+    """
+    指定銘柄のGC状態（SMA20 > SMA50）を一括チェックする。
+
+    2段階エントリー通知で、ペンディング銘柄のGC到達を確認するために使用。
+
+    Returns:
+        {code: True/False} — TrueならGC状態
+    """
+    suffix = TICKER_SUFFIX_JP if market.upper() == "JP" else TICKER_SUFFIX_US
+    tickers = [f"{code}{suffix}" for code in codes]
+    ohlcv_data = fetch_ohlcv_batch(tickers)
+
+    result = {}
+    for code in codes:
+        ticker = f"{code}{suffix}"
+        df = ohlcv_data.get(ticker)
+        if df is None or len(df) < BREAKOUT_SMA_MID:
+            result[code] = False
+            continue
+
+        df = calculate_breakout_indicators(df)
+        latest = df.iloc[-1]
+        sma20 = float(latest["sma_20"]) if pd.notna(latest.get("sma_20")) else None
+        sma50 = float(latest["sma_50"]) if pd.notna(latest.get("sma_50")) else None
+        result[code] = (sma20 is not None and sma50 is not None and sma20 > sma50)
+
+    return result
 
 
 def check_breakout(ticker: str, market: str = "JP") -> dict | None:
@@ -299,6 +334,6 @@ def check_breakout_batch(
     df = pd.DataFrame(results)
     col_order = [
         "code", "ticker", "signal", "close", "high_52w", "distance_pct",
-        "volume_ratio", "rsi", "above_sma_50", "above_sma_200",
+        "volume_ratio", "rsi", "above_sma_50", "above_sma_200", "gc_status",
     ]
     return df[[c for c in col_order if c in df.columns]]

@@ -13,13 +13,14 @@ from daily_run import (
 
 
 class TestRunBreakoutJP:
+    @patch("daily_run.add_pending_batch")
     @patch("daily_run.notify_breakout")
     @patch("daily_run.check_breakout_batch")
     @patch("daily_run.load_latest_watchlist")
-    def test_with_signals(self, mock_watchlist, mock_batch, mock_notify):
+    def test_with_signals(self, mock_watchlist, mock_batch, mock_notify, mock_pending):
         mock_watchlist.return_value = ({"7974": "任天堂", "6758": "ソニー"}, "2026-Q1")
         mock_batch.return_value = pd.DataFrame([
-            {"code": "7974", "signal": "breakout", "close": 8500},
+            {"code": "7974", "signal": "breakout", "close": 8500, "gc_status": True},
         ])
         mock_notify.return_value = True
 
@@ -43,20 +44,21 @@ class TestRunBreakoutJP:
     def test_dry_run_skips_notify(self, mock_watchlist, mock_batch, mock_notify):
         mock_watchlist.return_value = ({"7974": "任天堂"}, "2026-Q1")
         mock_batch.return_value = pd.DataFrame([
-            {"code": "7974", "signal": "breakout", "close": 8500},
+            {"code": "7974", "signal": "breakout", "close": 8500, "gc_status": True},
         ])
         run_breakout_jp(dry_run=True)
         mock_notify.assert_not_called()
 
 
 class TestRunBreakoutUS:
+    @patch("daily_run.add_pending_batch")
     @patch("daily_run.notify_breakout")
     @patch("daily_run.check_breakout_batch")
     @patch("daily_run.load_universe")
-    def test_with_signals(self, mock_universe, mock_batch, mock_notify):
+    def test_with_signals(self, mock_universe, mock_batch, mock_notify, mock_pending):
         mock_universe.return_value = ["AAPL", "NVDA", "MSFT"]
         mock_batch.return_value = pd.DataFrame([
-            {"code": "AAPL", "signal": "breakout", "close": 200.0},
+            {"code": "AAPL", "signal": "breakout", "close": 200.0, "gc_status": True},
         ])
         mock_notify.return_value = True
 

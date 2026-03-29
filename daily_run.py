@@ -24,10 +24,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from screener.breakout import check_breakout_batch
+from screener.breakout import check_breakout_batch, check_gc_status
+from screener.breakout_pending import load_pending, add_pending_batch, remove_pending
 from screener.daily_kuroten import run_daily_kuroten
 from screener.healthcheck import run_healthcheck
-from screener.notifier import notify_breakout, notify_slack, _resolve_webhook_url, _send_slack
+from screener.notifier import (
+    notify_breakout, notify_gc_entry, notify_slack,
+    _resolve_webhook_url, _send_slack,
+)
 from screener.reporter import load_latest_watchlist
 from screener.signal_store import (
     save_signals, load_previous_signals, diff_signals, format_diff_summary,
@@ -37,7 +41,7 @@ from screener.universe import load_universe
 
 
 def run_breakout_jp(dry_run: bool = False) -> tuple[list[str], str]:
-    """JP ブレイクアウト監視を実行"""
+    """JP ブレイクアウト監視を実行（2段階通知対応）"""
     code_to_name, label = load_latest_watchlist()
     if not code_to_name:
         print("  [SKIP] JPウォッチリストなし")
@@ -49,15 +53,33 @@ def run_breakout_jp(dry_run: bool = False) -> tuple[list[str], str]:
     df = check_breakout_batch(codes, market="JP")
     signal_codes = df["code"].tolist() if not df.empty else []
 
-    if not dry_run and not df.empty:
-        notify_breakout(df, date.today().isoformat(), market="JP")
-
-    # クロス戦略タグ: これらは黒字転換ウォッチリスト銘柄なのでタグ付け
     if not df.empty:
+        # 2段階通知: GC済みとGC待ちに分離
+        gc_ready = df[df["gc_status"] == True]
+        gc_pending = df[df["gc_status"] == False]
+
         for _, row in df.iterrows():
             name = code_to_name.get(row["code"], "")
+            gc_label = "GC済" if row.get("gc_status") else "GC待ち"
             tag = "BREAKOUT+黒字転換" if row["signal"] == "breakout" else "PRE-BREAK+黒字転換"
-            print(f"    [{tag}] {row['code']} {name}")
+            print(f"    [{tag}] {row['code']} {name} ({gc_label})")
+
+        if not dry_run:
+            # Stage 1: 全シグナルを準備通知（GC状態を付記）
+            notify_breakout(df, date.today().isoformat(), market="JP")
+
+            # GC未達のシグナルをペンディングに保存
+            if not gc_pending.empty:
+                pending_signals = {}
+                for _, row in gc_pending.iterrows():
+                    pending_signals[row["code"]] = {
+                        "signal_date": date.today().isoformat(),
+                        "signal": row["signal"],
+                        "close": float(row["close"]),
+                        "market": "JP",
+                    }
+                add_pending_batch(pending_signals)
+                print(f"    GC待ちペンディング登録: {len(pending_signals)}件")
 
     return signal_codes, "breakout:JP"
 
@@ -67,7 +89,7 @@ def run_breakout_us(
     limit: int = 0,
     dry_run: bool = False,
 ) -> tuple[list[str], str]:
-    """US ブレイクアウト監視を実行"""
+    """US ブレイクアウト監視を実行（2段階通知対応）"""
     codes = load_universe(universe)
     if not codes:
         print(f"  [SKIP] ユニバース '{universe}' 取得失敗")
@@ -80,8 +102,23 @@ def run_breakout_us(
     df = check_breakout_batch(codes, market="US")
     signal_codes = df["code"].tolist() if not df.empty else []
 
-    if not dry_run and not df.empty:
-        notify_breakout(df, date.today().isoformat(), market="US")
+    if not df.empty:
+        gc_pending = df[df["gc_status"] == False]
+
+        if not dry_run:
+            notify_breakout(df, date.today().isoformat(), market="US")
+
+            if not gc_pending.empty:
+                pending_signals = {}
+                for _, row in gc_pending.iterrows():
+                    pending_signals[row["code"]] = {
+                        "signal_date": date.today().isoformat(),
+                        "signal": row["signal"],
+                        "close": float(row["close"]),
+                        "market": "US",
+                    }
+                add_pending_batch(pending_signals)
+                print(f"    GC待ちペンディング登録: {len(pending_signals)}件")
 
     return signal_codes, "breakout:US"
 
@@ -133,6 +170,56 @@ def _build_market_change_message(changes: list[dict], today: str) -> str:
         lines.append("")
     lines.append("_スタンダード→プライム昇格は機関投資家の買い需要が構造的に発生_")
     return "\n".join(lines)
+
+
+def _check_pending_gc(today: str, dry_run: bool = False) -> None:
+    """ペンディングシグナルのGC到達をチェックし、エントリー通知を送る"""
+    pending = load_pending()
+    if not pending:
+        return
+
+    print(f"\n[5] GCペンディングチェック ({len(pending)}件)")
+
+    # 市場別にグループ化
+    by_market: dict[str, list[str]] = {}
+    for code, info in pending.items():
+        mkt = info.get("market", "JP")
+        by_market.setdefault(mkt, []).append(code)
+
+    gc_arrived = []
+    for market, codes in by_market.items():
+        print(f"  {market}: {len(codes)}件チェック中...")
+        gc_statuses = check_gc_status(codes, market=market)
+
+        for code in codes:
+            if gc_statuses.get(code, False):
+                info = pending[code]
+                signal_date = info.get("signal_date", "")
+                wait_days = (date.fromisoformat(today) - date.fromisoformat(signal_date)).days if signal_date else 0
+                gc_arrived.append({
+                    "code": code,
+                    "signal_date": signal_date,
+                    "signal": info.get("signal", "breakout"),
+                    "close": info.get("close", 0),
+                    "market": market,
+                    "wait_days": wait_days,
+                })
+                print(f"    [GC到達] {code} (シグナル: {signal_date}, 待機{wait_days}日)")
+
+    if gc_arrived:
+        # 市場別にエントリー通知
+        arrived_codes = [e["code"] for e in gc_arrived]
+        remove_pending(arrived_codes)
+
+        if not dry_run:
+            for market in by_market:
+                market_entries = [e for e in gc_arrived if e["market"] == market]
+                if market_entries:
+                    notify_gc_entry(market_entries, today, market=market)
+
+        print(f"  GCエントリー通知: {len(gc_arrived)}件")
+    else:
+        print("  GC到達なし")
 
 
 def build_digest(
@@ -249,6 +336,10 @@ def main():
         )
         if key:
             all_signals[key] = codes
+
+    # ---- GCペンディングチェック（2段階通知: Stage 2）----
+    if args.strategy is None or args.strategy == "breakout":
+        _check_pending_gc(today, dry_run=args.dry_run)
 
     # ---- シグナル保存 + 差分計算 ----
     print("\n" + "=" * 60)
