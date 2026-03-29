@@ -1,6 +1,10 @@
 """TDnetスクレイパーのテスト"""
 
-from screener.tdnet import _parse_tdnet_html, filter_earnings_disclosures
+from screener.tdnet import (
+    _parse_tdnet_html,
+    filter_earnings_disclosures,
+    filter_market_change_disclosures,
+)
 
 
 class TestParseTdnetHtml:
@@ -56,3 +60,25 @@ class TestFilterEarnings:
         assert "7890" in codes  # 特別損失
         assert "5678" not in codes  # 人事
         assert "3456" not in codes  # 新株予約権
+
+
+class TestFilterMarketChange:
+    def test_detects_prime_upgrade(self):
+        disclosures = [
+            {"code": "1234", "title": "プライム市場への市場区分の変更に関するお知らせ", "time": "15:00"},
+            {"code": "5678", "title": "2026年3月期 決算短信", "time": "16:00"},
+            {"code": "9012", "title": "上場市場の変更承認に関するお知らせ", "time": "17:00"},
+        ]
+        result = filter_market_change_disclosures(disclosures)
+        codes = [d["code"] for d in result]
+        assert "1234" in codes
+        assert "9012" in codes
+        assert "5678" not in codes
+
+    def test_no_market_change(self):
+        disclosures = [
+            {"code": "1234", "title": "決算短信", "time": "15:00"},
+            {"code": "5678", "title": "新株発行のお知らせ", "time": "16:00"},
+        ]
+        result = filter_market_change_disclosures(disclosures)
+        assert result == []

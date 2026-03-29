@@ -23,6 +23,17 @@ EARNINGS_KEYWORDS = [
     "特別利益",
 ]
 
+# 上場市場変更の検出キーワード
+MARKET_CHANGE_KEYWORDS = [
+    "市場区分の変更",
+    "上場市場の変更",
+    "プライム市場",
+    "スタンダード市場への変更",
+    "市場変更",
+    "指定替え",
+    "上場区分",
+]
+
 
 def fetch_tdnet_disclosures(target_date: str | None = None) -> list[dict]:
     """
@@ -148,3 +159,40 @@ def get_earnings_codes(target_date: str | None = None) -> list[str]:
     # 重複排除（同じ企業が複数開示することがある）
     codes = list(dict.fromkeys(d["code"] for d in earnings))
     return codes
+
+
+def filter_market_change_disclosures(disclosures: list[dict]) -> list[dict]:
+    """
+    適時開示一覧から上場市場変更に関する開示をフィルタする。
+
+    スタンダード→プライムなどの市場区分変更は、機関投資家の買い需要が
+    構造的に発生するため株価上昇の強いカタリストとなる。
+    """
+    result = []
+    for d in disclosures:
+        title = d.get("title", "")
+        if any(kw in title for kw in MARKET_CHANGE_KEYWORDS):
+            result.append(d)
+    return result
+
+
+def get_market_change_codes(target_date: str | None = None) -> list[dict]:
+    """
+    指定日に上場市場変更の開示があった企業を返す。
+
+    Args:
+        target_date: 日付 (YYYY-MM-DD)。省略時は前営業日。
+
+    Returns:
+        [{"code": "7974", "title": "プライム市場への変更に関するお知らせ"}, ...]
+    """
+    disclosures = fetch_tdnet_disclosures(target_date)
+    changes = filter_market_change_disclosures(disclosures)
+    # 重複排除しつつタイトルを保持
+    seen = set()
+    unique = []
+    for d in changes:
+        if d["code"] not in seen:
+            seen.add(d["code"])
+            unique.append({"code": d["code"], "title": d["title"]})
+    return unique

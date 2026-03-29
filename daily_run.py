@@ -32,6 +32,7 @@ from screener.reporter import load_latest_watchlist
 from screener.signal_store import (
     save_signals, load_previous_signals, diff_signals, format_diff_summary,
 )
+from screener.tdnet import get_market_change_codes
 from screener.universe import load_universe
 
 
@@ -94,6 +95,44 @@ def run_kuroten_daily(dry_run: bool = False) -> tuple[list[str], str]:
         notify_slack(df, date.today().strftime("%Y%m%d"))
 
     return signal_codes, "kuroten:JP"
+
+
+def run_market_change(dry_run: bool = False) -> tuple[list[str], str]:
+    """上場市場変更（鞍替え）の監視を実行"""
+    changes = get_market_change_codes()
+    if not changes:
+        print("  市場変更開示なし")
+        return [], ""
+
+    codes = [c["code"] for c in changes]
+    print(f"  市場変更検出: {len(changes)}件")
+    for c in changes:
+        print(f"    [{c['code']}] {c['title']}")
+
+    if not dry_run:
+        msg = _build_market_change_message(changes, date.today().isoformat())
+        webhook = _resolve_webhook_url("kuroten", "JP")
+        if webhook:
+            _send_slack(webhook, msg)
+
+    return codes, "market_change:JP"
+
+
+def _build_market_change_message(changes: list[dict], today: str) -> str:
+    """市場変更検出のSlack通知メッセージを構築"""
+    lines = [f"*上場市場変更検出* ({today})\n検出: *{len(changes)}件*\n"]
+    for c in changes:
+        code = c["code"]
+        title = c["title"]
+        lines.append(f"*{code}* {title}")
+        lines.append(
+            f"  <https://finance.yahoo.co.jp/quote/{code}.T|Yahoo>"
+            f" | <https://irbank.net/{code}|IR Bank>"
+            f" | <https://monex.ifis.co.jp/index.php?sa=report_zaimu&bcode={code}|銘柄Scout>"
+        )
+        lines.append("")
+    lines.append("_スタンダード→プライム昇格は機関投資家の買い需要が構造的に発生_")
+    return "\n".join(lines)
 
 
 def build_digest(
@@ -189,11 +228,20 @@ def main():
         if key:
             all_signals[key] = codes
 
+    # ---- JP 市場変更（鞍替え）監視 ----
+    run_mkt_change = (args.market is None or args.market == "JP") and \
+                     (args.strategy is None)
+    if run_mkt_change:
+        print("\n[3] JP 上場市場変更監視 (TDnet)")
+        codes, key = run_market_change(dry_run=args.dry_run)
+        if key:
+            all_signals[key] = codes
+
     # ---- US ブレイクアウト ----
     run_us = (args.market is None or args.market == "US") and \
              (args.strategy is None or args.strategy == "breakout")
     if run_us:
-        print("\n[3] US ブレイクアウト監視")
+        print("\n[4] US ブレイクアウト監視")
         codes, key = run_breakout_us(
             universe=args.universe,
             limit=args.limit,
