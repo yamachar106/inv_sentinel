@@ -31,6 +31,7 @@ from screener.config import (
     REQUEST_INTERVAL,
     BREAKOUT_PULLBACK_ENABLED,
     BREAKOUT_PULLBACK_RSI_MAX,
+    BREAKOUT_REQUIRE_ABOVE_SMA200,
 )
 
 # バッチダウンロードの1回あたりのティッカー数
@@ -203,6 +204,12 @@ def _evaluate_signal(latest: pd.Series, ticker: str, market: str) -> dict | None
 
     is_new_high = bool(latest["is_new_high"])
     above_sma50 = result["above_sma_50"]
+    above_sma200 = result["above_sma_200"]
+
+    # SMA200フィルタ: 全ブレイクアウト書籍で必須条件
+    # Minervini「200日MA下の銘柄は絶対に買わない」
+    if BREAKOUT_REQUIRE_ABOVE_SMA200 and not above_sma200:
+        return None
 
     if is_new_high and vol_ratio > vol_threshold and above_sma50:
         # 押し目フィルタ: RSI過熱圏なら即エントリー非推奨としてマーク

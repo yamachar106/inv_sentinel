@@ -11,10 +11,11 @@
 - 結果をSlackに通知
 
 **売却ルール（書籍準拠 + 改良版）：**
-- 株価2倍達成 → 利確
-- 翌四半期で再び赤字転落 → 利益・損失問わず即売却
+- 株価2倍達成 → 利確（書籍準拠）
+- 2Q連続赤字転落 → 利益・損失問わず即売却（1Qの一時的悪化では売らない）
+- 利益成長の鈍化 → 手放す（書籍核心ルール）
 - トレーリングストップ（+80%到達後、高値-20%で利確）
-- 損切りライン -30%
+- 損切りライン -10%（書籍コンセンサス: DUKE(ガチ)-10%, オニール-8%, kenmo-8%）
 - 最大保有期間 2年
 
 **購入推奨度（S/A/B/C）：**
@@ -26,13 +27,6 @@
 
 **エントリーフィルタ（核心）：**
 - 連続2Q以上の赤字→黒字転換のみシグナル（振り子・季節パターン除外）
-
-**売却ルール（書籍準拠 + 改良版）：**
-- 株価2倍達成 → 利確
-- 2Q連続赤字転落 → 利益・損失問わず即売却（1Qの一時的悪化では売らない）
-- トレーリングストップ（+80%到達後、高値-20%で利確）
-- 損切りライン -30%
-- 最大保有期間 2年
 
 ---
 
@@ -208,19 +202,35 @@ Slack通知
 
 ## スクリーニング条件（設定可能）
 
-| パラメータ | デフォルト値 | 変数名 | ファイル |
-|-----------|------------|--------|---------|
-| 時価総額上限 | 500億円 | `MAX_MARKET_CAP` | filters.py |
-| 株価下限 | 500円 | `MIN_PRICE` | filters.py |
-| 株価上限 | 2,500円 | `MAX_PRICE` | filters.py |
-| 連続赤字Q数(最低) | 2 | `MIN_CONSECUTIVE_RED` | backtest.py / irbank.py |
-| フェイクスコア閾値 | 2 | score >= 2 | fake_filter.py |
-| 損切りライン | -30% | `STOP_LOSS_PCT` | backtest.py |
-| 利確目標 | 2倍 | `SELL_TARGET` | backtest.py |
-| 最大保有期間 | 2年 | `MAX_HOLD_YEARS` | backtest.py |
-| トレーリング発動 | +80% | `TRAILING_STOP_TRIGGER` | backtest.py |
-| トレーリング幅 | 高値-20% | `TRAILING_STOP_PCT` | backtest.py |
-| 投資単位 | 100万円/trade | `PER_TRADE_CAPITAL` | backtest.py |
+### 黒字転換（config.py）
+
+| パラメータ | デフォルト値 | 変数名 | 根拠 |
+|-----------|------------|--------|------|
+| 時価総額上限 | 500億円 | `MAX_MARKET_CAP` | 馬渕本 |
+| 株価下限 | 500円 | `MIN_PRICE` | 馬渕本 |
+| 株価上限 | 2,500円 | `MAX_PRICE` | 馬渕本 |
+| 連続赤字Q数(最低) | 2 | `MIN_CONSECUTIVE_RED` | 馬渕本+季節パターン除外 |
+| 損切りライン | -10% | `STOP_LOSS_PCT` | DUKE(ガチ)-10%準拠 |
+| 利確目標 | 2倍 | `SELL_TARGET` | 馬渕本 |
+| 最大保有期間 | 2年 | `MAX_HOLD_YEARS` | 馬渕本 |
+| トレーリング発動 | +80% | `TRAILING_STOP_TRIGGER` | 独自改良 |
+| トレーリング幅 | 高値-20% | `TRAILING_STOP_PCT` | 独自改良 |
+
+### ブレイクアウト（config.py）
+
+| パラメータ | デフォルト値 | 変数名 | 根拠 |
+|-----------|------------|--------|------|
+| 52W高値ルックバック | 252日 | `BREAKOUT_52W_WINDOW` | 標準 |
+| SMA200必須 | True | `BREAKOUT_REQUIRE_ABOVE_SMA200` | Minervini/DUKE/Ryan全書籍 |
+| 出来高比率(JP) | 1.5倍 | `BREAKOUT_VOLUME_RATIO` | オニール+40〜50%=1.5倍 |
+| 出来高比率(US) | 3.0倍 | `BREAKOUT_VOLUME_RATIO_US` | バックテスト検証(勝率57%) |
+| RSI過熱閾値 | 75 | `BREAKOUT_PULLBACK_RSI_MAX` | 独自（バックテスト検証） |
+| 損切り | -10% | `BREAKOUT_STOP_LOSS` | DUKE(ガチ)/オニール-8%/kenmo-8% |
+| 標準利確 | +20% | `BREAKOUT_PROFIT_TARGET` | オニール/DUKE(ガチ) |
+| 延長利確 | +25% | `BREAKOUT_PROFIT_TARGET_EXTENDED` | オニール8週ルール |
+| 時価総額(JP優先) | 200億 | `BREAKOUT_MAX_MARKET_CAP_JP` | DUKE:10倍株92.4%が200億未満 |
+| 時価総額(JP許容) | 500億 | `BREAKOUT_MAX_MARKET_CAP_JP_LOOSE` | 拡大検索用 |
+| 有望セクター | IT/サービス/小売 | `BREAKOUT_PREFERRED_SECTORS_JP` | DUKE統計 |
 
 ---
 
@@ -239,5 +249,7 @@ Slack通知
 ---
 
 ## 参考資料
+- 書籍統合ルール対照表：`data/references/synthesis_all_books.md`（全9冊の投資ルール比較）
+- 書籍データ（9冊）：`data/references/`
 - 調査レポート：`C:\MyUniverse\SecondBrain\03_Resources\references\kuroten2bai_research.md`
 - EDINET API: https://disclosure2dl.edinet-fsa.go.jp/guide/static/disclosure/WZEK0110.html

@@ -32,7 +32,8 @@ from screener.breakout import (
 from screener.config import (
     TICKER_SUFFIX_JP,
     TICKER_SUFFIX_US,
-    STOP_LOSS_PCT,
+    BREAKOUT_STOP_LOSS,
+    BREAKOUT_PROFIT_TARGET,
 )
 from screener.universe import load_universe
 
@@ -93,6 +94,30 @@ def backtest_single(
                 drawdowns = (future_closes - entry_price) / entry_price
                 max_dd = float(np.min(drawdowns))
 
+        # 損切り(-10%)/利確(+20%)シミュレーション（60日以内）
+        trade_result = None
+        trade_return = None
+        trade_days = None
+        if future_end > i + 1:
+            future_closes = df["close"].iloc[i+1:future_end].values
+            for d_idx, price in enumerate(future_closes):
+                ret = (price - entry_price) / entry_price
+                if ret <= BREAKOUT_STOP_LOSS:
+                    trade_result = "stop_loss"
+                    trade_return = ret
+                    trade_days = d_idx + 1
+                    break
+                if ret >= BREAKOUT_PROFIT_TARGET:
+                    trade_result = "profit_target"
+                    trade_return = ret
+                    trade_days = d_idx + 1
+                    break
+            if trade_result is None and len(future_closes) > 0:
+                final_ret = (future_closes[-1] - entry_price) / entry_price
+                trade_result = "hold"
+                trade_return = final_ret
+                trade_days = len(future_closes)
+
         event = {
             "ticker": ticker,
             "date": str(signal_date.date()),
@@ -101,6 +126,9 @@ def backtest_single(
             "volume_ratio": hit["volume_ratio"],
             "rsi": hit["rsi"],
             "max_drawdown_60d": max_dd,
+            "trade_result": trade_result,
+            "trade_return": trade_return,
+            "trade_days": trade_days,
             **returns,
         }
         events.append(event)
@@ -157,8 +185,24 @@ def summarize_results(events: list[dict]) -> None:
         # 損切りヒット率
         dd_col = "max_drawdown_60d"
         if dd_col in subset.columns:
-            stop_hits = (subset[dd_col] < STOP_LOSS_PCT).sum()
-            print(f"  損切り(-30%)ヒット率: {stop_hits}/{len(subset)} ({stop_hits/len(subset):.1%})")
+            stop_hits = (subset[dd_col] < BREAKOUT_STOP_LOSS).sum()
+            print(f"  損切り({BREAKOUT_STOP_LOSS:.0%})ヒット率: "
+                  f"{stop_hits}/{len(subset)} ({stop_hits/len(subset):.1%})")
+
+        # トレードシミュレーション結果（損切り-10%/利確+20%）
+        if "trade_result" in subset.columns:
+            valid_trades = subset.dropna(subset=["trade_result"])
+            if not valid_trades.empty:
+                n_stop = (valid_trades["trade_result"] == "stop_loss").sum()
+                n_profit = (valid_trades["trade_result"] == "profit_target").sum()
+                n_hold = (valid_trades["trade_result"] == "hold").sum()
+                avg_return = valid_trades["trade_return"].mean()
+                avg_days = valid_trades["trade_days"].mean()
+                print(f"  トレードSIM (60日以内, 損切{BREAKOUT_STOP_LOSS:.0%}/利確+{BREAKOUT_PROFIT_TARGET:.0%}):")
+                print(f"    利確: {n_profit} | 損切: {n_stop} | 保有中: {n_hold}")
+                if n_profit + n_stop > 0:
+                    win_rate_sim = n_profit / (n_profit + n_stop)
+                    print(f"    決済勝率: {win_rate_sim:.1%} | 平均リターン: {avg_return:+.2%} | 平均保有日数: {avg_days:.0f}日")
 
     # 出来高比率別の勝率
     if "return_20d" in df.columns:
