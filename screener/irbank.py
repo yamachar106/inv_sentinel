@@ -456,11 +456,26 @@ def get_company_summary(code: str, html: str = None) -> dict | None:
     yoy_revenue = _calc_yoy(rev_records, "revenue") if rev_records else None
     yoy_op = _calc_yoy_op(op_records)
 
+    # yoy_revenue をfloat(小数)に変換（v2スコアリング用）
+    yoy_revenue_pct = None
+    if yoy_revenue:
+        m = re.search(r'([+-]?\d+\.?\d*)', yoy_revenue)
+        if m:
+            yoy_revenue_pct = float(m.group(1)) / 100.0
+
+    # 四半期営業利益履歴（v2スコアリング用: 季節パターン検出）
+    quarterly_history = [
+        {"period": r["period"], "quarter": r["quarter"], "op": r["operating_profit"]}
+        for r in op_records
+    ]
+
     return {
         "revenue_trend": rev_trend,
         "op_trend": op_trend,
         "yoy_revenue": yoy_revenue,
         "yoy_op": yoy_op,
+        "yoy_revenue_pct": yoy_revenue_pct,
+        "quarterly_history": quarterly_history,
     }
 
 

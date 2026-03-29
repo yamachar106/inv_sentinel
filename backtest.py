@@ -56,7 +56,9 @@ def _set_min_red(n: int):
     config.MIN_CONSECUTIVE_RED = n
 
 
-def find_historical_signals(code: str, name: str, df: pd.DataFrame = None) -> list[dict]:
+def find_historical_signals(code: str, name: str, df: pd.DataFrame = None,
+                           signal_failure_counts: dict | None = None,
+                           version: str = "v2") -> list[dict]:
     """
     IR Bankの過去四半期データから全ての黒字転換シグナルを検出する
 
@@ -64,6 +66,8 @@ def find_historical_signals(code: str, name: str, df: pd.DataFrame = None) -> li
         code: 証券コード
         name: 企業名
         df: 四半期データ（省略時はIR Bankから取得）
+        signal_failure_counts: {code: 失敗回数} シグナル失敗歴の追跡用（v2）
+        version: スコアリングバージョン ("v1" or "v2")
 
     Returns:
         シグナルリスト（後続四半期データ + 品質スコア付き）
@@ -75,6 +79,32 @@ def find_historical_signals(code: str, name: str, df: pd.DataFrame = None) -> li
 
     df = df.sort_values(["period", "quarter"]).reset_index(drop=True)
     signals = []
+
+    # v2用: 四半期履歴を構築（季節パターン検知用）
+    quarterly_history = []
+    for _, row in df.iterrows():
+        op = row.get("operating_profit")
+        if op is not None:
+            quarterly_history.append({
+                "period": row.get("period", ""),
+                "quarter": row.get("quarter", ""),
+                "op": op,
+            })
+
+    # v2用: 売上YoY取得（注: バックテストではget_quarterly_dataが既にHTMLを
+    # 取得済みだが、キャッシュ経由なので追加リクエストは発生しにくい）
+    yoy_revenue_pct = None
+    if version == "v2":
+        from screener.irbank import get_company_summary, get_quarterly_html
+        html = get_quarterly_html(code)
+        if html:
+            summary = get_company_summary(code, html=html)
+            if summary and summary.get("yoy_revenue"):
+                try:
+                    yoy_str = summary["yoy_revenue"].replace("+", "").replace("%", "")
+                    yoy_revenue_pct = float(yoy_str) / 100.0
+                except (ValueError, AttributeError):
+                    pass
 
     for i in range(1, len(df)):
         prev = df.iloc[i - 1]
@@ -110,10 +140,26 @@ def find_historical_signals(code: str, name: str, df: pd.DataFrame = None) -> li
             curr.get("period", ""), curr.get("quarter", "")
         )
 
-        # 推奨度スコア（共通ロジック）
+        # v2用: シグナル時点までの四半期履歴（未来データを含めない）
+        history_at_signal = [
+            r for r in quarterly_history
+            if (r["period"], r["quarter"]) <= (curr.get("period", ""), curr.get("quarter", ""))
+        ]
+
+        # 前回シグナル失敗回数
+        prior_failures = 0
+        if signal_failure_counts is not None:
+            prior_failures = signal_failure_counts.get(code, 0)
+
+        # 推奨度スコア
         grade, rec_pts, rec_reasons = calc_recommendation(
             prev_op, curr_op, prev_ord, curr_ord,
             consecutive_red=consecutive_red,
+            quarterly_history=history_at_signal if version == "v2" else None,
+            signal_quarter=curr.get("quarter", "") if version == "v2" else None,
+            yoy_revenue_pct=yoy_revenue_pct if version == "v2" else None,
+            prior_signal_failures=prior_failures,
+            version=version,
         )
 
         # 後続四半期データを収集（赤字転落チェック用）
@@ -328,7 +374,7 @@ def simulate_trade(
 
 
 def run_backtest(codes_with_names: list[tuple[str, str]], verbose: bool = False,
-                 grade_filter: str | None = None):
+                 grade_filter: str | None = None, scoring_version: str = "v2"):
     """バックテストを実行する"""
     print("=" * 70)
     print("  黒字転換2倍株 バックテスト")
@@ -340,6 +386,7 @@ def run_backtest(codes_with_names: list[tuple[str, str]], verbose: bool = False,
           f"TS(+{TRAILING_STOP_TRIGGER:.0%},-{abs(TRAILING_STOP_PCT):.0%}) / "
           f"損切り{STOP_LOSS_PCT:.0%} / 最大{MAX_HOLD_YEARS}年")
     print(f"  投資単位: {PER_TRADE_CAPITAL:,.0f}円/トレード")
+    print(f"  スコアリング: {scoring_version}")
     if grade_filter:
         grade_map = {"S": ["S"], "A": ["S", "A"], "B": ["S", "A", "B"]}
         allowed_grades = grade_map.get(grade_filter, ["S", "A", "B", "C"])
@@ -349,11 +396,17 @@ def run_backtest(codes_with_names: list[tuple[str, str]], verbose: bool = False,
     print()
 
     all_trades = []
+    # v2: 銘柄ごとのシグナル失敗歴を追跡
+    signal_failure_counts: dict[str, int] = {}
 
     for code, name in codes_with_names:
         print(f"[{code}] {name}")
 
-        signals = find_historical_signals(code, name)
+        signals = find_historical_signals(
+            code, name,
+            signal_failure_counts=signal_failure_counts,
+            version=scoring_version,
+        )
         if not signals:
             print(f"  -> 黒字転換シグナルなし")
             time.sleep(REQUEST_INTERVAL)
@@ -408,6 +461,15 @@ def run_backtest(codes_with_names: list[tuple[str, str]], verbose: bool = False,
             result["curr_op"] = sig["curr_op"]
             result["consecutive_red"] = sig.get("consecutive_red", 0)
             all_trades.append(result)
+
+            # v2: シグナル失敗歴を更新（損切り or 赤字転落でマイナスリターン）
+            if scoring_version == "v2":
+                sell_reason = result.get("sell_reason", "")
+                ret = result.get("return_pct", 0)
+                is_failure = ("損切り" in sell_reason or
+                              ("赤字転落" in sell_reason and ret < 0))
+                if is_failure:
+                    signal_failure_counts[code] = signal_failure_counts.get(code, 0) + 1
 
         time.sleep(REQUEST_INTERVAL)
 
@@ -700,9 +762,18 @@ def main():
     parser.add_argument("--grade-filter", type=str, default=None,
                         choices=["S", "A", "B"],
                         help="指定推奨度以上のみ取引 (例: A → S/Aのみ)")
+    parser.add_argument("--stop-loss", type=float, default=None,
+                        help="損切りラインを上書き (例: -0.15 → -15%%)")
+    parser.add_argument("--scoring", type=str, default="v2",
+                        choices=["v1", "v2"],
+                        help="スコアリングバージョン (デフォルト: v2)")
     args = parser.parse_args()
 
     _set_min_red(args.min_red)
+
+    if args.stop_loss is not None:
+        global STOP_LOSS_PCT
+        STOP_LOSS_PCT = args.stop_loss
 
     if args.book_filter:
         global MIN_PRICE, MAX_PRICE
@@ -733,7 +804,8 @@ def main():
         codes_with_names = _apply_fake_filter(codes_with_names)
 
     df = run_backtest(codes_with_names, verbose=args.verbose,
-                      grade_filter=args.grade_filter)
+                      grade_filter=args.grade_filter,
+                      scoring_version=args.scoring)
 
     if not df.empty:
         from pathlib import Path

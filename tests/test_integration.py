@@ -41,9 +41,9 @@ class TestPipelineIntegration:
         assert "RecReasons" in df.columns
 
     def test_recommendation_sorting(self):
-        """S > A > B > C の順序で推奨度が付く"""
+        """S > A > B > C の順序で推奨度が付く（v1スコアリング）"""
         df = self._make_kuroten_df()
-        add_recommendation_column(df)
+        add_recommendation_column(df, version="v1")
         grades = df["Recommendation"].tolist()
         # テストA: 4Q連続+ダブル転換+大転換 -> S or A
         # テストC: 3Q連続+ダブル転換+大転換 -> S or A
@@ -53,6 +53,18 @@ class TestPipelineIntegration:
         # テストBは最低ランク寄り
         assert df.loc[df["Code"] == "2000", "RecScore"].iloc[0] < \
                df.loc[df["Code"] == "1000", "RecScore"].iloc[0]
+
+    def test_recommendation_sorting_v2(self):
+        """v2: データなしでも相対順序は保たれる"""
+        df = self._make_kuroten_df()
+        add_recommendation_column(df)
+        # v2ではenrichmentデータなしだとスコアが低いが、相対順序は維持
+        score_a = df.loc[df["Code"] == "1000", "RecScore"].iloc[0]
+        score_b = df.loc[df["Code"] == "2000", "RecScore"].iloc[0]
+        score_c = df.loc[df["Code"] == "3000", "RecScore"].iloc[0]
+        # テストB(小規模転換+薄利)は最も低い
+        assert score_b < score_a
+        assert score_b < score_c
 
     def test_price_filter_integration(self):
         """株価フィルタとの結合"""

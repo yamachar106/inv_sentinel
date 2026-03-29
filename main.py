@@ -73,22 +73,15 @@ def main(
     if use_edinet:
         _edinet_crosscheck(df_filtered, target_date)
 
-    # 4. 購入推奨度を付与
-    add_recommendation_column(df_filtered)
-    print(f"  推奨度: ", end="")
-    for g in ["S", "A", "B", "C"]:
-        cnt = len(df_filtered[df_filtered["Recommendation"] == g])
-        if cnt > 0:
-            print(f"{g}={cnt} ", end="")
-    print()
-
-    # 5. 銘柄詳細取得（ウォッチリスト候補のみ）
+    # 4. 銘柄詳細取得（v2スコアリング用のenrichmentデータ収集を兼ねる）
     import time
     from screener.config import REQUEST_INTERVAL
     company_summaries = {}
+    quarterly_histories = {}
+    revenue_map = {}
     watchlist_codes = df_filtered["Code"].tolist()
     if watchlist_codes:
-        print(f"  [5/6] 銘柄詳細取得 ({len(watchlist_codes)} 銘柄)...")
+        print(f"  [4/6] 銘柄詳細取得 ({len(watchlist_codes)} 銘柄)...")
         for code in watchlist_codes:
             try:
                 html = get_quarterly_html(code)
@@ -96,10 +89,27 @@ def main(
                     summary = get_company_summary(code, html=html)
                     if summary:
                         company_summaries[code] = summary
+                        if summary.get("quarterly_history"):
+                            quarterly_histories[code] = summary["quarterly_history"]
+                        if summary.get("yoy_revenue_pct") is not None:
+                            revenue_map[code] = summary["yoy_revenue_pct"]
                 time.sleep(REQUEST_INTERVAL)
             except Exception as e:
                 print(f"  [WARN] {code} 詳細取得失敗: {e}")
         print(f"  詳細取得完了: {len(company_summaries)}/{len(watchlist_codes)} 件")
+
+    # 5. 購入推奨度を付与（v2: enrichmentデータ使用）
+    add_recommendation_column(
+        df_filtered,
+        quarterly_histories=quarterly_histories,
+        revenue_map=revenue_map,
+    )
+    print(f"  推奨度: ", end="")
+    for g in ["S", "A", "B", "C"]:
+        cnt = len(df_filtered[df_filtered["Recommendation"] == g])
+        if cnt > 0:
+            print(f"{g}={cnt} ", end="")
+    print()
 
     # 6. ウォッチリスト生成 (前回との差分も計算)
     output_path, new_additions, removals = generate_watchlist(
