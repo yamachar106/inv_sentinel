@@ -14,6 +14,7 @@ Usage:
 import argparse
 import sys
 import time
+from datetime import timedelta
 
 import numpy as np
 import pandas as pd
@@ -43,16 +44,82 @@ RETURN_WINDOWS = [5, 20, 60]
 # バックテスト用の期間（十分な履歴が必要）
 BACKTEST_PERIOD = "2y"
 
+# エントリー待機の最大日数
+ENTRY_WAIT_MAX_DAYS = 60
+
+
+def _find_breakout_entry(
+    df: pd.DataFrame,
+    signal_idx: int,
+    mode: str,
+) -> int | None:
+    """
+    ブレイクアウトシグナル後のテクニカルエントリーポイントを探す。
+
+    Args:
+        df: OHLCV + インジケータ付きDataFrame
+        signal_idx: シグナル発火行のインデックス位置
+        mode: "golden_cross" / "volume_surge" / "gc_or_volume"
+
+    Returns:
+        エントリー行のインデックス位置。条件未達ならNone。
+    """
+    signal_date = df.index[signal_idx]
+    deadline = signal_date + timedelta(days=ENTRY_WAIT_MAX_DAYS)
+
+    for j in range(signal_idx + 1, len(df)):
+        dt = df.index[j]
+        if dt > deadline:
+            break
+
+        row = df.iloc[j]
+        prev = df.iloc[j - 1]
+        triggered = False
+
+        if mode in ("golden_cross", "gc_or_volume"):
+            sma20 = row.get("sma_20")
+            sma50 = row.get("sma_50")
+            prev_sma20 = prev.get("sma_20")
+            prev_sma50 = prev.get("sma_50")
+            if (pd.notna(sma20) and pd.notna(sma50) and
+                pd.notna(prev_sma20) and pd.notna(prev_sma50)):
+                prev_above = prev_sma20 > prev_sma50
+                curr_above = sma20 > sma50
+                # GCクロス発生
+                if curr_above and not prev_above:
+                    triggered = True
+                # シグナル翌日: 既にGC状態なら即エントリー
+                if j == signal_idx + 1 and curr_above and prev_above:
+                    triggered = True
+
+        if mode in ("volume_surge", "gc_or_volume"):
+            vol = row.get("volume")
+            vol_avg = row.get("volume_ratio")  # already ratio in indicators
+            close_now = row.get("close", 0)
+            close_prev = prev.get("close", 0)
+            # volume_ratioはインジケータで計算済み（= volume / volume_sma20）
+            if pd.notna(vol_avg) and vol_avg >= 2.0 and close_now > close_prev:
+                triggered = True
+
+        if triggered:
+            return j
+
+    return None
+
 
 def backtest_single(
     ticker: str,
     market: str = "JP",
+    entry_mode: str = "immediate",
     verbose: bool = False,
 ) -> list[dict]:
     """
     1銘柄のブレイクアウトシグナルをバックテストする。
 
     過去データ全体を走査し、シグナル発火日ごとにN日後のリターンを計測。
+
+    Args:
+        entry_mode: "immediate" / "golden_cross" / "volume_surge" / "gc_or_volume"
 
     Returns:
         シグナル発火イベントのリスト
@@ -72,12 +139,25 @@ def backtest_single(
             continue
 
         signal_date = df.index[i]
-        entry_price = float(row["close"])
 
-        # N日後のリターンを計測
+        # エントリータイミング決定
+        if entry_mode == "immediate":
+            entry_idx = i
+        else:
+            entry_idx = _find_breakout_entry(df, i, entry_mode)
+            if entry_idx is None:
+                if verbose:
+                    print(f"    {signal_date.date()} [{hit['signal']}] "
+                          f"エントリー条件未達 ({entry_mode})")
+                continue
+
+        entry_price = float(df.iloc[entry_idx]["close"])
+        entry_wait = (df.index[entry_idx] - signal_date).days
+
+        # N日後のリターンを計測（エントリー日起点）
         returns = {}
         for window in RETURN_WINDOWS:
-            future_idx = i + window
+            future_idx = entry_idx + window
             if future_idx < len(df):
                 future_price = float(df.iloc[future_idx]["close"])
                 ret = (future_price - entry_price) / entry_price
@@ -87,19 +167,19 @@ def backtest_single(
 
         # 最大ドローダウン (60日間)
         max_dd = 0.0
-        future_end = min(i + 60, len(df))
-        if future_end > i + 1:
-            future_closes = df["close"].iloc[i+1:future_end].values
+        future_end = min(entry_idx + 60, len(df))
+        if future_end > entry_idx + 1:
+            future_closes = df["close"].iloc[entry_idx+1:future_end].values
             if len(future_closes) > 0:
                 drawdowns = (future_closes - entry_price) / entry_price
                 max_dd = float(np.min(drawdowns))
 
-        # 損切り(-10%)/利確(+20%)シミュレーション（60日以内）
+        # 損切り/利確シミュレーション（60日以内）
         trade_result = None
         trade_return = None
         trade_days = None
-        if future_end > i + 1:
-            future_closes = df["close"].iloc[i+1:future_end].values
+        if future_end > entry_idx + 1:
+            future_closes = df["close"].iloc[entry_idx+1:future_end].values
             for d_idx, price in enumerate(future_closes):
                 ret = (price - entry_price) / entry_price
                 if ret <= BREAKOUT_STOP_LOSS:
@@ -120,7 +200,9 @@ def backtest_single(
 
         event = {
             "ticker": ticker,
-            "date": str(signal_date.date()),
+            "signal_date": str(signal_date.date()),
+            "entry_date": str(df.index[entry_idx].date()),
+            "entry_wait": entry_wait,
             "signal": hit["signal"],
             "entry_price": entry_price,
             "volume_ratio": hit["volume_ratio"],
@@ -138,8 +220,9 @@ def backtest_single(
             ret_20 = returns.get("return_20d")
             r5_str = f"{ret_5:+.1%}" if ret_5 is not None else "N/A"
             r20_str = f"{ret_20:+.1%}" if ret_20 is not None else "N/A"
-            print(f"    {event['date']} [{hit['signal']}] "
-                  f"${entry_price:,.2f} → 5d:{r5_str} 20d:{r20_str}")
+            wait_str = f" (待機{entry_wait}日)" if entry_wait > 0 else ""
+            print(f"    {event['signal_date']} [{hit['signal']}] "
+                  f"${entry_price:,.2f} → 5d:{r5_str} 20d:{r20_str}{wait_str}")
 
     return events
 
@@ -204,6 +287,12 @@ def summarize_results(events: list[dict]) -> None:
                     win_rate_sim = n_profit / (n_profit + n_stop)
                     print(f"    決済勝率: {win_rate_sim:.1%} | 平均リターン: {avg_return:+.2%} | 平均保有日数: {avg_days:.0f}日")
 
+    # エントリー待機日数（entry_mode != immediate の場合）
+    if "entry_wait" in df.columns and df["entry_wait"].max() > 0:
+        print(f"\n--- エントリー待機統計 ---")
+        wait = df["entry_wait"]
+        print(f"  平均待機: {wait.mean():.0f}日 | 中央値: {wait.median():.0f}日 | 最大: {wait.max():.0f}日")
+
     # 出来高比率別の勝率
     if "return_20d" in df.columns:
         valid_20 = df.dropna(subset=["return_20d"])
@@ -225,6 +314,9 @@ def main():
                         help="USユニバース名")
     parser.add_argument("--limit", type=int, default=20,
                         help="バックテスト銘柄数上限 (デフォルト: 20)")
+    parser.add_argument("--entry", type=str, default="immediate",
+                        choices=["immediate", "golden_cross", "volume_surge", "gc_or_volume"],
+                        help="エントリータイミング (デフォルト: immediate)")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
@@ -240,15 +332,16 @@ def main():
         print("[ERROR] --codes または --universe を指定してください")
         return
 
+    entry_label = args.entry if args.entry != "immediate" else "即時エントリー"
     print(f"ブレイクアウト バックテスト ({args.market})")
-    print(f"対象: {len(codes)}銘柄, 期間: {BACKTEST_PERIOD}")
+    print(f"対象: {len(codes)}銘柄, 期間: {BACKTEST_PERIOD}, エントリー: {entry_label}")
     print("=" * 60)
 
     all_events = []
     for i, code in enumerate(codes):
         ticker = f"{code}{suffix}"
         print(f"  [{i+1}/{len(codes)}] {ticker}")
-        events = backtest_single(ticker, market=args.market, verbose=args.verbose)
+        events = backtest_single(ticker, market=args.market, entry_mode=args.entry, verbose=args.verbose)
         all_events.extend(events)
         if i < len(codes) - 1:
             time.sleep(0.5)

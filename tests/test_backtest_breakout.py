@@ -47,7 +47,7 @@ class TestBacktestSingle:
         # シグナルが1つ以上見つかるはず
         if events:
             assert "ticker" in events[0]
-            assert "date" in events[0]
+            assert "signal_date" in events[0]
             assert "signal" in events[0]
             assert "entry_price" in events[0]
 
