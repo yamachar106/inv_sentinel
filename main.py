@@ -36,6 +36,7 @@ def main(
     use_edinet: bool = False,
     skip_fake_filter: bool = False,
     limit: int = 0,
+    grade_notify: str | None = None,
 ):
     target_date = date or datetime.today().strftime("%Y%m%d")
     print(f">> 黒字転換スクリーニング実行: {target_date}")
@@ -136,6 +137,7 @@ def main(
             diff_info=diff_info,
             code_to_name=code_to_name,
             company_summaries=company_summaries,
+            min_grade=grade_notify,
         ):
             print("[OK] Slack通知送信完了")
 
@@ -167,6 +169,9 @@ if __name__ == "__main__":
     parser.add_argument("--edinet", action="store_true", help="EDINET APIでクロスチェック")
     parser.add_argument("--no-fake-filter", action="store_true", help="フェイクフィルタをスキップ")
     parser.add_argument("--limit", type=int, default=0, help="処理企業数の上限（テスト用）")
+    parser.add_argument("--grade-notify", type=str, default=None,
+                        choices=["S", "A", "B"],
+                        help="指定推奨度以上のみSlack通知 (例: A → S/Aのみ)")
     args = parser.parse_args()
     main(
         args.date,
@@ -174,4 +179,5 @@ if __name__ == "__main__":
         use_edinet=args.edinet,
         skip_fake_filter=args.no_fake_filter,
         limit=args.limit,
+        grade_notify=args.grade_notify,
     )

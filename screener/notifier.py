@@ -58,6 +58,7 @@ def notify_slack(
     diff_info: tuple[set[str], set[str]] | None = None,
     code_to_name: dict[str, str] | None = None,
     company_summaries: dict[str, dict] | None = None,
+    min_grade: str | None = None,
 ) -> bool:
     """
     スクリーニング結果をSlackに通知する
@@ -68,6 +69,7 @@ def notify_slack(
         diff_info: (new_additions, removals) の組。Noneなら差分表示なし
         code_to_name: コード→銘柄名マッピング（差分表示用）
         company_summaries: コード→銘柄詳細dictマッピング
+        min_grade: 最低推奨度フィルタ ("S" → Sのみ, "A" → S/A, "B" → S/A/B)
 
     Returns:
         送信成功ならTrue
@@ -77,11 +79,23 @@ def notify_slack(
         print("[WARN] SLACK_WEBHOOK_URL が未設定のため通知をスキップ")
         return False
 
+    # 推奨度フィルタ: 指定グレード以上のみ通知
+    df_notify = df
+    if min_grade and "Recommendation" in df.columns:
+        grade_map = {"S": ["S"], "A": ["S", "A"], "B": ["S", "A", "B"]}
+        allowed = grade_map.get(min_grade, ["S", "A", "B", "C"])
+        df_notify = df[df["Recommendation"].isin(allowed)].copy()
+        filtered_count = len(df) - len(df_notify)
+        if filtered_count > 0:
+            print(f"  通知フィルタ: {min_grade}以上のみ通知 "
+                  f"({len(df_notify)}件通知, {filtered_count}件省略)")
+
     message = _build_message(
-        df, date,
+        df_notify, date,
         diff_info=diff_info,
         code_to_name=code_to_name,
         company_summaries=company_summaries,
+        total_count=len(df) if min_grade else None,
     )
     return _send_slack(webhook_url, message)
 
@@ -182,15 +196,21 @@ def _build_message(
     diff_info: tuple[set[str], set[str]] | None = None,
     code_to_name: dict[str, str] | None = None,
     company_summaries: dict[str, dict] | None = None,
+    total_count: int | None = None,
 ) -> str:
     """Slack通知メッセージを組み立てる（銘柄ごとの意思決定情報付き）"""
     summaries = company_summaries or {}
     header = f"*黒字転換スクリーニング結果* ({date})\n"
 
     if df.empty:
+        if total_count:
+            return header + f"該当{total_count}件中、通知対象なし"
         return header + "該当銘柄なし"
 
-    header += f"該当: *{len(df)}件*"
+    if total_count and total_count > len(df):
+        header += f"厳選: *{len(df)}件* (全{total_count}件中)"
+    else:
+        header += f"該当: *{len(df)}件*"
 
     # 推奨度サマリ
     has_rec = "Recommendation" in df.columns
