@@ -21,6 +21,16 @@ on:
         required: false
         type: boolean
         default: false
+      grade-notify:
+        description: "Min grade for Slack notification (S/A/B or empty=all)"
+        required: false
+        type: choice
+        options:
+          - ""
+          - S
+          - A
+          - B
+        default: "A"
 
 permissions:
   contents: write
@@ -60,7 +70,7 @@ jobs:
 
       - name: Run screening
         run: |
-          ARGS="--no-notify"
+          ARGS=""
 
           if [ -n "${{ github.event.inputs.date }}" ]; then
             ARGS="$ARGS --date ${{ github.event.inputs.date }}"
@@ -74,31 +84,16 @@ jobs:
             ARGS="$ARGS --no-fake-filter"
           fi
 
+          GRADE="${{ github.event.inputs.grade-notify }}"
+          if [ -n "$GRADE" ]; then
+            ARGS="$ARGS --grade-notify $GRADE"
+          elif [ "${{ github.event_name }}" = "schedule" ]; then
+            # スケジュール実行時はA以上のみ通知
+            ARGS="$ARGS --grade-notify A"
+          fi
+
           echo "Running: python main.py $ARGS"
           python main.py $ARGS
-
-      - name: Send Slack notification
-        if: env.SLACK_WEBHOOK_URL != ''
-        continue-on-error: true
-        run: |
-          python -c "
-          from screener.notifier import notify_slack
-          from screener.reporter import load_previous_watchlist
-          import pandas as pd, glob, os
-          files = sorted(glob.glob('data/watchlist/*.md'))
-          if files:
-              print(f'Latest watchlist: {files[-1]}')
-          # Slack notification is already handled by main.py if --no-notify is removed
-          # For CI, we send a simple notification
-          import json
-          from urllib.request import Request, urlopen
-          url = os.getenv('SLACK_WEBHOOK_URL', '')
-          if url:
-              msg = 'Quarterly screening completed. Check the repository for results.'
-              payload = json.dumps({'text': msg}).encode('utf-8')
-              req = Request(url, data=payload, headers={'Content-Type': 'application/json'})
-              urlopen(req)
-          "
 
       - name: Commit results
         run: |
