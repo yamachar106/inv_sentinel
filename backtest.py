@@ -216,29 +216,108 @@ def _estimate_signal_date(period: str, quarter: str) -> str | None:
     return announcement.strftime("%Y-%m-%d")
 
 
+# エントリー待機の最大日数（この期間内にトリガーがなければ見送り）
+ENTRY_WAIT_MAX_DAYS = 120
+
+
+def _find_technical_entry(
+    close: pd.Series,
+    volume: pd.Series,
+    signal_ts: pd.Timestamp,
+    mode: str,
+) -> pd.Timestamp | None:
+    """
+    シグナル日以降でテクニカルエントリー条件を探す
+
+    Args:
+        close: 終値Series（シグナル日より前のデータも含む）
+        volume: 出来高Series
+        signal_ts: 黒字転換シグナル日
+        mode: "golden_cross" / "volume_surge" / "gc_or_volume"
+
+    Returns:
+        エントリー日のTimestamp。条件未達ならNone。
+    """
+    # SMA計算
+    sma20 = close.rolling(20, min_periods=20).mean()
+    sma50 = close.rolling(50, min_periods=50).mean()
+    vol_ma20 = volume.rolling(20, min_periods=20).mean()
+
+    # シグナル日以降のウィンドウ
+    deadline = signal_ts + timedelta(days=ENTRY_WAIT_MAX_DAYS)
+    window_mask = (close.index >= signal_ts) & (close.index <= deadline)
+    window_dates = close.index[window_mask]
+
+    for dt in window_dates:
+        loc = close.index.get_loc(dt)
+        if loc < 1:
+            continue
+
+        triggered = False
+
+        if mode in ("golden_cross", "gc_or_volume"):
+            # ゴールデンクロス: SMA20が前日SMA50以下 → 当日SMA50以上
+            if (pd.notna(sma20.iloc[loc]) and pd.notna(sma50.iloc[loc]) and
+                pd.notna(sma20.iloc[loc - 1]) and pd.notna(sma50.iloc[loc - 1])):
+                prev_above = sma20.iloc[loc - 1] > sma50.iloc[loc - 1]
+                curr_above = sma20.iloc[loc] > sma50.iloc[loc]
+                if curr_above and not prev_above:
+                    triggered = True
+                # 既にゴールデンクロス状態（SMA20 > SMA50）でシグナル日を迎えた場合
+                # → 最初の営業日でエントリー（上昇トレンド中）
+                if dt == window_dates[0] and curr_above and prev_above:
+                    triggered = True
+
+        if mode in ("volume_surge", "gc_or_volume"):
+            # 出来高急増: 当日出来高が20日平均の2倍以上 & 陽線
+            if (pd.notna(vol_ma20.iloc[loc]) and vol_ma20.iloc[loc] > 0 and
+                pd.notna(volume.iloc[loc])):
+                vol_ratio = float(volume.iloc[loc]) / float(vol_ma20.iloc[loc])
+                is_up = float(close.iloc[loc]) > float(close.iloc[loc - 1])
+                if vol_ratio >= 2.0 and is_up:
+                    triggered = True
+
+        if triggered:
+            return dt
+
+    return None
+
+
 def simulate_trade(
     code: str,
     signal_date: str,
     subsequent_quarters: list[dict] | None = None,
     verbose: bool = False,
+    entry_mode: str = "immediate",
 ) -> dict:
     """
     シグナル日からの売買シミュレーション
 
+    Args:
+        entry_mode: エントリー方式
+            "immediate" — シグナル翌営業日に即エントリー（従来）
+            "golden_cross" — SMA20がSMA50を上抜けるタイミングで買い
+            "volume_surge" — 出来高が20日平均の2倍以上になった日に買い
+            "gc_or_volume" — ゴールデンクロスまたは出来高急増の早い方
+
     売却優先順位:
       1. 2倍達成
       2. 赤字転落（後続四半期の決算発表推定日）
-      3. トレーリングストップ（+30%到達後、高値から-15%）
-      4. 損切りライン（-30%）
+      3. トレーリングストップ（+80%到達後、高値から-20%）
+      4. 損切りライン（-20%）
       5. 最大保有期間
     """
     ticker = f"{code}.T"
-    buy_date = pd.Timestamp(signal_date)
-    end_date = buy_date + timedelta(days=MAX_HOLD_YEARS * 365 + 30)
+    signal_ts = pd.Timestamp(signal_date)
+
+    # エントリータイミング最適化: SMA計算のため過去60日分余分に取得
+    lookback_days = 60 if entry_mode != "immediate" else 0
+    fetch_start = signal_ts - timedelta(days=lookback_days + 10)
+    end_date = signal_ts + timedelta(days=MAX_HOLD_YEARS * 365 + 30)
 
     try:
         hist = yf.download(
-            ticker, start=buy_date.strftime("%Y-%m-%d"),
+            ticker, start=fetch_start.strftime("%Y-%m-%d"),
             end=min(end_date, datetime.now()).strftime("%Y-%m-%d"),
             progress=False
         )
@@ -251,6 +330,29 @@ def simulate_trade(
     close_series = hist["Close"]
     if isinstance(close_series, pd.DataFrame):
         close_series = close_series.iloc[:, 0]
+    vol_series = hist["Volume"]
+    if isinstance(vol_series, pd.DataFrame):
+        vol_series = vol_series.iloc[:, 0]
+
+    # エントリーポイントを決定
+    if entry_mode == "immediate":
+        # 従来通り: シグナル日以降の最初の営業日
+        mask = close_series.index >= signal_ts
+        if not mask.any():
+            return {"error": "シグナル日以降のデータなし"}
+        first_pos = mask.argmax()
+        entry_idx = close_series.index[first_pos]
+    else:
+        # テクニカルエントリー: シグナル日以降でトリガー条件を待つ
+        entry_idx = _find_technical_entry(
+            close_series, vol_series, signal_ts, entry_mode,
+        )
+        if entry_idx is None:
+            return {"error": f"エントリー条件未達({entry_mode})"}
+
+    # エントリー以降のデータで売買シミュレーション
+    entry_pos = close_series.index.get_loc(entry_idx)
+    close_series = close_series.iloc[entry_pos:]
     buy_price = float(close_series.iloc[0])
     if buy_price <= 0:
         return {"error": "買値が0以下"}
@@ -353,6 +455,9 @@ def simulate_trade(
     return_pct = (sell_price - buy_price) / buy_price
     hold_days = (sell_date - close_series.index[0]).days
 
+    # エントリー待機日数（シグナル日からエントリーまで）
+    entry_wait = (close_series.index[0] - signal_ts).days
+
     result = {
         "buy_date": close_series.index[0].strftime("%Y-%m-%d"),
         "buy_price": round(buy_price, 1),
@@ -362,6 +467,7 @@ def simulate_trade(
         "return_pct": round(return_pct * 100, 1),
         "hold_days": hold_days,
         "max_return_pct": round(max_return * 100, 1),
+        "entry_wait_days": entry_wait,
     }
 
     if verbose:
@@ -374,14 +480,24 @@ def simulate_trade(
 
 
 def run_backtest(codes_with_names: list[tuple[str, str]], verbose: bool = False,
-                 grade_filter: str | None = None, scoring_version: str = "v2"):
+                 grade_filter: str | None = None, scoring_version: str = "v2",
+                 entry_mode: str = "immediate"):
     """バックテストを実行する"""
+    entry_labels = {
+        "immediate": "即エントリー（シグナル翌営業日）",
+        "golden_cross": "ゴールデンクロス待ち（SMA20×50）",
+        "volume_surge": "出来高急増待ち（20日平均の2倍+陽線）",
+        "gc_or_volume": "GC or 出来高急増（早い方）",
+    }
     print("=" * 70)
     print("  黒字転換2倍株 バックテスト")
     print("=" * 70)
     print(f"  対象銘柄数: {len(codes_with_names)}")
     print(f"  エントリー: 連続{MIN_CONSECUTIVE_RED}Q以上赤字->黒字転換"
           f" | 株価{MIN_PRICE}-{MAX_PRICE}円")
+    print(f"  エントリー方式: {entry_labels.get(entry_mode, entry_mode)}")
+    if entry_mode != "immediate":
+        print(f"  最大待機: {ENTRY_WAIT_MAX_DAYS}日（未達なら見送り）")
     print(f"  売却ルール: 2倍達成 / 赤字転落即売却 / "
           f"TS(+{TRAILING_STOP_TRIGGER:.0%},-{abs(TRAILING_STOP_PCT):.0%}) / "
           f"損切り{STOP_LOSS_PCT:.0%} / 最大{MAX_HOLD_YEARS}年")
@@ -444,6 +560,7 @@ def run_backtest(codes_with_names: list[tuple[str, str]], verbose: bool = False,
                 code, sig["signal_date"],
                 subsequent_quarters=sig.get("subsequent_quarters"),
                 verbose=verbose,
+                entry_mode=entry_mode,
             )
             if "error" in result:
                 if verbose:
@@ -503,6 +620,9 @@ def _print_summary(df: pd.DataFrame):
     print(f"  最大リターン:   {df['return_pct'].max():+.1f}%")
     print(f"  最大損失:       {df['return_pct'].min():+.1f}%")
     print(f"  平均保有日数:   {df['hold_days'].mean():.0f}日")
+    if "entry_wait_days" in df.columns and df["entry_wait_days"].mean() > 1:
+        print(f"  平均待機日数:   {df['entry_wait_days'].mean():.0f}日"
+              f" (中央値: {df['entry_wait_days'].median():.0f}日)")
 
     # 期待値
     avg_win = wins["return_pct"].mean() if not wins.empty else 0
@@ -767,6 +887,9 @@ def main():
     parser.add_argument("--scoring", type=str, default="v2",
                         choices=["v1", "v2"],
                         help="スコアリングバージョン (デフォルト: v2)")
+    parser.add_argument("--entry", type=str, default="immediate",
+                        choices=["immediate", "golden_cross", "volume_surge", "gc_or_volume"],
+                        help="エントリー方式 (デフォルト: immediate)")
     args = parser.parse_args()
 
     _set_min_red(args.min_red)
@@ -805,7 +928,8 @@ def main():
 
     df = run_backtest(codes_with_names, verbose=args.verbose,
                       grade_filter=args.grade_filter,
-                      scoring_version=args.scoring)
+                      scoring_version=args.scoring,
+                      entry_mode=args.entry)
 
     if not df.empty:
         from pathlib import Path
