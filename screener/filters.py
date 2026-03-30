@@ -25,6 +25,11 @@ def add_price_filters(df_kuroten: pd.DataFrame, df_price: pd.DataFrame) -> pd.Da
     Returns:
         フィルタ後のDataFrame
     """
+    # 株価データが空の場合（全銘柄取得失敗）
+    if df_price.empty or "Code" not in df_price.columns:
+        print("  [WARN] 株価データが取得できませんでした。全銘柄除外されます。")
+        return pd.DataFrame(columns=list(df_kuroten.columns) + ["Close", "MarketCapitalization"])
+
     # 株価データをマージ
     merged = df_kuroten.merge(
         df_price[["Code", "Close", "MarketCapitalization"]],
