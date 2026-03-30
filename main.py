@@ -19,7 +19,8 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 
 from dotenv import load_dotenv
 
-from screener.irbank import screen_all_companies, get_company_summary, get_quarterly_html
+from screener.irbank import screen_all_companies, get_company_summary, get_quarterly_html, _invalidate_cache
+from screener.tdnet import get_earnings_codes
 from screener.yfinance_client import get_price_data
 from screener.filters import add_price_filters
 from screener.fake_filter import apply_fake_filter
@@ -37,9 +38,21 @@ def main(
     skip_fake_filter: bool = False,
     limit: int = 0,
     grade_notify: str | None = None,
+    refresh_earnings: bool = False,
 ):
     target_date = date or datetime.today().strftime("%Y%m%d")
     print(f">> 黒字転換スクリーニング実行: {target_date}")
+
+    # 0. 決算開示銘柄のキャッシュ無効化（本決算シーズン用）
+    if refresh_earnings:
+        tdnet_date = f"{target_date[:4]}-{target_date[4:6]}-{target_date[6:]}"
+        earnings_codes = get_earnings_codes(tdnet_date)
+        if earnings_codes:
+            print(f"  [TDnet] 決算開示 {len(earnings_codes)}件 → キャッシュ無効化")
+            for code in earnings_codes:
+                _invalidate_cache(code)
+        else:
+            print(f"  [TDnet] 決算開示なし")
 
     # 1. IR Bank: 全銘柄の四半期データ取得 → 黒字転換フィルタ
     step = "[1/4]" if not skip_fake_filter else "[1/3]"
@@ -176,6 +189,8 @@ if __name__ == "__main__":
     parser.add_argument("--grade-notify", type=str, default=None,
                         choices=["S", "A", "B"],
                         help="指定推奨度以上のみSlack通知 (例: A → S/Aのみ)")
+    parser.add_argument("--refresh-earnings", action="store_true",
+                        help="TDnet決算開示銘柄のキャッシュを無効化してからスキャン（本決算シーズン用）")
     args = parser.parse_args()
     main(
         args.date,
@@ -184,4 +199,5 @@ if __name__ == "__main__":
         skip_fake_filter=args.no_fake_filter,
         limit=args.limit,
         grade_notify=args.grade_notify,
+        refresh_earnings=args.refresh_earnings,
     )
