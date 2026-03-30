@@ -62,6 +62,7 @@ kuroten-screener/
 │   ├── fake_filter.py     ← フェイク銘柄フィルタ
 │   ├── recommendation.py  ← 購入推奨度スコアリング（S/A/B/C、相対評価）
 │   ├── breakout.py        ← 新高値ブレイクアウト検出（JP/US対応、バッチ取得）
+│   ├── earnings.py        ← Earnings Acceleration検出（CAN SLIM C+A、ブレイクアウト確度フィルタ）
 │   ├── universe.py        ← 銘柄ユニバース管理（NASDAQ API、7000+銘柄）
 │   ├── exclusion.py       ← 除外フィルタ（REIT/ETF/優先株等、キャッシュ付き）
 │   ├── signal_store.py    ← シグナル履歴永続化（初出/継続/消失判定）
@@ -89,6 +90,7 @@ kuroten-screener/
     ├── test_exclusion.py
     ├── test_signal_store.py
     ├── test_healthcheck.py
+    ├── test_earnings.py
     └── test_integration.py
 ```
 
@@ -231,6 +233,16 @@ Slack通知
 | 時価総額(JP優先) | 200億 | `BREAKOUT_MAX_MARKET_CAP_JP` | DUKE:10倍株92.4%が200億未満 |
 | 時価総額(JP許容) | 500億 | `BREAKOUT_MAX_MARKET_CAP_JP_LOOSE` | 拡大検索用 |
 | 有望セクター | IT/サービス/小売 | `BREAKOUT_PREFERRED_SECTORS_JP` | DUKE統計 |
+
+### Earnings Acceleration（config.py）
+
+| パラメータ | デフォルト値 | 変数名 | 根拠 |
+|-----------|------------|--------|------|
+| 最低利益成長率 | +25% | `EA_MIN_PROFIT_GROWTH` | O'Neill CAN SLIM "C" |
+| 加速判定閾値 | 0% | `EA_MIN_ACCELERATION` | 前期比改善ならOK |
+| 連続加速四半期数 | 2 | `EA_MIN_CONSECUTIVE` | O'Neill: 2Q以上必須 |
+| 最低売上成長率 | +10% | `EA_MIN_REVENUE_GROWTH` | O'Neill: 売上伴わない利益成長は除外 |
+| 売上バリデーション | 有効 | `EA_REQUIRE_REVENUE_VALIDATION` | O'Neill準拠 |
 
 ---
 

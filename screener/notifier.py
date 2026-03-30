@@ -183,8 +183,11 @@ def _build_breakout_message(df: pd.DataFrame, date: str, market: str = "JP") -> 
 
         gc = row.get("gc_status", False)
         gc_str = "GC済" if gc else "GC待ち"
+        ea_tag = row.get("ea_tag", "")
 
         detail_line = f"  Vol {vol:.1f}x | RSI {rsi:.1f} | {sma_str} | {gc_str}"
+        if ea_tag:
+            detail_line += f" | {ea_tag}"
         lines.append(stock_line)
         lines.append(detail_line)
         lines.append(link_line)

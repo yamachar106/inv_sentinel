@@ -27,7 +27,9 @@ load_dotenv()
 from screener.breakout import check_breakout_batch, check_gc_status
 from screener.breakout_pending import load_pending, add_pending_batch, remove_pending
 from screener.daily_kuroten import run_daily_kuroten
+from screener.earnings import check_earnings_acceleration, format_earnings_tag
 from screener.healthcheck import run_healthcheck
+from screener.irbank import get_quarterly_html, get_company_summary
 from screener.notifier import (
     notify_breakout, notify_gc_entry, notify_slack,
     _resolve_webhook_url, _send_slack,
@@ -40,8 +42,38 @@ from screener.tdnet import get_market_change_codes
 from screener.universe import load_universe
 
 
+def _enrich_with_earnings(df, codes: list[str], market: str = "JP") -> None:
+    """ブレイクアウトシグナルにEarnings Accelerationタグを付加する（JP専用）"""
+    if df.empty or market != "JP":
+        df["ea_tag"] = ""
+        return
+
+    ea_tags = {}
+    for code in codes:
+        try:
+            html = get_quarterly_html(code)
+            if not html:
+                continue
+            summary = get_company_summary(code, html=html)
+            if not summary:
+                continue
+            result = check_earnings_acceleration(
+                summary.get("quarterly_history", []),
+                summary.get("revenue_history", []),
+                code=code,
+            )
+            if result:
+                ea_tags[code] = format_earnings_tag(result)
+                print(f"    [EA] {code}: {ea_tags[code]}")
+            time.sleep(1)  # IR Bank負荷軽減
+        except Exception as e:
+            print(f"    [WARN] EA取得失敗 {code}: {e}")
+
+    df["ea_tag"] = df["code"].map(lambda c: ea_tags.get(c, ""))
+
+
 def run_breakout_jp(dry_run: bool = False) -> tuple[list[str], str]:
-    """JP ブレイクアウト監視を実行（2段階通知対応）"""
+    """JP ブレイクアウト監視を実行（2段階通知対応+EA付加）"""
     code_to_name, label = load_latest_watchlist()
     if not code_to_name:
         print("  [SKIP] JPウォッチリストなし")
@@ -54,6 +86,9 @@ def run_breakout_jp(dry_run: bool = False) -> tuple[list[str], str]:
     signal_codes = df["code"].tolist() if not df.empty else []
 
     if not df.empty:
+        # Earnings Accelerationチェック（シグナル銘柄のみ）
+        _enrich_with_earnings(df, signal_codes, market="JP")
+
         # 2段階通知: GC済みとGC待ちに分離
         gc_ready = df[df["gc_status"] == True]
         gc_pending = df[df["gc_status"] == False]
@@ -61,8 +96,9 @@ def run_breakout_jp(dry_run: bool = False) -> tuple[list[str], str]:
         for _, row in df.iterrows():
             name = code_to_name.get(row["code"], "")
             gc_label = "GC済" if row.get("gc_status") else "GC待ち"
+            ea = f" {row.get('ea_tag', '')}" if row.get("ea_tag") else ""
             tag = "BREAKOUT+黒字転換" if row["signal"] == "breakout" else "PRE-BREAK+黒字転換"
-            print(f"    [{tag}] {row['code']} {name} ({gc_label})")
+            print(f"    [{tag}] {row['code']} {name} ({gc_label}){ea}")
 
         if not dry_run:
             # Stage 1: 全シグナルを準備通知（GC状態を付記）
