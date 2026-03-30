@@ -147,10 +147,14 @@ def detect_acceleration(
             break
 
     if consecutive < min_consecutive:
-        # 加速が不十分でも、直近が非常に強い場合は黒字転換ボーナスで救済
-        if not has_turnaround or latest["growth"] < 0.50:
+        # 救済条件1: 黒字転換+高成長
+        if has_turnaround and latest["growth"] >= 0.50:
+            consecutive = max(consecutive, 1)
+        # 救済条件2: データ不足（US株yfinance: ~5Q→YoY1回のみ）で強い成長
+        elif min_consecutive <= 1 and len(numeric) == 1 and latest["growth"] >= min_growth:
+            consecutive = 1
+        else:
             return None
-        consecutive = max(consecutive, 1)
 
     # 成長率推移（直近4Q分）
     trend = [r["growth"] for r in numeric[-4:]]
@@ -199,6 +203,7 @@ def check_earnings_acceleration(
     quarterly_history: list[dict],
     revenue_history: list[dict] | None = None,
     code: str = "",
+    min_consecutive_override: int | None = None,
 ) -> dict | None:
     """
     銘柄の利益加速シグナルを総合判定する。
@@ -207,6 +212,8 @@ def check_earnings_acceleration(
         quarterly_history: [{"period", "quarter", "op"}, ...]
         revenue_history: [{"period", "quarter", "revenue"}, ...]
         code: 銘柄コード（ログ用）
+        min_consecutive_override: 連続加速要求を上書き（US株はyfinanceデータが
+            5Q程度しかなくYoY比較が1回のため、1に緩和して使用）
 
     Returns:
         {
@@ -225,7 +232,8 @@ def check_earnings_acceleration(
     """
     # 利益の成長率を計算
     profit_rates = calc_yoy_growth_rates(quarterly_history, metric="op")
-    accel = detect_acceleration(profit_rates)
+    min_consec = min_consecutive_override if min_consecutive_override is not None else EA_MIN_CONSECUTIVE
+    accel = detect_acceleration(profit_rates, min_consecutive=min_consec)
     if accel is None:
         return None
 

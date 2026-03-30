@@ -19,7 +19,7 @@ import pandas as pd
 
 from screener.config import (
     MIN_CONSECUTIVE_RED, REQUEST_INTERVAL, MAX_RETRIES, RETRY_BACKOFF,
-    IRBANK_CACHE_DAYS,
+    IRBANK_CACHE_DAYS, IRBANK_CACHE_DAYS_EARNINGS, EARNINGS_SEASON_MONTHS,
 )
 
 BASE_URL = "https://irbank.net"
@@ -648,11 +648,22 @@ def _parse_number(s: str) -> float | None:
         return None
 
 
-def _load_cache(code: str, cache_days: int = IRBANK_CACHE_DAYS) -> dict | None:
+def _effective_cache_days() -> int:
+    """本決算シーズン中はキャッシュTTLを短縮する"""
+    from datetime import date
+    if date.today().month in EARNINGS_SEASON_MONTHS:
+        return IRBANK_CACHE_DAYS_EARNINGS
+    return IRBANK_CACHE_DAYS
+
+
+def _load_cache(code: str, cache_days: int | None = None) -> dict | None:
     """
     キャッシュファイルを読み込む。有効期限内であればdictを返す。
     期限切れまたは存在しない場合はNoneを返す。
+    本決算シーズン（1-2月/4-5月）は自動的にTTLを1日に短縮。
     """
+    if cache_days is None:
+        cache_days = _effective_cache_days()
     cache_path = IRBANK_CACHE_DIR / f"{code}.json"
     if not cache_path.exists():
         return None

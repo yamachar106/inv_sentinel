@@ -43,6 +43,7 @@ RETURN_WINDOWS = [5, 20, 60]
 
 # バックテスト用の期間（十分な履歴が必要）
 BACKTEST_PERIOD = "2y"
+BACKTEST_PERIOD_EXTENDED = "5y"
 
 # エントリー待機の最大日数
 ENTRY_WAIT_MAX_DAYS = 60
@@ -112,6 +113,7 @@ def backtest_single(
     market: str = "JP",
     entry_mode: str = "immediate",
     verbose: bool = False,
+    period: str = BACKTEST_PERIOD,
 ) -> list[dict]:
     """
     1銘柄のブレイクアウトシグナルをバックテストする。
@@ -120,11 +122,12 @@ def backtest_single(
 
     Args:
         entry_mode: "immediate" / "golden_cross" / "volume_surge" / "gc_or_volume"
+        period: データ取得期間 ("2y", "5y" etc.)
 
     Returns:
         シグナル発火イベントのリスト
     """
-    df = fetch_ohlcv(ticker, period=BACKTEST_PERIOD)
+    df = fetch_ohlcv(ticker, period=period)
     if df is None or len(df) < 100:
         return []
 
@@ -305,6 +308,23 @@ def summarize_results(events: list[dict]) -> None:
                     print(f"  Vol >= {threshold}x: 勝率 {wr:.1%} ({len(above)}件)")
 
 
+def save_results_csv(events: list[dict], args) -> str | None:
+    """バックテスト結果をCSVに保存する"""
+    if not events:
+        return None
+    from datetime import datetime
+    from pathlib import Path
+
+    df = pd.DataFrame(events)
+    out_dir = Path(__file__).resolve().parent / "data" / "backtest"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"breakout_bt_{args.market}_{args.entry}_{ts}.csv"
+    path = out_dir / filename
+    df.to_csv(path, index=False, encoding="utf-8-sig")
+    return str(path)
+
+
 def main():
     parser = argparse.ArgumentParser(description="ブレイクアウト戦略バックテスト")
     parser.add_argument("--codes", type=str, default=None,
@@ -317,6 +337,10 @@ def main():
     parser.add_argument("--entry", type=str, default="immediate",
                         choices=["immediate", "golden_cross", "volume_surge", "gc_or_volume"],
                         help="エントリータイミング (デフォルト: immediate)")
+    parser.add_argument("--period", type=str, default=BACKTEST_PERIOD,
+                        help=f"バックテスト期間 (デフォルト: {BACKTEST_PERIOD}, 拡大: 5y)")
+    parser.add_argument("--save", action="store_true",
+                        help="結果をCSVに保存")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
@@ -334,19 +358,25 @@ def main():
 
     entry_label = args.entry if args.entry != "immediate" else "即時エントリー"
     print(f"ブレイクアウト バックテスト ({args.market})")
-    print(f"対象: {len(codes)}銘柄, 期間: {BACKTEST_PERIOD}, エントリー: {entry_label}")
+    print(f"対象: {len(codes)}銘柄, 期間: {args.period}, エントリー: {entry_label}")
     print("=" * 60)
 
     all_events = []
     for i, code in enumerate(codes):
         ticker = f"{code}{suffix}"
         print(f"  [{i+1}/{len(codes)}] {ticker}")
-        events = backtest_single(ticker, market=args.market, entry_mode=args.entry, verbose=args.verbose)
+        events = backtest_single(ticker, market=args.market, entry_mode=args.entry,
+                                 verbose=args.verbose, period=args.period)
         all_events.extend(events)
         if i < len(codes) - 1:
             time.sleep(0.5)
 
     summarize_results(all_events)
+
+    if args.save:
+        path = save_results_csv(all_events, args)
+        if path:
+            print(f"\n[SAVED] {path}")
 
 
 if __name__ == "__main__":

@@ -4,6 +4,9 @@ on:
   schedule:
     # Feb 15, May 15, Aug 15, Nov 15 00:00 JST = 前日 15:00 UTC
     - cron: "0 15 14 2,5,8,11 *"
+    # 本決算シーズン（4-5月）: 毎週土曜 00:00 JST = 金曜 15:00 UTC
+    # 週次フルスキャンで新規黒字転換を網羅的にキャッチ
+    - cron: "0 15 * 4,5 5"
 
   workflow_dispatch:
     inputs:

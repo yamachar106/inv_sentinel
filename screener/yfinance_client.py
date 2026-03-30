@@ -109,6 +109,83 @@ def _fetch_individual_price(ticker_str: str) -> float | None:
     return None
 
 
+def get_us_quarterly_financials(symbol: str) -> tuple[list[dict], list[dict]]:
+    """
+    US株の四半期財務データをyfinanceから取得し、earnings.py互換形式に変換する。
+
+    Returns:
+        (quarterly_history, revenue_history)
+        quarterly_history: [{"period": "2025/12", "quarter": "Q1", "op": 150.0}, ...]
+        revenue_history:   [{"period": "2025/12", "quarter": "Q1", "revenue": 950.0}, ...]
+        値の単位: 百万USD
+    """
+    try:
+        ticker = yf.Ticker(symbol)
+        stmt = ticker.quarterly_income_stmt
+        if stmt is None or stmt.empty:
+            return [], []
+    except Exception:
+        return [], []
+
+    quarterly_history = []
+    revenue_history = []
+
+    # 列は日付（新しい順）、行はline items
+    for col_date in stmt.columns:
+        dt = pd.Timestamp(col_date)
+        # カレンダー四半期を判定
+        month = dt.month
+        if month <= 3:
+            quarter = "Q1"
+        elif month <= 6:
+            quarter = "Q2"
+        elif month <= 9:
+            quarter = "Q3"
+        else:
+            quarter = "Q4"
+
+        # 会計年度（12月決算企業は暦年、それ以外はdt.year）
+        fiscal_year = dt.year
+        fiscal_month = "12"  # 簡略化: カレンダー年度ベース
+        period = f"{fiscal_year}/{fiscal_month}"
+
+        # Operating Income（営業利益）
+        op_val = _safe_extract(stmt, col_date, ["Operating Income", "operatingIncome"])
+        if op_val is not None:
+            quarterly_history.append({
+                "period": period,
+                "quarter": quarter,
+                "op": op_val / 1_000_000,  # 百万USD単位
+            })
+
+        # Total Revenue（売上）
+        rev_val = _safe_extract(stmt, col_date, ["Total Revenue", "totalRevenue"])
+        if rev_val is not None:
+            revenue_history.append({
+                "period": period,
+                "quarter": quarter,
+                "revenue": rev_val / 1_000_000,
+            })
+
+    # 古い順にソート
+    quarterly_history.sort(key=lambda r: (r["period"], r["quarter"]))
+    revenue_history.sort(key=lambda r: (r["period"], r["quarter"]))
+
+    return quarterly_history, revenue_history
+
+
+def _safe_extract(stmt: pd.DataFrame, col, keys: list[str]) -> float | None:
+    """income statementから安全に値を取得する"""
+    for key in keys:
+        try:
+            val = stmt.loc[key, col]
+            if pd.notna(val):
+                return float(val)
+        except (KeyError, TypeError):
+            continue
+    return None
+
+
 def _fetch_market_cap(ticker_str: str, close: float) -> float | None:
     """
     時価総額を取得する

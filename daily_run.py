@@ -26,10 +26,11 @@ load_dotenv()
 
 from screener.breakout import check_breakout_batch, check_gc_status
 from screener.breakout_pending import load_pending, add_pending_batch, remove_pending
+from screener.config import EARNINGS_SEASON_MONTHS
 from screener.daily_kuroten import run_daily_kuroten
 from screener.earnings import check_earnings_acceleration, format_earnings_tag
 from screener.healthcheck import run_healthcheck
-from screener.irbank import get_quarterly_html, get_company_summary
+from screener.irbank import get_quarterly_html, get_company_summary, _invalidate_cache
 from screener.notifier import (
     notify_breakout, notify_gc_entry, notify_slack,
     _resolve_webhook_url, _send_slack,
@@ -38,36 +39,75 @@ from screener.reporter import load_latest_watchlist
 from screener.signal_store import (
     save_signals, load_previous_signals, diff_signals, format_diff_summary,
 )
-from screener.tdnet import get_market_change_codes
+from screener.tdnet import get_earnings_codes, get_market_change_codes
 from screener.universe import load_universe
 
 
+def _auto_refresh_earnings_cache(today: str) -> int:
+    """本決算シーズン中、TDnet開示銘柄のIR Bankキャッシュを自動無効化する。
+
+    Returns:
+        無効化した銘柄数
+    """
+    if date.today().month not in EARNINGS_SEASON_MONTHS:
+        return 0
+
+    codes = get_earnings_codes(today)
+    if not codes:
+        return 0
+
+    for code in codes:
+        _invalidate_cache(code)
+    return len(codes)
+
+
 def _enrich_with_earnings(df, codes: list[str], market: str = "JP") -> None:
-    """ブレイクアウトシグナルにEarnings Accelerationタグを付加する（JP専用）"""
-    if df.empty or market != "JP":
+    """ブレイクアウトシグナルにEarnings Accelerationタグを付加する（JP/US対応）"""
+    if df.empty:
         df["ea_tag"] = ""
         return
 
     ea_tags = {}
-    for code in codes:
-        try:
-            html = get_quarterly_html(code)
-            if not html:
-                continue
-            summary = get_company_summary(code, html=html)
-            if not summary:
-                continue
-            result = check_earnings_acceleration(
-                summary.get("quarterly_history", []),
-                summary.get("revenue_history", []),
-                code=code,
-            )
-            if result:
-                ea_tags[code] = format_earnings_tag(result)
-                print(f"    [EA] {code}: {ea_tags[code]}")
-            time.sleep(1)  # IR Bank負荷軽減
-        except Exception as e:
-            print(f"    [WARN] EA取得失敗 {code}: {e}")
+
+    if market == "JP":
+        for code in codes:
+            try:
+                html = get_quarterly_html(code)
+                if not html:
+                    continue
+                summary = get_company_summary(code, html=html)
+                if not summary:
+                    continue
+                result = check_earnings_acceleration(
+                    summary.get("quarterly_history", []),
+                    summary.get("revenue_history", []),
+                    code=code,
+                )
+                if result:
+                    ea_tags[code] = format_earnings_tag(result)
+                    print(f"    [EA] {code}: {ea_tags[code]}")
+                time.sleep(1)  # IR Bank負荷軽減
+            except Exception as e:
+                print(f"    [WARN] EA取得失敗 {code}: {e}")
+
+    elif market == "US":
+        from screener.yfinance_client import get_us_quarterly_financials
+        for code in codes:
+            try:
+                qh, rh = get_us_quarterly_financials(code)
+                if not qh:
+                    continue
+                # US: yfinanceは~5Qのみ→YoY比較1回→min_consecutive=1に緩和
+                result = check_earnings_acceleration(
+                    qh, rh, code=code,
+                    min_consecutive_override=1,
+                )
+                if result:
+                    ea_tags[code] = format_earnings_tag(result)
+                    print(f"    [EA] {code}: {ea_tags[code]}")
+                time.sleep(0.3)  # yfinance負荷軽減
+            except Exception as e:
+                print(f"    [WARN] EA取得失敗 {code}: {e}")
 
     df["ea_tag"] = df["code"].map(lambda c: ea_tags.get(c, ""))
 
@@ -139,6 +179,9 @@ def run_breakout_us(
     signal_codes = df["code"].tolist() if not df.empty else []
 
     if not df.empty:
+        # Earnings Accelerationチェック（USシグナル銘柄のみ）
+        _enrich_with_earnings(df, signal_codes, market="US")
+
         gc_pending = df[df["gc_status"] == False]
 
         if not dry_run:
@@ -332,6 +375,12 @@ def main():
 
     all_signals: dict[str, list[str]] = {}
     start_time = time.time()
+
+    # ---- 本決算シーズン: TDnet開示銘柄のキャッシュ自動無効化 ----
+    if args.market is None or args.market == "JP":
+        n_refreshed = _auto_refresh_earnings_cache(today)
+        if n_refreshed > 0:
+            print(f"\n[!] 本決算シーズン: TDnet開示{n_refreshed}件のIR Bankキャッシュ無効化")
 
     # ---- JP ブレイクアウト ----
     run_jp = (args.market is None or args.market == "JP") and \

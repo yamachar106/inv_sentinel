@@ -44,7 +44,12 @@ def main(
     print(f">> 黒字転換スクリーニング実行: {target_date}")
 
     # 0. 決算開示銘柄のキャッシュ無効化（本決算シーズン用）
-    if refresh_earnings:
+    # 本決算シーズン（1-2月/4-5月）は自動有効化。IR BankキャッシュTTLも1日に短縮。
+    from screener.config import EARNINGS_SEASON_MONTHS
+    auto_refresh = datetime.today().month in EARNINGS_SEASON_MONTHS
+    if refresh_earnings or auto_refresh:
+        if auto_refresh and not refresh_earnings:
+            print(f"  [AUTO] 本決算シーズン: キャッシュTTL=1日 + TDnet開示キャッシュ無効化")
         tdnet_date = f"{target_date[:4]}-{target_date[4:6]}-{target_date[6:]}"
         earnings_codes = get_earnings_codes(tdnet_date)
         if earnings_codes:

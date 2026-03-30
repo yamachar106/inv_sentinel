@@ -243,6 +243,7 @@ Slack通知
 | 連続加速四半期数 | 2 | `EA_MIN_CONSECUTIVE` | O'Neill: 2Q以上必須 |
 | 最低売上成長率 | +10% | `EA_MIN_REVENUE_GROWTH` | O'Neill: 売上伴わない利益成長は除外 |
 | 売上バリデーション | 有効 | `EA_REQUIRE_REVENUE_VALIDATION` | O'Neill準拠 |
+| US向け連続加速緩和 | 1Q | `min_consecutive_override=1` | yfinance制約(~5Q→YoY1回) |
 
 ---
 
