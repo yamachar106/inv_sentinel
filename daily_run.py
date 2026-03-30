@@ -40,7 +40,7 @@ from screener.signal_store import (
     save_signals, load_previous_signals, diff_signals, format_diff_summary,
 )
 from screener.tdnet import get_earnings_codes, get_market_change_codes
-from screener.universe import load_universe
+from screener.universe import load_universe, fetch_us_stocks
 
 
 def _auto_refresh_earnings_cache(today: str) -> int:
@@ -59,6 +59,25 @@ def _auto_refresh_earnings_cache(today: str) -> int:
     for code in codes:
         _invalidate_cache(code)
     return len(codes)
+
+
+def _enrich_with_universe_meta(df) -> None:
+    """USブレイクアウト結果にセクター・時価総額・企業名を付加する"""
+    if df.empty:
+        return
+    try:
+        stocks = fetch_us_stocks()
+        meta = {s["symbol"]: s for s in stocks}
+        df["sector"] = df["code"].map(lambda c: meta.get(c, {}).get("sector", ""))
+        df["name"] = df["code"].map(lambda c: meta.get(c, {}).get("name", ""))
+        df["market_cap"] = df["code"].map(
+            lambda c: meta.get(c, {}).get("marketCap", 0) or 0
+        )
+    except Exception as e:
+        print(f"  [WARN] ユニバースメタデータ取得失敗: {e}")
+        df["sector"] = ""
+        df["name"] = ""
+        df["market_cap"] = 0
 
 
 def _enrich_with_earnings(df, codes: list[str], market: str = "JP") -> None:
@@ -179,8 +198,20 @@ def run_breakout_us(
     signal_codes = df["code"].tolist() if not df.empty else []
 
     if not df.empty:
+        # US: pre_breakoutを除外（BT勝率21%でノイジー）
+        n_total = len(df)
+        df = df[df["signal"] != "pre_breakout"].reset_index(drop=True)
+        n_filtered = n_total - len(df)
+        if n_filtered > 0:
+            print(f"  PRE_BREAKOUT除外: {n_filtered}件 (通知対象: {len(df)}件)")
+        signal_codes = df["code"].tolist() if not df.empty else []
+
+    if not df.empty:
         # Earnings Accelerationチェック（USシグナル銘柄のみ）
         _enrich_with_earnings(df, signal_codes, market="US")
+
+        # セクター・時価総額を付加（ユニバースキャッシュから）
+        _enrich_with_universe_meta(df)
 
         gc_pending = df[df["gc_status"] == False]
 

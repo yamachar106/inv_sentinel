@@ -16,6 +16,15 @@ import pandas as pd
 from screener.config import NOTIFY_CHANNELS, NOTIFY_FALLBACK_ENV
 
 
+def _format_mcap_usd(mcap: float) -> str:
+    """時価総額を読みやすい形式に変換 ($1.5B, $300M等)"""
+    if mcap >= 1_000_000_000:
+        return f"${mcap / 1_000_000_000:.1f}B"
+    if mcap >= 1_000_000:
+        return f"${mcap / 1_000_000:.0f}M"
+    return ""
+
+
 def _resolve_webhook_url(strategy: str = "", market: str = "") -> str | None:
     """
     strategy×market に対応するSlack Webhook URLを解決する。
@@ -135,11 +144,16 @@ def _build_breakout_message(df: pd.DataFrame, date: str, market: str = "JP") -> 
     header += f"検出: *{len(df)}件* (ブレイクアウト: {n_breakout} | プレブレイクアウト: {n_pre})\n"
 
     lines = [header]
-    # breakout を先に、次に pre_breakout
-    signal_order = {"breakout": 0, "pre_breakout": 1}
+    # ソート: EA付き→breakout→pre_breakout
     df_sorted = df.copy()
-    df_sorted["_order"] = df_sorted["signal"].map(signal_order)
-    df_sorted = df_sorted.sort_values("_order").drop(columns=["_order"])
+    signal_order = {"breakout": 0, "breakout_overheated": 1, "pre_breakout": 2}
+    df_sorted["_sig_order"] = df_sorted["signal"].map(signal_order).fillna(9)
+    df_sorted["_has_ea"] = df_sorted.get("ea_tag", pd.Series("", index=df.index)).apply(
+        lambda x: 0 if x else 1
+    )
+    df_sorted = df_sorted.sort_values(["_has_ea", "_sig_order"]).drop(
+        columns=["_sig_order", "_has_ea"]
+    )
 
     for _, row in df_sorted.iterrows():
         code = row.get("code", "")
@@ -168,9 +182,19 @@ def _build_breakout_message(df: pd.DataFrame, date: str, market: str = "JP") -> 
 
         if is_us:
             price_str = f"${close:,.2f}"
-            stock_line = f"[{tag}] {code} | {price_str} | 52W High {dist_str}"
+            name = row.get("name", "")
+            sector = row.get("sector", "")
+            mcap_val = row.get("market_cap", 0) or 0
+            mcap_str = _format_mcap_usd(mcap_val) if mcap_val else ""
+
+            name_part = f" {name}" if name else ""
+            meta_parts = [p for p in [sector, mcap_str] if p]
+            meta_str = f" ({', '.join(meta_parts)})" if meta_parts else ""
+
+            stock_line = f"[{tag}] *{code}*{name_part}{meta_str}"
+            price_line = f"  {price_str} | 52W High {dist_str}"
             link_line = (
-                f"  <https://finance.yahoo.com/quote/{code}|Yahoo Finance>"
+                f"  <https://finance.yahoo.com/quote/{code}|Yahoo>"
                 f" | <https://finviz.com/quote.ashx?t={code}|Finviz>"
             )
         else:
@@ -189,6 +213,8 @@ def _build_breakout_message(df: pd.DataFrame, date: str, market: str = "JP") -> 
         if ea_tag:
             detail_line += f" | {ea_tag}"
         lines.append(stock_line)
+        if is_us:
+            lines.append(price_line)
         lines.append(detail_line)
         lines.append(link_line)
         lines.append("")
