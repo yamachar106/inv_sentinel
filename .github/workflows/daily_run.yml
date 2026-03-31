@@ -151,7 +151,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          for dir in data/signals data/universe data/cache data/watchlist; do
+          for dir in data/signals data/universe data/watchlist; do
             [ -d "$dir" ] && git add "$dir/"
           done
           if git diff --cached --quiet; then
