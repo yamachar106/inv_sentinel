@@ -24,9 +24,11 @@ MIN_CONSECUTIVE_RED = 2             # 最低連続赤字四半期数
 # 売買ルール
 SELL_TARGET = 2.0                   # 利確目標（2倍）
 MAX_HOLD_YEARS = 2                  # 最大保有期間（年）
-STOP_LOSS_PCT = -0.20               # 損切りライン（-20%）※黒字転換戦略はボラが高く-10%だと早期損切り多発（BT検証済）
+STOP_LOSS_PCT = -0.25               # 損切りライン（-25%）※BT90トレードsweep: -25%がPF4.16/勝率60%で最適（-20%比+23%改善）
 TRAILING_STOP_TRIGGER = 0.80        # トレーリングストップ発動（+80%到達時）
 TRAILING_STOP_PCT = -0.20           # 高値からの下落で利確（-20%）
+PARTIAL_PROFIT_TARGET = 0.50        # 部分利確ライン（+50%で半分売却）
+PARTIAL_PROFIT_RATIO = 0.50         # 部分利確時の売却割合（50%）
 PER_TRADE_CAPITAL = 1_000_000       # 1トレードあたりの投資額（100万円）
 
 # バックテスト用株価フィルタ（過去データ検証用に書籍より広め）
@@ -77,19 +79,24 @@ REC_GRADE_B = 3                     # Bランク: この点数以上
 # =============================================================================
 
 # --- 加点ファクター ---
-REC_V2_YOY_SAME_Q_RED_BONUS = 2          # 前年同期も赤字 → 構造的改善(+2)
+# v2.1: バックテスト90トレードの因子分析に基づき再調整
+# 旧YOY_SAME_Q_RED_BONUS=+2は逆効果（あり+7.1%/wr42% vs なし+9.7%/wr55%）→ 0に
+REC_V2_YOY_SAME_Q_RED_BONUS = 0          # 前年同期も赤字 → 中立（v2.0: +2→v2.1: 0）
 REC_V2_PROFIT_MCAP_HIGH = 0.02           # 利益/時価総額 > 2% → +2
 REC_V2_PROFIT_MCAP_LOW = 0.005           # 利益/時価総額 > 0.5% → +1
-REC_V2_REVENUE_GROWTH_HIGH = 0.15        # 前年同期比売上 > +15% → +2
-REC_V2_REVENUE_GROWTH_LOW = 0.05         # 前年同期比売上 > +5% → +1
+# 旧REVENUE_GROWTH_HIGH=+2は逆効果（あり+2.7% vs なし+12.7%）→ +1/0に
+REC_V2_REVENUE_GROWTH_HIGH = 0.15        # 前年同期比売上 > +15% → +1（v2.0: +2→v2.1: +1）
+REC_V2_REVENUE_GROWTH_LOW = 0.05         # 前年同期比売上 > +5% → 0（v2.0: +1→v2.1: 0）
 REC_V2_FORECAST_ALIGNED_BONUS = 1        # 通期予想黒字+進捗率健全 → +1
 
 # --- 減点ファクター ---
-REC_V2_SEASONAL_PENALTY_MILD = -2        # 前年同期が黒字(1年)
-REC_V2_SEASONAL_PENALTY_STRONG = -3      # 前年同期が黒字(2年以上)
+# 旧SEASONAL_PENALTY=-2/-3は過剰（wr53%は平均以上）→ -1/-2に緩和
+REC_V2_SEASONAL_PENALTY_MILD = -1        # 前年同期が黒字(1年)（v2.0: -2→v2.1: -1）
+REC_V2_SEASONAL_PENALTY_STRONG = -2      # 前年同期が黒字(2年以上)（v2.0: -3→v2.1: -2）
 REC_V2_PRIOR_FAILURE_PENALTY = -2        # 同銘柄の過去シグナル失敗
-REC_V2_THIN_PROFIT_SEVERE = -2           # 営業利益 < 1億
-REC_V2_THIN_PROFIT_MILD = -1             # 営業利益 < 3億
+# 旧THIN_PROFIT=-2/-1は逆効果（薄利+22.1%/wr60% vs 非薄利+7.4%/wr50%）→ 0に
+REC_V2_THIN_PROFIT_SEVERE = 0            # 営業利益 < 1億（v2.0: -2→v2.1: 0）
+REC_V2_THIN_PROFIT_MILD = 0              # 営業利益 < 3億（v2.0: -1→v2.1: 0）
 REC_V2_DEPTH_MISMATCH_PENALTY = -1       # 5Q+赤字で回復が弱い
 
 # --- 重み削減（旧ファクター） ---
@@ -100,10 +107,10 @@ REC_V2_DOUBLE_TURN_BONUS = 1             # ダブル転換: +1（旧: +2）
 REC_V2_FSCORE_HIGH = 5                   # F-Score >= 5 → +1（財務健全）
 REC_V2_FSCORE_LOW = 2                    # F-Score <= 2 → -1（財務懸念）
 
-# --- グレード閾値（スコア範囲: 約-7〜+7） ---
-REC_V2_GRADE_S = 5                       # S(Top Pick): 年3-5件の厳選投資対象
-REC_V2_GRADE_A = 3                       # A(Strong): 枠があれば投資
-REC_V2_GRADE_B = 1                       # B(Watch): ウォッチのみ
+# --- グレード閾値（v2.1: BT90トレード因子分析→単調性確認済み S>A>B） ---
+REC_V2_GRADE_S = 3                       # S(Top Pick): BT avg+26%, n=4（v2.0: 5→v2.1: 3）
+REC_V2_GRADE_A = 1                       # A(Strong): BT avg+11.4%, n=45（v2.0: 3→v2.1: 1）
+REC_V2_GRADE_B = -1                      # B(Watch): BT avg+4.8%, n=41（v2.0: 1→v2.1: -1）
 
 # =============================================================================
 # ブレイクアウト監視設定
@@ -168,3 +175,19 @@ NOTIFY_CHANNELS = {
     "breakout:US":      "SLACK_WEBHOOK_BREAKOUT_US",
 }
 NOTIFY_FALLBACK_ENV = "SLACK_WEBHOOK_URL"
+
+# =============================================================================
+# 売却監視設定
+# =============================================================================
+
+SELL_MONITOR_DEFICIT_CHECK_INTERVAL = 7   # 赤字転落チェック間隔（日）
+MARKET_REGIME_SUPPRESS_IN_BEAR = False    # BEAR時の買いシグナル抑制（オプション）
+
+# =============================================================================
+# Relative Strength (RS) ランキング設定
+# =============================================================================
+
+RS_LOOKBACK_DAYS = 126                   # RSルックバック期間（営業日、約6ヶ月）
+RS_MIN_PERCENTILE_JP = 70               # JP: 上位30%以上のみ通過
+RS_MIN_PERCENTILE_US = 70               # US: 上位30%以上のみ通過
+RS_ENABLED = True                        # RSフィルタ有効/無効

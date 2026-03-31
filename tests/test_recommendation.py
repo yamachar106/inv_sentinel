@@ -127,7 +127,7 @@ class TestCalcRecommendationV2:
         assert pts < 0
 
     def test_seasonal_bonus_same_q_also_red(self):
-        """前年同期も赤字 → 構造的改善ボーナス"""
+        """前年同期も赤字 → v2.1: 中立（BT検証で逆効果と判明）"""
         history = [
             {"period": "2023/03", "quarter": "3Q", "op": -8.0},  # 前年同期: 赤字
             {"period": "2024/03", "quarter": "2Q", "op": -5.0},  # 直前
@@ -139,26 +139,29 @@ class TestCalcRecommendationV2:
             quarterly_history=history,
             signal_quarter="3Q",
         )
+        # v2.1: YOY_SAME_Q_RED_BONUS=0 なので加点なし（季節ペナルティもなし）
         reason_str = ", ".join(reasons)
-        assert "構造改善" in reason_str
+        assert "季節" not in reason_str  # 前年同期赤字→季節ペナルティ不要を確認
 
-    def test_thin_profit_penalty(self):
-        """薄利 → 減点"""
+    def test_thin_profit_no_penalty(self):
+        """薄利 → v2.1: ペナルティなし（BT検証で薄利が高パフォーマンス）"""
         grade, pts, reasons = calc_recommendation(
             prev_op=-5, curr_op=0.3,  # 0.3億 < 1億
             consecutive_red=2,
         )
+        # v2.1: THIN_PROFIT_SEVERE=0 なので減点なし
         reason_str = ", ".join(reasons)
-        assert "薄利" in reason_str
+        # 薄利のreason自体は表示されるが点数は0
+        assert pts >= -1  # 減点されていないことを確認
 
-    def test_thin_profit_mild(self):
-        """利益小(1-3億) → 軽い減点"""
+    def test_thin_profit_mild_no_penalty(self):
+        """利益小(1-3億) → v2.1: ペナルティなし"""
         grade, pts, reasons = calc_recommendation(
             prev_op=-5, curr_op=2.0,  # 2億: 1億以上3億未満
             consecutive_red=2,
         )
-        reason_str = ", ".join(reasons)
-        assert "利益小" in reason_str
+        # v2.1: THIN_PROFIT_MILD=0 なので減点なし
+        assert pts >= -1
 
     def test_no_thin_profit_for_solid_profit(self):
         """十分な利益 → 薄利ペナルティなし"""

@@ -12,9 +12,11 @@ Usage:
 """
 
 import argparse
+import json
 import sys
 import time
 from datetime import date
+from pathlib import Path
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -31,10 +33,17 @@ from screener.daily_kuroten import run_daily_kuroten
 from screener.earnings import check_earnings_acceleration, format_earnings_tag
 from screener.healthcheck import run_healthcheck
 from screener.irbank import get_quarterly_html, get_company_summary, _invalidate_cache
+from screener.config import RS_ENABLED, RS_MIN_PERCENTILE_JP, RS_MIN_PERCENTILE_US
+from screener.market_regime import detect_regime, format_regime_header
+from screener.rs_ranking import filter_by_rs
 from screener.notifier import (
-    notify_breakout, notify_gc_entry, notify_slack,
+    notify_breakout, notify_gc_entry, notify_portfolio_summary,
+    notify_sell_signals, notify_slack,
     _resolve_webhook_url, _send_slack,
 )
+from screener.performance import compute_stats
+from screener.portfolio import load_portfolio, save_portfolio, list_positions
+from screener.sell_monitor import check_all_positions, check_deficit_positions
 from screener.reporter import load_latest_watchlist
 from screener.signal_store import (
     save_signals, load_previous_signals, diff_signals, format_diff_summary,
@@ -131,12 +140,159 @@ def _enrich_with_earnings(df, codes: list[str], market: str = "JP") -> None:
     df["ea_tag"] = df["code"].map(lambda c: ea_tags.get(c, ""))
 
 
+def _apply_rs_filter(df, market: str, min_pct: float):
+    """ブレイクアウトシグナルにRSフィルタを適用し、低RSを除外する。
+    除外された銘柄は見送りログに記録する。"""
+    codes = df["code"].tolist()
+    if not codes:
+        return df
+
+    try:
+        filtered, scores = filter_by_rs(codes, market=market, min_percentile=min_pct)
+        if scores:
+            n_before = len(df)
+            removed_df = df[~df["code"].isin(filtered)]
+            df = df[df["code"].isin(filtered)].reset_index(drop=True)
+            n_removed = n_before - len(df)
+            if n_removed > 0:
+                print(f"  RS Ranking フィルタ: {n_removed}件除外 (RS<{min_pct}%), 残り{len(df)}件")
+                # 見送りログに記録
+                for _, row in removed_df.iterrows():
+                    rs = scores.get(row["code"], 0)
+                    _log_passed_signal(
+                        row["code"], "breakout", market,
+                        f"RS低 ({rs:.0f} < {min_pct})", float(row["close"]),
+                    )
+            # RSスコアを付加
+            df["rs_score"] = df["code"].map(lambda c: scores.get(c, 0))
+    except Exception as e:
+        print(f"  [WARN] RS Ranking 取得失敗: {e}")
+
+    return df
+
+
+def _enrich_with_rs(df, codes: list[str], market: str) -> None:
+    """ブレイクアウトシグナルにRSスコアを付加する（フィルタせず）"""
+    try:
+        from screener.rs_ranking import calc_rs_scores
+        scores = calc_rs_scores(codes, market=market)
+        if scores:
+            df["rs_score"] = df["code"].map(lambda c: scores.get(c, 0))
+            for code, score in scores.items():
+                print(f"    [RS] {code}: {score:.0f}")
+    except Exception as e:
+        print(f"  [WARN] RS Ranking 取得失敗: {e}")
+
+
+PASSED_SIGNALS_FILE = Path(__file__).resolve().parent / "data" / "passed_signals.json"
+PRICE_SNAPSHOTS_DIR = Path(__file__).resolve().parent / "data" / "price_snapshots"
+
+
+def _log_passed_signal(
+    code: str, strategy: str, market: str, reason: str, price: float,
+) -> None:
+    """見送りシグナルをログに記録する（Item 5）。"""
+    PASSED_SIGNALS_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+    entries = []
+    if PASSED_SIGNALS_FILE.exists():
+        try:
+            entries = json.loads(PASSED_SIGNALS_FILE.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, ValueError):
+            entries = []
+
+    entries.append({
+        "date": date.today().isoformat(),
+        "code": code,
+        "strategy": strategy,
+        "market": market,
+        "reason": reason,
+        "price_at_signal": round(price, 2),
+    })
+
+    # 直近90日分のみ保持
+    cutoff = (date.today() - __import__("datetime").timedelta(days=90)).isoformat()
+    entries = [e for e in entries if e.get("date", "") >= cutoff]
+
+    PASSED_SIGNALS_FILE.write_text(
+        json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def save_price_snapshot(codes: list[str], market: str = "JP") -> None:
+    """ウォッチリスト銘柄の株価スナップショットを保存する（Item 6）。"""
+    PRICE_SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+    today_str = date.today().isoformat()
+    path = PRICE_SNAPSHOTS_DIR / f"{today_str}.json"
+
+    # 既存データがあれば読み込み（JP+USマージ用）
+    existing = {}
+    if path.exists():
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    if market == "JP":
+        from screener.yfinance_client import get_price_data
+        df = get_price_data(codes)
+        for _, row in df.iterrows():
+            code = str(row.get("Code", ""))
+            close = row.get("Close")
+            mcap = row.get("MarketCapitalization")
+            if code and close:
+                existing[code] = {"close": float(close), "market_cap": float(mcap) if mcap else None}
+    else:
+        import yfinance as yf
+        try:
+            data = yf.download(codes, period="1d", progress=False)
+            if not data.empty:
+                close = data["Close"]
+                if isinstance(close, __import__("pandas").Series):
+                    existing[codes[0]] = {"close": float(close.iloc[-1])}
+                else:
+                    for code in codes:
+                        try:
+                            val = float(close[code].iloc[-1])
+                            existing[code] = {"close": val}
+                        except (KeyError, IndexError):
+                            pass
+        except Exception:
+            pass
+
+    if existing:
+        path.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _df_to_enriched(df) -> list[dict]:
+    """ブレイクアウトDataFrameからリッチシグナル辞書リストを生成する。"""
+    enriched_cols = [
+        "code", "signal", "close", "high_52w", "distance_pct",
+        "volume_ratio", "rsi", "above_sma_50", "above_sma_200", "gc_status",
+        "ea_tag", "rs_score", "sector", "name", "market_cap",
+    ]
+    records = []
+    for _, row in df.iterrows():
+        rec = {}
+        for col in enriched_cols:
+            if col in row.index and row[col] is not None:
+                val = row[col]
+                # numpy/pandas型をPythonネイティブに変換
+                if hasattr(val, "item"):
+                    val = val.item()
+                elif isinstance(val, float) and val != val:  # NaN check
+                    continue
+                rec[col] = val
+        records.append(rec)
+    return records
+
+
 def run_breakout_jp(dry_run: bool = False) -> tuple[list[str], str]:
     """JP ブレイクアウト監視を実行（2段階通知対応+EA付加）"""
     code_to_name, label = load_latest_watchlist()
     if not code_to_name:
         print("  [SKIP] JPウォッチリストなし")
-        return [], ""
+        return [], "", None
 
     codes = list(code_to_name.keys())
     print(f"  ウォッチリスト ({label}): {len(codes)}件")
@@ -145,6 +301,10 @@ def run_breakout_jp(dry_run: bool = False) -> tuple[list[str], str]:
     signal_codes = df["code"].tolist() if not df.empty else []
 
     if not df.empty:
+        # RS Ranking スコア付加（JPは小ウォッチリストなのでフィルタせず付記のみ）
+        if RS_ENABLED:
+            _enrich_with_rs(df, signal_codes, market="JP")
+
         # Earnings Accelerationチェック（シグナル銘柄のみ）
         _enrich_with_earnings(df, signal_codes, market="JP")
 
@@ -176,7 +336,7 @@ def run_breakout_jp(dry_run: bool = False) -> tuple[list[str], str]:
                 add_pending_batch(pending_signals)
                 print(f"    GC待ちペンディング登録: {len(pending_signals)}件")
 
-    return signal_codes, "breakout:JP"
+    return signal_codes, "breakout:JP", df
 
 
 def run_breakout_us(
@@ -188,7 +348,7 @@ def run_breakout_us(
     codes = load_universe(universe)
     if not codes:
         print(f"  [SKIP] ユニバース '{universe}' 取得失敗")
-        return [], ""
+        return [], "", None
 
     if limit > 0:
         codes = codes[:limit]
@@ -204,6 +364,11 @@ def run_breakout_us(
         n_filtered = n_total - len(df)
         if n_filtered > 0:
             print(f"  PRE_BREAKOUT除外: {n_filtered}件 (通知対象: {len(df)}件)")
+        signal_codes = df["code"].tolist() if not df.empty else []
+
+    if not df.empty and RS_ENABLED:
+        # RS Ranking フィルタ（シグナル銘柄のみ評価）
+        df = _apply_rs_filter(df, market="US", min_pct=RS_MIN_PERCENTILE_US)
         signal_codes = df["code"].tolist() if not df.empty else []
 
     if not df.empty:
@@ -230,7 +395,7 @@ def run_breakout_us(
                 add_pending_batch(pending_signals)
                 print(f"    GC待ちペンディング登録: {len(pending_signals)}件")
 
-    return signal_codes, "breakout:US"
+    return signal_codes, "breakout:US", df
 
 
 def run_kuroten_daily(dry_run: bool = False) -> tuple[list[str], str]:
@@ -332,16 +497,111 @@ def _check_pending_gc(today: str, dry_run: bool = False) -> None:
         print("  GC到達なし")
 
 
+def run_market_regime(dry_run: bool = False) -> tuple[str | None, dict | None]:
+    """相場環境を判定し (ヘッダー文字列, regime辞書) を返す"""
+    regime = detect_regime()
+    if regime is None:
+        print("  [WARN] 相場環境判定失敗")
+        return None, None
+    header = format_regime_header(regime)
+    print(f"  {header}")
+    regime_dict = {
+        "trend": regime.trend,
+        "price": regime.price,
+        "sma50": regime.sma50,
+        "sma200": regime.sma200,
+        "description": regime.description,
+    }
+    return header, regime_dict
+
+
+def _fetch_position_prices(positions: dict) -> dict[str, float]:
+    """保有ポジションの現在価格を取得（JP/US混在対応）"""
+    jp_codes = [c for c, p in positions.items() if p.get("market", "JP") == "JP"]
+    us_codes = [c for c, p in positions.items() if p.get("market", "JP") == "US"]
+
+    price_data: dict[str, float] = {}
+    if jp_codes:
+        from screener.yfinance_client import get_price_data
+        df = get_price_data(jp_codes)
+        for _, row in df.iterrows():
+            if row.get("Close"):
+                price_data[str(row["Code"])] = float(row["Close"])
+
+    if us_codes:
+        import yfinance as yf
+        for code in us_codes:
+            try:
+                info = yf.Ticker(code).info
+                price = info.get("regularMarketPrice") or info.get("currentPrice")
+                if price and price > 0:
+                    price_data[code] = float(price)
+            except Exception:
+                pass
+
+    return price_data
+
+
+def run_position_monitor(dry_run: bool = False) -> tuple[list, dict[str, float]]:
+    """保有ポジションの売却シグナルをチェック。(signals, price_data)を返す。"""
+    portfolio = load_portfolio()
+    positions = portfolio.get("positions", {})
+    if not positions:
+        print("  ポジションなし")
+        return [], {}
+
+    print(f"  保有ポジション: {len(positions)}件")
+
+    price_data = _fetch_position_prices(positions)
+
+    # 価格ベースのシグナルチェック
+    signals = check_all_positions(positions, price_data)
+
+    # 赤字転落チェック（kuroten銘柄のみ、週1回）
+    deficit_signals = check_deficit_positions(positions)
+    signals.extend(deficit_signals)
+
+    # ポートフォリオ保存（peak_price更新 + last_deficit_check更新）
+    save_portfolio(portfolio)
+
+    # 部分利確シグナルは自動的にポジションをマーク
+    from screener.portfolio import mark_partial_sold
+    for s in signals:
+        if s.rule == "partial_profit":
+            current = price_data.get(s.code)
+            if current and mark_partial_sold(s.code, current):
+                print(f"    [AUTO] {s.code}: 部分利確を記録 @{current:,.0f}")
+
+    if signals:
+        for s in signals:
+            print(f"    [{s.urgency}] {s.code}: {s.message}")
+        if not dry_run:
+            notify_sell_signals(signals, date.today().isoformat())
+
+    return signals, price_data
+
+
 def build_digest(
     all_signals: dict[str, list[str]],
     diff: dict[str, dict[str, list[str]]],
     today: str,
+    regime_header: str | None = None,
+    sell_signals: list | None = None,
 ) -> str:
     """統合ダイジェストメッセージを構築"""
     lines = [f"*Daily Digest* ({today})\n"]
 
+    if regime_header:
+        lines.append(regime_header)
+        lines.append("")
+
+    if sell_signals:
+        n_high = sum(1 for s in sell_signals if s.urgency == "HIGH")
+        lines.append(f"*売却シグナル: {len(sell_signals)}件* (緊急: {n_high})")
+        lines.append("")
+
     if not all_signals or all(not v for v in all_signals.values()):
-        lines.append("シグナル検出なし")
+        lines.append("買いシグナル検出なし")
         return "\n".join(lines)
 
     for key, codes in sorted(all_signals.items()):
@@ -405,6 +665,7 @@ def main():
             return
 
     all_signals: dict[str, list[str]] = {}
+    all_enriched: dict[str, list[dict]] = {}
     start_time = time.time()
 
     # ---- 本決算シーズン: TDnet開示銘柄のキャッシュ自動無効化 ----
@@ -418,9 +679,11 @@ def main():
              (args.strategy is None or args.strategy == "breakout")
     if run_jp:
         print("\n[1] JP ブレイクアウト監視")
-        codes, key = run_breakout_jp(dry_run=args.dry_run)
+        codes, key, df_jp = run_breakout_jp(dry_run=args.dry_run)
         if key:
             all_signals[key] = codes
+            if df_jp is not None and not df_jp.empty:
+                all_enriched[key] = _df_to_enriched(df_jp)
 
     # ---- JP 黒字転換 日次チェック ----
     run_kuroten = (args.market is None or args.market == "JP") and \
@@ -445,21 +708,53 @@ def main():
              (args.strategy is None or args.strategy == "breakout")
     if run_us:
         print("\n[4] US ブレイクアウト監視")
-        codes, key = run_breakout_us(
+        codes, key, df_us = run_breakout_us(
             universe=args.universe,
             limit=args.limit,
             dry_run=args.dry_run,
         )
         if key:
             all_signals[key] = codes
+            if df_us is not None and not df_us.empty:
+                all_enriched[key] = _df_to_enriched(df_us)
 
     # ---- GCペンディングチェック（2段階通知: Stage 2）----
     if args.strategy is None or args.strategy == "breakout":
         _check_pending_gc(today, dry_run=args.dry_run)
 
+    # ---- 相場環境判定 ----
+    regime_header = None
+    regime_dict = None
+    if args.strategy is None:
+        print("\n[6] 相場環境判定")
+        regime_header, regime_dict = run_market_regime(dry_run=args.dry_run)
+
+    # ---- ポジション監視（売却シグナル）----
+    sell_signals = []
+    position_prices: dict[str, float] = {}
+    if args.strategy is None:
+        print("\n[7] ポジション監視")
+        sell_signals, position_prices = run_position_monitor(dry_run=args.dry_run)
+
+    # 売却シグナルをシリアライズ（永続化用）
+    sell_signals_data = [
+        {
+            "code": s.code, "rule": s.rule, "urgency": s.urgency,
+            "current_price": s.current_price, "buy_price": s.buy_price,
+            "return_pct": round(s.return_pct, 4), "hold_days": s.hold_days,
+            "strategy": s.strategy, "market": s.market, "message": s.message,
+        }
+        for s in sell_signals
+    ] if sell_signals else None
+
     # ---- シグナル保存 + 差分計算 ----
     print("\n" + "=" * 60)
-    save_signals(all_signals, today)
+    save_signals(
+        all_signals, today,
+        enriched=all_enriched or None,
+        regime=regime_dict,
+        sell_signals_data=sell_signals_data,
+    )
     previous = load_previous_signals(today)
     diff = diff_signals(all_signals, previous)
 
@@ -471,11 +766,33 @@ def main():
     print(f"\n完了 ({elapsed:.0f}秒)")
 
     if not args.dry_run:
-        digest = build_digest(all_signals, diff, today)
+        digest = build_digest(
+            all_signals, diff, today,
+            regime_header=regime_header,
+            sell_signals=sell_signals,
+        )
         webhook = _resolve_webhook_url()
         if webhook:
             _send_slack(webhook, digest)
             print("統合ダイジェスト通知完了")
+
+        # 週次ポートフォリオサマリー（月曜のみ）
+        if date.today().weekday() == 0 and args.strategy is None:
+            positions = list_positions()
+            if positions:
+                stats = compute_stats()
+                notify_portfolio_summary(positions, position_prices, stats, today)
+                print("週次ポートフォリオサマリー通知完了")
+
+    # ---- 価格スナップショット（ウォッチリスト銘柄）----
+    if args.market is None or args.market == "JP":
+        try:
+            wl_codes, _ = load_latest_watchlist()
+            if wl_codes:
+                save_price_snapshot(list(wl_codes.keys()), market="JP")
+                print("価格スナップショット保存完了")
+        except Exception as e:
+            print(f"  [WARN] 価格スナップショット失敗: {e}")
 
 
 if __name__ == "__main__":

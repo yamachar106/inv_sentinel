@@ -68,9 +68,16 @@ kuroten-screener/
 │   ├── signal_store.py    ← シグナル履歴永続化（初出/継続/消失判定）
 │   ├── healthcheck.py     ← データソース疎通確認
 │   ├── filters.py         ← 株価・時価総額フィルタ
-│   ├── notifier.py        ← Slack通知（strategy×marketルーティング対応）
+│   ├── notifier.py        ← Slack通知（strategy×marketルーティング+売却シグナル対応）
+│   ├── portfolio.py       ← ポジション管理CRUD+CLI
+│   ├── sell_monitor.py    ← 売却シグナル監視（5ルール）
+│   ├── market_regime.py   ← 相場環境判定（BULL/NEUTRAL/BEAR）
+│   ├── performance.py     ← トレード履歴・勝率・PF統計
+│   ├── rs_ranking.py      ← Relative Strength ランキング（ブレイクアウト前段フィルタ）
 │   └── reporter.py        ← ウォッチリスト生成（リンク付き）
 ├── data/
+│   ├── portfolio.json     ← 保有ポジション管理
+│   ├── portfolio_history.json ← クローズ済みトレード履歴
 │   ├── watchlist/         ← 生成されたウォッチリスト（YYYY-QN.md）
 │   ├── backtest/          ← バックテスト結果CSV
 │   ├── signals/           ← 日次シグナル履歴（YYYY-MM-DD.json）
@@ -91,6 +98,11 @@ kuroten-screener/
     ├── test_signal_store.py
     ├── test_healthcheck.py
     ├── test_earnings.py
+    ├── test_portfolio.py
+    ├── test_sell_monitor.py
+    ├── test_market_regime.py
+    ├── test_performance.py
+    ├── test_rs_ranking.py
     └── test_integration.py
 ```
 
@@ -154,6 +166,14 @@ python daily_run.py --universe us_mid --limit 100  # USユニバース指定
 python backtest_breakout.py --codes AAPL,MSFT,NVDA         # 指定銘柄
 python backtest_breakout.py --codes 7974,6758 --market JP  # 日本株
 python backtest_breakout.py --universe us_mid --limit 50   # USユニバース
+
+# ポジション管理
+python -m screener.portfolio add 3656 --strategy kuroten --buy-date 2026-03-15 --buy-price 1250 --shares 800
+python -m screener.portfolio add 3656 --strategy kuroten --buy-date 2026-03-15 --buy-price 1250 --shares 800 --notes "S評価"
+python -m screener.portfolio list                          # 全ポジション
+python -m screener.portfolio list --strategy kuroten       # 戦略フィルタ
+python -m screener.portfolio remove 3656                   # 単純削除
+python -m screener.portfolio remove 3656 --sell-price 2500 --sell-reason "2倍達成"  # 売却記録付き
 ```
 
 ---
@@ -181,6 +201,20 @@ yfinance（候補銘柄の株価・時価総額）
 ウォッチリスト生成（Markdown + 推奨度・理由付き）
   ↓
 Slack通知
+
+--- daily_run.py 統合フロー ---
+
+[0] ヘルスチェック
+[!] キャッシュ無効化（本決算シーズン）
+[1] JP ブレイクアウト監視
+[2] JP 黒字転換 日次チェック
+[3] JP 上場市場変更監視
+[4] US ブレイクアウト監視
+[5] GCペンディングチェック
+[6] 相場環境判定（SMA50/SMA200 → BULL/NEUTRAL/BEAR）
+[7] ポジション監視（売却シグナル → Slack通知）
+[8] シグナル保存 + 差分計算
+[9] ダイジェスト通知（regime header + 売却シグナル件数）
 ```
 
 ---
@@ -244,6 +278,24 @@ Slack通知
 | 最低売上成長率 | +10% | `EA_MIN_REVENUE_GROWTH` | O'Neill: 売上伴わない利益成長は除外 |
 | 売上バリデーション | 有効 | `EA_REQUIRE_REVENUE_VALIDATION` | O'Neill準拠 |
 | US向け連続加速緩和 | 1Q | `min_consecutive_override=1` | yfinance制約(~5Q→YoY1回) |
+
+### 売却監視（config.py）
+
+| パラメータ | デフォルト値 | 変数名 | 根拠 |
+|-----------|------------|--------|------|
+| 赤字チェック間隔 | 7日 | `SELL_MONITOR_DEFICIT_CHECK_INTERVAL` | 週1回で十分 |
+| BEAR時買い抑制 | False | `MARKET_REGIME_SUPPRESS_IN_BEAR` | オプション |
+
+売却ルール自体は黒字転換（`SELL_TARGET`, `STOP_LOSS_PCT`等）とブレイクアウト（`BREAKOUT_PROFIT_TARGET`, `BREAKOUT_STOP_LOSS`等）の既存パラメータを共有。
+
+### Relative Strength ランキング（config.py）
+
+| パラメータ | デフォルト値 | 変数名 | 根拠 |
+|-----------|------------|--------|------|
+| ルックバック期間 | 126日 | `RS_LOOKBACK_DAYS` | 約6ヶ月（O'Neill準拠） |
+| JP最低パーセンタイル | 70 | `RS_MIN_PERCENTILE_JP` | 上位30% |
+| US最低パーセンタイル | 70 | `RS_MIN_PERCENTILE_US` | 上位30% |
+| RS有効化 | True | `RS_ENABLED` | ブレイクアウト前段フィルタ |
 
 ---
 

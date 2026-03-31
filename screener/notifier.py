@@ -209,7 +209,10 @@ def _build_breakout_message(df: pd.DataFrame, date: str, market: str = "JP") -> 
         gc_str = "GC済" if gc else "GC待ち"
         ea_tag = row.get("ea_tag", "")
 
+        rs_score = row.get("rs_score", 0)
         detail_line = f"  Vol {vol:.1f}x | RSI {rsi:.1f} | {sma_str} | {gc_str}"
+        if rs_score:
+            detail_line += f" | RS{rs_score:.0f}"
         if ea_tag:
             detail_line += f" | {ea_tag}"
         lines.append(stock_line)
@@ -290,6 +293,128 @@ def _build_gc_entry_message(
 
     lines.append("_ブレイクアウト+GC確認済み — エントリー検討_")
     return "\n".join(lines)
+
+
+def notify_sell_signals(
+    signals: list,
+    date_str: str,
+) -> bool:
+    """
+    売却シグナルをSlackに通知する。
+    フォールバックWebhookに送信（全戦略・全市場共通）。
+
+    Args:
+        signals: SellSignal のリスト
+        date_str: 対象日付 (YYYY-MM-DD)
+
+    Returns:
+        送信成功ならTrue
+    """
+    webhook_url = _resolve_webhook_url()
+    if not webhook_url:
+        print("[WARN] SLACK_WEBHOOK_URL が未設定のため通知をスキップ")
+        return False
+
+    if not signals:
+        return False
+
+    message = _build_sell_signal_message(signals, date_str)
+    return _send_slack(webhook_url, message)
+
+
+def _build_sell_signal_message(signals: list, date_str: str) -> str:
+    """売却シグナル通知メッセージを組み立てる"""
+    high = [s for s in signals if s.urgency == "HIGH"]
+    medium = [s for s in signals if s.urgency == "MEDIUM"]
+
+    lines = [
+        f"*売却シグナル検出* ({date_str})",
+        f"検出: *{len(signals)}件* (緊急: {len(high)} | 注意: {len(medium)})\n",
+    ]
+
+    for s in signals:
+        if s.urgency == "HIGH":
+            icon = "\U0001f534"  # 🔴
+            tag = "SELL"
+            action = "即時売却推奨"
+        else:
+            icon = "\U0001f7e1"  # 🟡
+            tag = "WATCH"
+            action = "出口戦略を検討"
+
+        # JP/US で通貨・リンクを切り替え
+        is_us = hasattr(s, "market") and s.market == "US" if hasattr(s, "market") else not s.code.isdigit()
+
+        gain_str = f"{s.return_pct:+.1%}"
+        lines.append(f"{icon} [{tag}] {s.code} | {s.message}")
+
+        if is_us:
+            lines.append(
+                f"  買値: ${s.buy_price:,.2f} → 現在: ${s.current_price:,.2f} (損益: {gain_str})"
+            )
+        else:
+            lines.append(
+                f"  買値: {s.buy_price:,.0f}円 → 現在: {s.current_price:,.0f}円 (損益: {gain_str})"
+            )
+        lines.append(
+            f"  保有: {s.hold_days}日 | {s.strategy} | → {action}"
+        )
+
+        code = s.code
+        if is_us:
+            lines.append(
+                f"  <https://finance.yahoo.com/quote/{code}|Yahoo>"
+                f" | <https://finviz.com/quote.ashx?t={code}|Finviz>"
+            )
+        else:
+            lines.append(
+                f"  <https://irbank.net/{code}|IR Bank>"
+                f" | <https://finance.yahoo.co.jp/quote/{code}.T|Yahoo>"
+            )
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def notify_portfolio_summary(
+    positions: list[dict],
+    price_data: dict[str, float],
+    stats: dict,
+    date_str: str,
+) -> bool:
+    """ポートフォリオサマリーをSlack通知する（週次ダイジェスト向け）"""
+    webhook_url = _resolve_webhook_url()
+    if not webhook_url:
+        return False
+
+    lines = [f"*ポートフォリオサマリー* ({date_str})\n"]
+
+    if not positions:
+        lines.append("保有ポジションなし")
+    else:
+        lines.append(f"保有: *{len(positions)}件*\n")
+        for p in positions:
+            code = p["code"]
+            current = price_data.get(code)
+            if current:
+                ret = (current - p["buy_price"]) / p["buy_price"]
+                is_us = p.get("market") == "US"
+                if is_us:
+                    price_str = f"${current:,.2f}"
+                else:
+                    price_str = f"{current:,.0f}円"
+                trail = " [トレーリング中]" if p.get("trailing_active") else ""
+                lines.append(f"  {code} | {price_str} | {ret:+.1%}{trail} | {p['strategy']}")
+        lines.append("")
+
+    if stats.get("total_trades", 0) > 0:
+        lines.append(f"_決済済: {stats['total_trades']}件 | "
+                     f"勝率: {stats['win_rate']:.0%} | "
+                     f"PF: {stats['profit_factor']:.2f} | "
+                     f"累計損益: {stats['total_profit']:+,.0f}_")
+
+    message = "\n".join(lines)
+    return _send_slack(webhook_url, message)
 
 
 def _build_message(

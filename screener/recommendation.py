@@ -279,9 +279,8 @@ def _revenue_growth_score(
         return 0, ""
 
     if yoy_revenue_pct > REC_V2_REVENUE_GROWTH_HIGH:
-        return 2, f"売上成長{yoy_revenue_pct:+.0%}"
-    elif yoy_revenue_pct > REC_V2_REVENUE_GROWTH_LOW:
         return 1, f"売上成長{yoy_revenue_pct:+.0%}"
+    # REC_V2_REVENUE_GROWTH_LOW: v2.1で0に変更（BT検証: 売上成長ありが逆効果）
     return 0, ""
 
 

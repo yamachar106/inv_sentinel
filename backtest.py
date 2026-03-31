@@ -43,6 +43,8 @@ MAX_HOLD_YEARS = config.MAX_HOLD_YEARS
 STOP_LOSS_PCT = config.STOP_LOSS_PCT
 TRAILING_STOP_TRIGGER = config.TRAILING_STOP_TRIGGER
 TRAILING_STOP_PCT = config.TRAILING_STOP_PCT
+PARTIAL_PROFIT_TARGET = config.PARTIAL_PROFIT_TARGET
+PARTIAL_PROFIT_RATIO = config.PARTIAL_PROFIT_RATIO
 PER_TRADE_CAPITAL = config.PER_TRADE_CAPITAL
 MIN_CONSECUTIVE_RED = config.MIN_CONSECUTIVE_RED
 REQUEST_INTERVAL = config.REQUEST_INTERVAL
@@ -392,6 +394,9 @@ def simulate_trade(
     max_price = buy_price
     max_return = 0.0
     trailing_active = False
+    partial_sold = False
+    partial_sell_price = None
+    partial_sell_date = None
 
     for date_idx in range(len(close_series)):
         date = close_series.index[date_idx]
@@ -416,6 +421,13 @@ def simulate_trade(
             sell_reason = deficit_sell_reason
             sell_date = date
             break
+
+        # 部分利確: +50%到達で半分売却（残りは2倍目標 or トレーリングで管理）
+        if (not partial_sold and PARTIAL_PROFIT_TARGET > 0
+                and ret >= PARTIAL_PROFIT_TARGET):
+            partial_sold = True
+            partial_sell_price = close
+            partial_sell_date = date
 
         # トレーリングストップの発動チェック
         if not trailing_active and ret >= TRAILING_STOP_TRIGGER:
@@ -452,7 +464,15 @@ def simulate_trade(
         sell_reason = "保有中/期間終了"
         sell_date = close_series.index[-1]
 
-    return_pct = (sell_price - buy_price) / buy_price
+    # リターン計算（部分利確を考慮）
+    if partial_sold and partial_sell_price is not None:
+        # 50%は部分利確価格で実現、残り50%は最終売却価格
+        ratio = PARTIAL_PROFIT_RATIO
+        partial_ret = (partial_sell_price - buy_price) / buy_price
+        final_ret = (sell_price - buy_price) / buy_price
+        return_pct = ratio * partial_ret + (1 - ratio) * final_ret
+    else:
+        return_pct = (sell_price - buy_price) / buy_price
     hold_days = (sell_date - close_series.index[0]).days
 
     # エントリー待機日数（シグナル日からエントリーまで）
@@ -468,13 +488,18 @@ def simulate_trade(
         "hold_days": hold_days,
         "max_return_pct": round(max_return * 100, 1),
         "entry_wait_days": entry_wait,
+        "partial_sold": partial_sold,
     }
 
     if verbose:
         direction = "+" if return_pct >= 0 else ""
+        partial_info = ""
+        if partial_sold:
+            partial_info = f" [部分利確@{partial_sell_price:,.0f}円]"
         print(f"    買: {result['buy_date']} @{buy_price:,.0f}円 -> "
               f"売: {result['sell_date']} @{sell_price:,.0f}円 "
-              f"({direction}{return_pct:.1%}, {hold_days}日, {sell_reason})")
+              f"({direction}{return_pct:.1%}, {hold_days}日, {sell_reason})"
+              f"{partial_info}")
 
     return result
 
@@ -498,7 +523,9 @@ def run_backtest(codes_with_names: list[tuple[str, str]], verbose: bool = False,
     print(f"  エントリー方式: {entry_labels.get(entry_mode, entry_mode)}")
     if entry_mode != "immediate":
         print(f"  最大待機: {ENTRY_WAIT_MAX_DAYS}日（未達なら見送り）")
-    print(f"  売却ルール: 2倍達成 / 赤字転落即売却 / "
+    partial_info = (f" / 部分利確+{PARTIAL_PROFIT_TARGET:.0%}({PARTIAL_PROFIT_RATIO:.0%}売却)"
+                    if PARTIAL_PROFIT_TARGET > 0 else "")
+    print(f"  売却ルール: 2倍達成{partial_info} / 赤字転落即売却 / "
           f"TS(+{TRAILING_STOP_TRIGGER:.0%},-{abs(TRAILING_STOP_PCT):.0%}) / "
           f"損切り{STOP_LOSS_PCT:.0%} / 最大{MAX_HOLD_YEARS}年")
     print(f"  投資単位: {PER_TRADE_CAPITAL:,.0f}円/トレード")
@@ -665,6 +692,19 @@ def _print_summary(df: pd.DataFrame):
     # --- 売却理由の内訳 ---
     print()
     print("  -- 売却理由 --")
+    # 部分利確の統計
+    if "partial_sold" in df.columns:
+        partial_count = df["partial_sold"].sum()
+        if partial_count > 0:
+            partial_trades = df[df["partial_sold"] == True]
+            non_partial = df[df["partial_sold"] == False]
+            p_avg = partial_trades["return_pct"].mean()
+            np_avg = non_partial["return_pct"].mean() if not non_partial.empty else 0
+            print(f"\n  -- 部分利確 --")
+            print(f"  部分利確発動: {int(partial_count)}/{n}件"
+                  f" | 部分利確あり平均{p_avg:+.1f}%"
+                  f" | なし平均{np_avg:+.1f}%")
+
     reason_categories = {
         "2倍達成": [],
         "トレーリングストップ": [],
@@ -890,6 +930,8 @@ def main():
     parser.add_argument("--entry", type=str, default="immediate",
                         choices=["immediate", "golden_cross", "volume_surge", "gc_or_volume"],
                         help="エントリー方式 (デフォルト: immediate)")
+    parser.add_argument("--no-partial-profit", action="store_true",
+                        help="部分利確を無効化して比較")
     args = parser.parse_args()
 
     _set_min_red(args.min_red)
@@ -897,6 +939,10 @@ def main():
     if args.stop_loss is not None:
         global STOP_LOSS_PCT
         STOP_LOSS_PCT = args.stop_loss
+
+    if args.no_partial_profit:
+        global PARTIAL_PROFIT_TARGET
+        PARTIAL_PROFIT_TARGET = 0  # disable partial profit
 
     if args.book_filter:
         global MIN_PRICE, MAX_PRICE

@@ -24,7 +24,7 @@ class TestRunBreakoutJP:
         ])
         mock_notify.return_value = True
 
-        codes, key = run_breakout_jp(dry_run=False)
+        codes, key, df = run_breakout_jp(dry_run=False)
         assert codes == ["7974"]
         assert key == "breakout:JP"
         mock_notify.assert_called_once()
@@ -33,7 +33,7 @@ class TestRunBreakoutJP:
     @patch("daily_run.load_latest_watchlist")
     def test_no_watchlist(self, mock_watchlist, mock_batch):
         mock_watchlist.return_value = ({}, "")
-        codes, key = run_breakout_jp()
+        codes, key, df = run_breakout_jp()
         assert codes == []
         assert key == ""
         mock_batch.assert_not_called()
@@ -62,7 +62,7 @@ class TestRunBreakoutUS:
         ])
         mock_notify.return_value = True
 
-        codes, key = run_breakout_us(universe="us_mid", dry_run=False)
+        codes, key, df = run_breakout_us(universe="us_mid", dry_run=False)
         assert codes == ["AAPL"]
         assert key == "breakout:US"
 
@@ -70,7 +70,7 @@ class TestRunBreakoutUS:
     @patch("daily_run.load_universe")
     def test_empty_universe(self, mock_universe, mock_batch):
         mock_universe.return_value = []
-        codes, key = run_breakout_us()
+        codes, key, df = run_breakout_us()
         assert codes == []
         assert key == ""
 

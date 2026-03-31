@@ -35,6 +35,7 @@ from screener.config import (
     TICKER_SUFFIX_US,
     BREAKOUT_STOP_LOSS,
     BREAKOUT_PROFIT_TARGET,
+    RS_LOOKBACK_DAYS,
 )
 from screener.universe import load_universe
 
@@ -201,6 +202,15 @@ def backtest_single(
                 trade_return = final_ret
                 trade_days = len(future_closes)
 
+        # 6ヶ月モメンタム（RS Ranking代替指標）
+        rs_lookback = min(RS_LOOKBACK_DAYS, entry_idx)
+        if rs_lookback > 20:
+            price_now = float(df.iloc[entry_idx]["close"])
+            price_past = float(df.iloc[entry_idx - rs_lookback]["close"])
+            momentum_6m = (price_now - price_past) / price_past if price_past > 0 else None
+        else:
+            momentum_6m = None
+
         event = {
             "ticker": ticker,
             "signal_date": str(signal_date.date()),
@@ -214,6 +224,7 @@ def backtest_single(
             "trade_result": trade_result,
             "trade_return": trade_return,
             "trade_days": trade_days,
+            "momentum_6m": momentum_6m,
             **returns,
         }
         events.append(event)
@@ -306,6 +317,57 @@ def summarize_results(events: list[dict]) -> None:
                 if len(above) >= 3:
                     wr = (above["return_20d"] > 0).sum() / len(above)
                     print(f"  Vol >= {threshold}x: 勝率 {wr:.1%} ({len(above)}件)")
+
+    # RS（6ヶ月モメンタム）別の勝率分析
+    if "momentum_6m" in df.columns and "trade_return" in df.columns:
+        valid_rs = df.dropna(subset=["momentum_6m", "trade_return"])
+        if len(valid_rs) >= 10:
+            print(f"\n--- RS(6ヶ月モメンタム)別パフォーマンス ---")
+            # パーセンタイルで分割
+            q_vals = valid_rs["momentum_6m"].quantile([0.25, 0.50, 0.75])
+            q25, q50, q75 = q_vals.iloc[0], q_vals.iloc[1], q_vals.iloc[2]
+
+            buckets = [
+                ("下位25%", valid_rs[valid_rs["momentum_6m"] <= q25]),
+                ("25-50%", valid_rs[(valid_rs["momentum_6m"] > q25) & (valid_rs["momentum_6m"] <= q50)]),
+                ("50-75%", valid_rs[(valid_rs["momentum_6m"] > q50) & (valid_rs["momentum_6m"] <= q75)]),
+                ("上位25%", valid_rs[valid_rs["momentum_6m"] > q75]),
+            ]
+            print(f"  {'モメンタム':>10}  {'件数':>4}  {'勝率':>6}  {'平均リターン':>10}  {'モメンタム範囲':>16}")
+            for label, bucket in buckets:
+                if bucket.empty:
+                    continue
+                n = len(bucket)
+                decided = bucket[bucket["trade_result"] != "hold"]
+                if not decided.empty:
+                    wins = (decided["trade_result"] == "profit_target").sum()
+                    wr = wins / len(decided)
+                else:
+                    wr = 0.0
+                avg_ret = bucket["trade_return"].mean()
+                m_lo = bucket["momentum_6m"].min()
+                m_hi = bucket["momentum_6m"].max()
+                print(f"  {label:>10}  {n:>4}  {wr:>5.0%}  {avg_ret:>+9.1%}  {m_lo:+.0%}〜{m_hi:+.0%}")
+
+            # RS70以上 vs 以下（実際のフィルタ閾値でも比較）
+            rs_pct70 = valid_rs["momentum_6m"].quantile(0.70)
+            high_rs = valid_rs[valid_rs["momentum_6m"] >= rs_pct70]
+            low_rs = valid_rs[valid_rs["momentum_6m"] < rs_pct70]
+            if not high_rs.empty and not low_rs.empty:
+                h_avg = high_rs["trade_return"].mean()
+                l_avg = low_rs["trade_return"].mean()
+                h_decided = high_rs[high_rs["trade_result"] != "hold"]
+                l_decided = low_rs[low_rs["trade_result"] != "hold"]
+                h_wr = ((h_decided["trade_result"] == "profit_target").sum() / len(h_decided)
+                        if not h_decided.empty else 0)
+                l_wr = ((l_decided["trade_result"] == "profit_target").sum() / len(l_decided)
+                        if not l_decided.empty else 0)
+                print(f"\n  RS上位30% (>={rs_pct70:+.0%}): {len(high_rs)}件"
+                      f" | 勝率{h_wr:.0%} | 平均{h_avg:+.1%}")
+                print(f"  RS下位70% (<{rs_pct70:+.0%}):  {len(low_rs)}件"
+                      f" | 勝率{l_wr:.0%} | 平均{l_avg:+.1%}")
+                diff = h_avg - l_avg
+                print(f"  → RS効果: {diff:+.1%} ({'有効' if diff > 0 else '逆効果'})")
 
 
 def save_results_csv(events: list[dict], args) -> str | None:

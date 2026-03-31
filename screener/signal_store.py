@@ -20,6 +20,9 @@ def _path_for_date(d: str) -> Path:
 def save_signals(
     signals: dict[str, list[str]],
     target_date: str | None = None,
+    enriched: dict[str, list[dict]] | None = None,
+    regime: dict | None = None,
+    sell_signals_data: list[dict] | None = None,
 ) -> Path:
     """
     日次シグナルを保存する。
@@ -27,6 +30,9 @@ def save_signals(
     Args:
         signals: {"breakout:US": ["AAPL", "NVDA"], "breakout:JP": ["7974"], ...}
         target_date: 日付 (YYYY-MM-DD)。省略時は今日。
+        enriched: リッチシグナル {"breakout:US": [{code, close, rs_score, ...}], ...}
+        regime: 相場環境 {"trend": "BULL", "price": 38500, ...}
+        sell_signals_data: 売却シグナル [{code, rule, urgency, message, ...}]
 
     Returns:
         保存先のPath
@@ -39,6 +45,13 @@ def save_signals(
         "date": d,
         "signals": signals,
     }
+    if enriched:
+        data["enriched"] = enriched
+    if regime:
+        data["regime"] = regime
+    if sell_signals_data:
+        data["sell_signals"] = sell_signals_data
+
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
 
