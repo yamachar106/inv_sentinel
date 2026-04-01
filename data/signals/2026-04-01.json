@@ -1,0 +1,54 @@
+{
+  "date": "2026-04-01",
+  "signals": {
+    "breakout:US": [
+      "CNTA",
+      "APLS"
+    ]
+  },
+  "enriched": {
+    "breakout:US": [
+      {
+        "code": "CNTA",
+        "signal": "breakout",
+        "close": 39.720001220703125,
+        "high_52w": 40.2599983215332,
+        "distance_pct": -1.3412745239516286,
+        "volume_ratio": 12.442681545901022,
+        "rsi": 73.0553361288915,
+        "above_sma_50": true,
+        "above_sma_200": true,
+        "gc_status": true,
+        "ea_tag": "",
+        "rs_score": 75.0,
+        "sector": "Health Care",
+        "name": "Centessa Pharmaceuticals plc American Depositary Shares",
+        "market_cap": 4114320156.0
+      },
+      {
+        "code": "APLS",
+        "signal": "breakout_overheated",
+        "close": 40.22999954223633,
+        "high_52w": 40.45000076293945,
+        "distance_pct": -0.5438843425305729,
+        "volume_ratio": 13.33598995971682,
+        "rsi": 86.4128505319024,
+        "above_sma_50": true,
+        "above_sma_200": true,
+        "gc_status": false,
+        "ea_tag": "",
+        "rs_score": 100.0,
+        "sector": "Health Care",
+        "name": "Apellis Pharmaceuticals Inc. Common Stock",
+        "market_cap": 2169273556.0
+      }
+    ]
+  },
+  "regime": {
+    "trend": "BULL",
+    "price": 53739.6796875,
+    "sma50": 54736.37953125,
+    "sma200": 47783.7096484375,
+    "description": "BULL: 日経225 53,740円 (SMA50: 54,736 > SMA200: 47,784)"
+  }
+}
