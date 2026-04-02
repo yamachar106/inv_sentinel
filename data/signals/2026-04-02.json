@@ -1,0 +1,36 @@
+{
+  "date": "2026-04-02",
+  "signals": {
+    "breakout:US": [
+      "TH"
+    ]
+  },
+  "enriched": {
+    "breakout:US": [
+      {
+        "code": "TH",
+        "signal": "breakout_overheated",
+        "close": 12.65999984741211,
+        "high_52w": 13.289999961853027,
+        "distance_pct": -4.740407195253874,
+        "volume_ratio": 9.705720599558031,
+        "rsi": 75.69444800876586,
+        "above_sma_50": true,
+        "above_sma_200": true,
+        "gc_status": true,
+        "ea_tag": "",
+        "rs_score": 100.0,
+        "sector": "Consumer Discretionary",
+        "name": "Target Hospitality Corp. Common Stock",
+        "market_cap": 962472290.0
+      }
+    ]
+  },
+  "regime": {
+    "trend": "BULL",
+    "price": 52463.26953125,
+    "sma50": 54713.973515625,
+    "sma200": 47857.31794921875,
+    "description": "BULL: 日経225 52,463円 (SMA50: 54,714 > SMA200: 47,857)"
+  }
+}
