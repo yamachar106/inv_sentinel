@@ -1,0 +1,54 @@
+{
+  "date": "2026-04-03",
+  "signals": {
+    "breakout:US": [
+      "GSAT",
+      "RLAY"
+    ]
+  },
+  "enriched": {
+    "breakout:US": [
+      {
+        "code": "GSAT",
+        "signal": "breakout",
+        "close": 77.7300033569336,
+        "high_52w": 78.30000305175781,
+        "distance_pct": -0.7279689305343168,
+        "volume_ratio": 4.3927564372389005,
+        "rsi": 69.95600430749863,
+        "above_sma_50": true,
+        "above_sma_200": true,
+        "gc_status": true,
+        "ea_tag": "",
+        "rs_score": 75.0,
+        "sector": "Consumer Discretionary",
+        "name": "Globalstar Inc. Common Stock",
+        "market_cap": 8248046968.0
+      },
+      {
+        "code": "RLAY",
+        "signal": "breakout",
+        "close": 12.539999961853027,
+        "high_52w": 13.039999961853027,
+        "distance_pct": -3.834355839437812,
+        "volume_ratio": 3.050855017566974,
+        "rsi": 68.28859597357362,
+        "above_sma_50": true,
+        "above_sma_200": true,
+        "gc_status": true,
+        "ea_tag": "",
+        "rs_score": 100.0,
+        "sector": "Health Care",
+        "name": "Relay Therapeutics Inc. Common Stock",
+        "market_cap": 1715767766.0
+      }
+    ]
+  },
+  "regime": {
+    "trend": "BULL",
+    "price": 52463.26953125,
+    "sma50": 54713.973515625,
+    "sma200": 47857.31794921875,
+    "description": "BULL: 日経225 52,463円 (SMA50: 54,714 > SMA200: 47,857)"
+  }
+}
