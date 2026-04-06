@@ -288,7 +288,7 @@ def _df_to_enriched(df) -> list[dict]:
 
 
 def run_breakout_jp(
-    universe: str = "jp_all",
+    universe: str = "jp_growth",
     limit: int = 0,
     dry_run: bool = False,
 ) -> tuple[list[str], str]:
@@ -723,8 +723,8 @@ def main():
                         help="特定市場のみ実行")
     parser.add_argument("--universe", type=str, default="us_all",
                         help="USユニバース (デフォルト: us_all)")
-    parser.add_argument("--jp-universe", type=str, default="jp_all",
-                        help="JPユニバース (デフォルト: jp_all, jp_growth, jp_standard, jp_prime)")
+    parser.add_argument("--jp-universe", type=str, default="jp_growth",
+                        help="JPユニバース (デフォルト: jp_growth, jp_all, jp_standard, jp_prime)")
     parser.add_argument("--limit", type=int, default=0,
                         help="USチェック銘柄数の上限（テスト用）")
     parser.add_argument("--dry-run", action="store_true",
