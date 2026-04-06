@@ -38,7 +38,7 @@ from screener.market_regime import detect_regime, format_regime_header
 from screener.rs_ranking import filter_by_rs
 from screener.notifier import (
     notify_breakout, notify_gc_entry, notify_portfolio_summary,
-    notify_sell_signals, notify_slack,
+    notify_sell_signals, notify_slack, _clean_us_name,
     _resolve_webhook_url, _send_slack,
 )
 from screener.performance import compute_stats
@@ -362,6 +362,10 @@ def run_breakout_jp(
                         "signal_date": date.today().isoformat(),
                         "signal": row["signal"],
                         "close": float(row["close"]),
+                        "name": row.get("name", ""),
+                        "volume_ratio": float(row.get("volume_ratio", 0) or 0),
+                        "rsi": float(row.get("rsi", 0) or 0),
+                        "rs_score": float(row.get("rs_score", 0) or 0),
                         "market": "JP",
                     }
                 add_pending_batch(pending_signals)
@@ -473,6 +477,10 @@ def run_breakout_us(
                         "signal_date": date.today().isoformat(),
                         "signal": row["signal"],
                         "close": float(row["close"]),
+                        "name": _clean_us_name(row.get("name", "")),
+                        "volume_ratio": float(row.get("volume_ratio", 0) or 0),
+                        "rsi": float(row.get("rsi", 0) or 0),
+                        "rs_score": float(row.get("rs_score", 0) or 0),
                         "market": "US",
                     }
                 add_pending_batch(pending_signals)
@@ -559,6 +567,10 @@ def _check_pending_gc(today: str, dry_run: bool = False) -> None:
                     "signal_date": signal_date,
                     "signal": info.get("signal", "breakout"),
                     "close": info.get("close", 0),
+                    "name": info.get("name", ""),
+                    "volume_ratio": info.get("volume_ratio", 0),
+                    "rsi": info.get("rsi", 0),
+                    "rs_score": info.get("rs_score", 0),
                     "market": market,
                     "wait_days": wait_days,
                 })

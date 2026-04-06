@@ -356,6 +356,8 @@ def _build_breakout_message(
             # --- US向けフォーマット ---
             quality = _calc_signal_quality(row)
             stars = "\u2605" * quality + "\u2606" * (5 - quality)
+            # 品質スコア → 注目度ランク
+            grade = "S" if quality >= 5 else "A" if quality >= 4 else "B" if quality >= 3 else "C"
 
             price_str = f"${close:,.2f}"
             name = _clean_us_name(row.get("name", ""))
@@ -373,17 +375,17 @@ def _build_breakout_message(
             else:
                 dist_label = f"高値まで{abs(dist):.1f}%"
 
-            # 1行目: 星 + ティッカー + 企業名
+            # 1行目: 注目度ランク + ティッカー + 企業名
             if signal == "short_candidate":
                 short_prio = _calc_short_priority(row)
                 prio_label = "S" if short_prio >= 4 else "A" if short_prio >= 3 else "B" if short_prio >= 2 else "C"
-                stock_line = f"\U0001f4c9 [{prio_label}] *{code}*{name_part}  _ショート候補_"
+                stock_line = f"\U0001f4c9 [ショート{prio_label}] *{code}*{name_part}"
             elif signal == "breakout_overheated":
-                stock_line = f"{stars} *{code}*{name_part}  _\u26a0 過熱・押し目待ち_"
+                stock_line = f"[注目度{grade}] {stars} *{code}*{name_part}  _\u26a0 過熱・押し目待ち_"
             elif is_bear_regime:
-                stock_line = f"{stars} *{code}*{name_part}  _\u26a0 BEAR厳選ロング_"
+                stock_line = f"[注目度{grade}] {stars} *{code}*{name_part}  _\u26a0 BEAR厳選ロング_"
             else:
-                stock_line = f"{stars} *{code}*{name_part}"
+                stock_line = f"[注目度{grade}] {stars} *{code}*{name_part}"
 
             # 2行目: 価格・52W距離・セクター・時価総額
             meta_parts = [price_str, dist_label]
@@ -393,12 +395,30 @@ def _build_breakout_message(
                 meta_parts.append(mcap_str)
             meta_line = f"  {' | '.join(meta_parts)}"
 
-            # 3行目: テクニカル（日本語ラベル）
+            # 3行目: テクニカル（日本語ラベル+意味付き）
             tech_parts = []
             tech_parts.append(f"出来高 {vol:.1f}倍")
-            tech_parts.append(f"過熱度(RSI) {rsi:.0f}")
+            # RSI: 数値の意味を併記
+            if rsi >= 75:
+                rsi_comment = "過熱"
+            elif rsi >= 60:
+                rsi_comment = "やや高い"
+            elif rsi >= 40:
+                rsi_comment = "適温"
+            else:
+                rsi_comment = "売られすぎ"
+            tech_parts.append(f"RSI(過熱度) {rsi:.0f} ({rsi_comment})")
+            # RS: 数値の意味を併記
             if rs_score:
-                tech_parts.append(f"相対強度(RS) {rs_score:.0f}")
+                if rs_score >= 90:
+                    rs_comment = "最強"
+                elif rs_score >= 80:
+                    rs_comment = "強い"
+                elif rs_score >= 70:
+                    rs_comment = "良好"
+                else:
+                    rs_comment = "普通"
+                tech_parts.append(f"RS(相対強度) {rs_score:.0f} ({rs_comment})")
             if ea_tag:
                 # EA+35% → 利益加速(EA)+35%
                 ea_jp = ea_tag.replace("EA", "利益加速(EA)")
@@ -413,7 +433,7 @@ def _build_breakout_message(
                 elif above_200:
                     trend_flags.append("SMA200\u2191")
                 if gc:
-                    trend_flags.append("GC\u2713")
+                    trend_flags.append("GC済(買いサイン)")
                 else:
                     trend_flags.append("GC待ち")
                 tech_parts.extend(trend_flags)
@@ -451,6 +471,7 @@ def _build_breakout_message(
             # JP: US同等のリッチフォーマット
             quality = _calc_signal_quality(row)
             stars = "\u2605" * quality + "\u2606" * (5 - quality)
+            grade = "S" if quality >= 5 else "A" if quality >= 4 else "B" if quality >= 3 else "C"
             price_str = f"{close:,.0f}円"
             name = row.get("name", "")
             sector = row.get("sector", "")
@@ -461,11 +482,11 @@ def _build_breakout_message(
             name_part = f" {name}" if name else ""
             kuroten_badge = "  _[黒字転換]_" if is_kuroten else ""
 
-            # 1行目: 星 + コード + 企業名 + 黒字転換バッジ
+            # 1行目: 注目度ランク + コード + 企業名 + 黒字転換バッジ
             if signal == "breakout_overheated":
-                stock_line = f"{stars} *{code}*{name_part}  _\u26a0 過熱・押し目待ち_{kuroten_badge}"
+                stock_line = f"[注目度{grade}] {stars} *{code}*{name_part}  _\u26a0 過熱・押し目待ち_{kuroten_badge}"
             else:
-                stock_line = f"{stars} *{code}*{name_part}{kuroten_badge}"
+                stock_line = f"[注目度{grade}] {stars} *{code}*{name_part}{kuroten_badge}"
 
             # 2行目: 価格・52W距離・セクター・時価総額
             if dist >= 0:
@@ -481,10 +502,29 @@ def _build_breakout_message(
                 meta_parts.append(mcap_str)
             meta_line = f"  {' | '.join(meta_parts)}"
 
-            # 3行目: テクニカル
-            tech_parts = [f"出来高 {vol:.1f}倍", f"過熱度(RSI) {rsi:.0f}"]
+            # 3行目: テクニカル（日本語ラベル+意味付き）
+            tech_parts = [f"出来高 {vol:.1f}倍"]
+            # RSI
+            if rsi >= 75:
+                rsi_comment = "過熱"
+            elif rsi >= 60:
+                rsi_comment = "やや高い"
+            elif rsi >= 40:
+                rsi_comment = "適温"
+            else:
+                rsi_comment = "売られすぎ"
+            tech_parts.append(f"RSI(過熱度) {rsi:.0f} ({rsi_comment})")
+            # RS
             if rs_score:
-                tech_parts.append(f"相対強度(RS) {rs_score:.0f}")
+                if rs_score >= 90:
+                    rs_comment = "最強"
+                elif rs_score >= 80:
+                    rs_comment = "強い"
+                elif rs_score >= 70:
+                    rs_comment = "良好"
+                else:
+                    rs_comment = "普通"
+                tech_parts.append(f"RS(相対強度) {rs_score:.0f} ({rs_comment})")
             if ea_tag:
                 ea_jp = ea_tag.replace("EA", "利益加速(EA)")
                 tech_parts.append(ea_jp)
@@ -494,7 +534,7 @@ def _build_breakout_message(
             elif above_200:
                 trend_flags.append("SMA200\u2191")
             if gc:
-                trend_flags.append("GC\u2713")
+                trend_flags.append("GC済(買いサイン)")
             else:
                 trend_flags.append("GC待ち")
             tech_parts.extend(trend_flags)
@@ -570,9 +610,38 @@ def _build_gc_entry_message(
         close = e.get("close", 0)
         wait_days = e.get("wait_days", 0)
         name = e.get("name", "")
+        vol = e.get("volume_ratio", 0) or 0
+        rsi = e.get("rsi", 0) or 0
+        rs_score = e.get("rs_score", 0) or 0
 
         tag = "エントリー" if signal == "breakout" else "エントリー(プレ)"
         name_part = f" {name}" if name else ""
+
+        # テクニカル行（シグナル時点の値）
+        tech_parts = []
+        if vol:
+            tech_parts.append(f"出来高 {vol:.1f}倍")
+        if rsi:
+            if rsi >= 75:
+                rsi_comment = "過熱"
+            elif rsi >= 60:
+                rsi_comment = "やや高い"
+            elif rsi >= 40:
+                rsi_comment = "適温"
+            else:
+                rsi_comment = "売られすぎ"
+            tech_parts.append(f"RSI(過熱度) {rsi:.0f} ({rsi_comment})")
+        if rs_score:
+            if rs_score >= 90:
+                rs_comment = "最強"
+            elif rs_score >= 80:
+                rs_comment = "強い"
+            elif rs_score >= 70:
+                rs_comment = "良好"
+            else:
+                rs_comment = "普通"
+            tech_parts.append(f"RS(相対強度) {rs_score:.0f} ({rs_comment})")
+        tech_line = f"  {' | '.join(tech_parts)}" if tech_parts else ""
 
         if is_us:
             price_str = f"${close:,.2f}" if close else ""
@@ -590,18 +659,21 @@ def _build_gc_entry_message(
             )
         else:
             price_str = f"{close:,.0f}円" if close else ""
-            stock_line = f"[{tag}] {code} | {price_str}"
+            stock_line = f"[{tag}] *{code}*{name_part} | {price_str}"
             timing_line = f"  シグナル: {signal_date} → GC確認: {date} ({wait_days}日)"
             sl_price = close * (1 + BREAKOUT_STOP_LOSS) if close else 0
             tp_price = close * (1 + BREAKOUT_PROFIT_TARGET) if close else 0
-            entry_line = f"  損切 {sl_price:,.0f}円 ({BREAKOUT_STOP_LOSS:+.0%}) | 利確 {tp_price:,.0f}円 ({BREAKOUT_PROFIT_TARGET:+.0%})" if close else ""
+            entry_line = f"  \U0001f6a8損切 {sl_price:,.0f}円 ({BREAKOUT_STOP_LOSS:+.0%}) | \U0001f3af利確 {tp_price:,.0f}円 ({BREAKOUT_PROFIT_TARGET:+.0%})" if close else ""
             link_line = (
                 f"  <https://finance.yahoo.co.jp/quote/{code}.T|Yahoo>"
                 f" | <https://irbank.net/{code}|IR Bank>"
+                f" | <https://www.tradingview.com/chart/?symbol=TSE:{code}|TV>"
             )
 
         lines.append(stock_line)
         lines.append(timing_line)
+        if tech_line:
+            lines.append(tech_line)
         if entry_line:
             lines.append(entry_line)
         lines.append(link_line)
