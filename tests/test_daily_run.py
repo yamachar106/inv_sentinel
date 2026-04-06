@@ -96,10 +96,10 @@ class TestBuildDigest:
             "breakout:US": {"new": ["NVDA"], "continuing": ["AAPL"], "disappeared": []},
         }
         digest = build_digest(signals, diff, "2026-03-29")
-        assert "Daily Digest" in digest
+        assert "デイリーダイジェスト" in digest
         assert "breakout:JP" in digest
         assert "breakout:US" in digest
-        assert "NEW: 1" in digest
+        assert "新規: 1" in digest
 
     def test_disappeared_signals(self):
         # 少なくとも1つのコードがないと早期リターンされるので、ダミーを入れる

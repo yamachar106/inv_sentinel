@@ -9,7 +9,8 @@ import pytest
 
 from screener.notifier import (
     notify_slack, _build_message, _build_stock_section,
-    _build_breakout_message, _resolve_webhook_url, notify_breakout,
+    _build_breakout_message, _calc_signal_quality,
+    _resolve_webhook_url, notify_breakout,
 )
 
 
@@ -288,6 +289,34 @@ class TestResolveWebhookUrl:
             assert url == "https://hooks.slack.com/kuroten"
 
 
+class TestSignalQuality:
+    """シグナル品質スコアのテスト"""
+
+    def test_perfect_score(self):
+        """全条件充足で★5"""
+        row = {
+            "gc_status": True, "ea_tag": "EA🔥",
+            "rs_score": 90, "rsi": 65, "volume_ratio": 3.5,
+        }
+        assert _calc_signal_quality(row) == 5
+
+    def test_minimum_score(self):
+        """条件未充足で★0"""
+        row = {
+            "gc_status": False, "ea_tag": "",
+            "rs_score": 50, "rsi": 75, "volume_ratio": 1.5,
+        }
+        assert _calc_signal_quality(row) == 0
+
+    def test_partial_score(self):
+        """一部充足"""
+        row = {
+            "gc_status": True, "ea_tag": "",
+            "rs_score": 90, "rsi": 45, "volume_ratio": 2.0,
+        }
+        assert _calc_signal_quality(row) == 2  # GC + RS
+
+
 class TestBuildBreakoutMessage:
     """ブレイクアウト通知メッセージのテスト"""
 
@@ -307,11 +336,32 @@ class TestBuildBreakoutMessage:
         assert "[US]" in msg
 
     def test_us_links(self):
-        """US市場は英語サイトのリンク"""
+        """US市場はYahoo+Finviz+TradingViewリンク"""
         df = self._make_breakout_df()
         msg = _build_breakout_message(df, "2026-03-29", market="US")
         assert "finance.yahoo.com" in msg
         assert "finviz.com" in msg
+        assert "tradingview.com" in msg
+
+    def test_us_stars_displayed(self):
+        """US市場は★スコアが表示される"""
+        df = self._make_breakout_df()
+        msg = _build_breakout_message(df, "2026-03-29", market="US")
+        # ★ or ☆ が含まれる
+        assert "\u2605" in msg or "\u2606" in msg
+
+    def test_us_sl_tp_displayed(self):
+        """US市場は損切/利確ラインが表示される"""
+        df = self._make_breakout_df()
+        msg = _build_breakout_message(df, "2026-03-29", market="US")
+        assert "損切 $" in msg
+        assert "利確 $" in msg
+
+    def test_us_regime_header(self):
+        """相場環境ヘッダーが表示される"""
+        df = self._make_breakout_df()
+        msg = _build_breakout_message(df, "2026-03-29", market="US", regime_header="BULL")
+        assert "BULL" in msg
 
     def test_jp_format_yen(self):
         """JP市場は円表記"""

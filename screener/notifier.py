@@ -13,7 +13,10 @@ from urllib.error import URLError
 
 import pandas as pd
 
-from screener.config import NOTIFY_CHANNELS, NOTIFY_FALLBACK_ENV
+from screener.config import (
+    NOTIFY_CHANNELS, NOTIFY_FALLBACK_ENV,
+    BREAKOUT_STOP_LOSS, BREAKOUT_PROFIT_TARGET,
+)
 
 
 def _format_mcap_usd(mcap: float) -> str:
@@ -109,7 +112,12 @@ def notify_slack(
     return _send_slack(webhook_url, message)
 
 
-def notify_breakout(df_breakout: pd.DataFrame, date: str, market: str = "JP") -> bool:
+def notify_breakout(
+    df_breakout: pd.DataFrame,
+    date: str,
+    market: str = "JP",
+    regime_header: str | None = None,
+) -> bool:
     """
     ブレイクアウト検出結果をSlackに通知する。
 
@@ -117,6 +125,7 @@ def notify_breakout(df_breakout: pd.DataFrame, date: str, market: str = "JP") ->
         df_breakout: check_breakout_batch() の戻り値
         date: 対象日付 (YYYY-MM-DD)
         market: "JP" or "US"
+        regime_header: 相場環境ヘッダー（例: "🟢 BULL"）
 
     Returns:
         送信成功ならTrue
@@ -129,31 +138,92 @@ def notify_breakout(df_breakout: pd.DataFrame, date: str, market: str = "JP") ->
     if df_breakout.empty:
         return False
 
-    message = _build_breakout_message(df_breakout, date, market)
+    message = _build_breakout_message(df_breakout, date, market, regime_header=regime_header)
     return _send_slack(webhook_url, message)
 
 
-def _build_breakout_message(df: pd.DataFrame, date: str, market: str = "JP") -> str:
+def _calc_signal_quality(row) -> int:
+    """シグナル品質スコアを計算する（0-5、★表示用）
+
+    条件:
+    - GC済: +1
+    - EA付き: +1
+    - RS ≥ 85: +1
+    - RSI 50-70（過熱なし）: +1
+    - 出来高 ≥ 3倍: +1
+    """
+    score = 0
+    if row.get("gc_status", False):
+        score += 1
+    if row.get("ea_tag", ""):
+        score += 1
+    rs = row.get("rs_score", 0) or 0
+    if rs >= 85:
+        score += 1
+    rsi = row.get("rsi", 0) or 0
+    if 50 <= rsi <= 70:
+        score += 1
+    vol = row.get("volume_ratio", 0) or 0
+    if vol >= 3.0:
+        score += 1
+    return score
+
+
+def _build_breakout_message(
+    df: pd.DataFrame,
+    date: str,
+    market: str = "JP",
+    regime_header: str | None = None,
+) -> str:
     """ブレイクアウト検出結果のSlack通知メッセージを組み立てる"""
     is_us = market.upper() == "US"
     n_breakout = len(df[df["signal"].isin(["breakout", "breakout_overheated"])])
     n_pre = len(df[df["signal"] == "pre_breakout"])
 
     market_label = "US" if is_us else "JP"
-    header = f"*New High Breakout [{market_label}]* ({date})\n" if is_us else f"*新高値ブレイクアウト検出 [{market_label}]* ({date})\n"
-    header += f"検出: *{len(df)}件* (ブレイクアウト: {n_breakout} | プレブレイクアウト: {n_pre})\n"
+
+    # --- ヘッダー（改善D: 相場環境 + スコア分布）---
+    header = f"*新高値ブレイクアウト検出 [{market_label}]* ({date})"
+    if regime_header:
+        header += f" {regime_header}"
+    header += "\n"
+
+    # スコア分布を計算
+    if is_us:
+        scores = [_calc_signal_quality(row) for _, row in df.iterrows()]
+        n_high = sum(1 for s in scores if s >= 4)
+        n_mid = sum(1 for s in scores if s == 3)
+        n_low = sum(1 for s in scores if s < 3)
+        score_parts = []
+        if n_high:
+            score_parts.append(f"★4+: {n_high}")
+        if n_mid:
+            score_parts.append(f"★3: {n_mid}")
+        if n_low:
+            score_parts.append(f"★2-: {n_low}")
+        score_summary = f" ({' | '.join(score_parts)})" if score_parts else ""
+        header += f"検出: *{len(df)}件*{score_summary}\n"
+    else:
+        header += f"検出: *{len(df)}件* (ブレイクアウト: {n_breakout} | プレブレイクアウト: {n_pre})\n"
 
     lines = [header]
-    # ソート: EA付き→breakout→pre_breakout
+
+    # ソート: US=スコア降順、JP=EA付き→breakout→pre_breakout
     df_sorted = df.copy()
     signal_order = {"breakout": 0, "breakout_overheated": 1, "pre_breakout": 2}
     df_sorted["_sig_order"] = df_sorted["signal"].map(signal_order).fillna(9)
     df_sorted["_has_ea"] = df_sorted.get("ea_tag", pd.Series("", index=df.index)).apply(
         lambda x: 0 if x else 1
     )
-    df_sorted = df_sorted.sort_values(["_has_ea", "_sig_order"]).drop(
-        columns=["_sig_order", "_has_ea"]
-    )
+    if is_us:
+        df_sorted["_quality"] = [_calc_signal_quality(row) for _, row in df_sorted.iterrows()]
+        df_sorted = df_sorted.sort_values(
+            ["_quality", "_has_ea", "_sig_order"], ascending=[False, True, True]
+        ).drop(columns=["_sig_order", "_has_ea", "_quality"])
+    else:
+        df_sorted = df_sorted.sort_values(["_has_ea", "_sig_order"]).drop(
+            columns=["_sig_order", "_has_ea"]
+        )
 
     for _, row in df_sorted.iterrows():
         code = row.get("code", "")
@@ -164,13 +234,16 @@ def _build_breakout_message(df: pd.DataFrame, date: str, market: str = "JP") -> 
         rsi = row["rsi"]
         above_50 = row.get("above_sma_50", False)
         above_200 = row.get("above_sma_200", False)
+        gc = row.get("gc_status", False)
+        ea_tag = row.get("ea_tag", "")
+        rs_score = row.get("rs_score", 0) or 0
 
         if signal == "breakout":
-            tag = "BREAKOUT"
+            tag = "ブレイクアウト"
         elif signal == "breakout_overheated":
-            tag = "BREAKOUT (RSI過熱・押し目待ち推奨)"
+            tag = "ブレイクアウト (RSI過熱・押し目待ち推奨)"
         else:
-            tag = "PRE-BREAK"
+            tag = "プレブレイク"
         dist_str = f"+{dist:.1f}%" if dist >= 0 else f"{dist:.1f}%"
 
         sma_parts = []
@@ -180,7 +253,13 @@ def _build_breakout_message(df: pd.DataFrame, date: str, market: str = "JP") -> 
             sma_parts.append("SMA200↑")
         sma_str = " ".join(sma_parts) if sma_parts else ""
 
+        gc_str = "GC\u2713" if gc else "GC待ち"
+
         if is_us:
+            # --- 改善A+B: US向けリッチフォーマット ---
+            quality = _calc_signal_quality(row)
+            stars = "\u2605" * quality + "\u2606" * (5 - quality)
+
             price_str = f"${close:,.2f}"
             name = row.get("name", "")
             sector = row.get("sector", "")
@@ -188,38 +267,59 @@ def _build_breakout_message(df: pd.DataFrame, date: str, market: str = "JP") -> 
             mcap_str = _format_mcap_usd(mcap_val) if mcap_val else ""
 
             name_part = f" {name}" if name else ""
-            meta_parts = [p for p in [sector, mcap_str] if p]
-            meta_str = f" ({', '.join(meta_parts)})" if meta_parts else ""
 
-            stock_line = f"[{tag}] *{code}*{name_part}{meta_str}"
-            price_line = f"  {price_str} | 52W High {dist_str}"
+            # 1行目: 星 + ティッカー + 企業名 + 価格 + 52W距離
+            if signal == "breakout_overheated":
+                stock_line = f"{stars} *{code}*{name_part} | {price_str} ({dist_str}) _RSI過熱_"
+            else:
+                stock_line = f"{stars} *{code}*{name_part} | {price_str} ({dist_str})"
+
+            # 2行目: ファンダ情報（セクター、時価総額、RS、EA）
+            funda_parts = [p for p in [sector, mcap_str] if p]
+            if rs_score:
+                funda_parts.append(f"RS{rs_score:.0f}")
+            if ea_tag:
+                funda_parts.append(ea_tag)
+            funda_line = f"  {' | '.join(funda_parts)}" if funda_parts else ""
+
+            # 3行目: テクニカル情報
+            tech_line = f"  Vol {vol:.1f}x | RSI {rsi:.0f} | {sma_str} | {gc_str}"
+
+            # 改善E: 損切/利確ライン
+            sl_price = close * (1 + BREAKOUT_STOP_LOSS)
+            tp_price = close * (1 + BREAKOUT_PROFIT_TARGET)
+            entry_line = f"  損切 ${sl_price:,.2f} ({BREAKOUT_STOP_LOSS:+.0%}) | 利確 ${tp_price:,.2f} ({BREAKOUT_PROFIT_TARGET:+.0%})"
+
+            # 4行目: リンク（TradingView追加）
             link_line = (
                 f"  <https://finance.yahoo.com/quote/{code}|Yahoo>"
                 f" | <https://finviz.com/quote.ashx?t={code}|Finviz>"
+                f" | <https://www.tradingview.com/chart/?symbol={code}|TV>"
             )
+
+            lines.append(stock_line)
+            if funda_line:
+                lines.append(funda_line)
+            lines.append(tech_line)
+            lines.append(entry_line)
+            lines.append(link_line)
         else:
+            # JP: 従来フォーマット
             price_str = f"{close:,.0f}円"
             stock_line = f"[{tag}] {code} | {price_str} | 52W高値 {dist_str}"
+            detail_line = f"  出来高 {vol:.1f}倍 | RSI {rsi:.1f} | {sma_str} | {gc_str}"
+            if rs_score:
+                detail_line += f" | RS{rs_score:.0f}"
+            if ea_tag:
+                detail_line += f" | {ea_tag}"
             link_line = (
                 f"  <https://finance.yahoo.co.jp/quote/{code}.T|Yahoo>"
                 f" | <https://irbank.net/{code}|IR Bank>"
             )
+            lines.append(stock_line)
+            lines.append(detail_line)
+            lines.append(link_line)
 
-        gc = row.get("gc_status", False)
-        gc_str = "GC済" if gc else "GC待ち"
-        ea_tag = row.get("ea_tag", "")
-
-        rs_score = row.get("rs_score", 0)
-        detail_line = f"  Vol {vol:.1f}x | RSI {rsi:.1f} | {sma_str} | {gc_str}"
-        if rs_score:
-            detail_line += f" | RS{rs_score:.0f}"
-        if ea_tag:
-            detail_line += f" | {ea_tag}"
-        lines.append(stock_line)
-        if is_us:
-            lines.append(price_line)
-        lines.append(detail_line)
-        lines.append(link_line)
         lines.append("")
 
     return "\n".join(lines)
@@ -269,25 +369,40 @@ def _build_gc_entry_message(
         signal = e.get("signal", "breakout")
         close = e.get("close", 0)
         wait_days = e.get("wait_days", 0)
+        name = e.get("name", "")
 
-        tag = "ENTRY" if signal == "breakout" else "ENTRY(PRE)"
+        tag = "エントリー" if signal == "breakout" else "エントリー(プレ)"
+        name_part = f" {name}" if name else ""
 
         if is_us:
             price_str = f"${close:,.2f}" if close else ""
-            stock_line = f"[{tag}] {code} | シグナル: {signal_date} | 待機{wait_days}日"
+            stock_line = f"[{tag}] *{code}*{name_part} | {price_str}"
+            timing_line = f"  シグナル: {signal_date} → GC確認: {date} ({wait_days}日)"
+            # 改善C: 損切/利確ライン
+            sl_price = close * (1 + BREAKOUT_STOP_LOSS) if close else 0
+            tp_price = close * (1 + BREAKOUT_PROFIT_TARGET) if close else 0
+            entry_line = f"  損切 ${sl_price:,.2f} ({BREAKOUT_STOP_LOSS:+.0%}) | 利確 ${tp_price:,.2f} ({BREAKOUT_PROFIT_TARGET:+.0%})" if close else ""
             link_line = (
-                f"  <https://finance.yahoo.com/quote/{code}|Yahoo Finance>"
+                f"  <https://finance.yahoo.com/quote/{code}|Yahoo>"
                 f" | <https://finviz.com/quote.ashx?t={code}|Finviz>"
+                f" | <https://www.tradingview.com/chart/?symbol={code}|TV>"
             )
         else:
             price_str = f"{close:,.0f}円" if close else ""
-            stock_line = f"[{tag}] {code} | シグナル: {signal_date} | 待機{wait_days}日"
+            stock_line = f"[{tag}] {code} | {price_str}"
+            timing_line = f"  シグナル: {signal_date} → GC確認: {date} ({wait_days}日)"
+            sl_price = close * (1 + BREAKOUT_STOP_LOSS) if close else 0
+            tp_price = close * (1 + BREAKOUT_PROFIT_TARGET) if close else 0
+            entry_line = f"  損切 {sl_price:,.0f}円 ({BREAKOUT_STOP_LOSS:+.0%}) | 利確 {tp_price:,.0f}円 ({BREAKOUT_PROFIT_TARGET:+.0%})" if close else ""
             link_line = (
                 f"  <https://finance.yahoo.co.jp/quote/{code}.T|Yahoo>"
                 f" | <https://irbank.net/{code}|IR Bank>"
             )
 
         lines.append(stock_line)
+        lines.append(timing_line)
+        if entry_line:
+            lines.append(entry_line)
         lines.append(link_line)
         lines.append("")
 
@@ -335,11 +450,11 @@ def _build_sell_signal_message(signals: list, date_str: str) -> str:
     for s in signals:
         if s.urgency == "HIGH":
             icon = "\U0001f534"  # 🔴
-            tag = "SELL"
+            tag = "売却"
             action = "即時売却推奨"
         else:
             icon = "\U0001f7e1"  # 🟡
-            tag = "WATCH"
+            tag = "注視"
             action = "出口戦略を検討"
 
         # JP/US で通貨・リンクを切り替え
@@ -458,10 +573,10 @@ def _build_message(
         name_map = code_to_name or {}
         if new_additions:
             names = [f"{c} {name_map.get(c, '')}".strip() for c in sorted(new_additions)]
-            header += f"_New:_ {', '.join(names)}\n"
+            header += f"_新規:_ {', '.join(names)}\n"
         if removals:
             names = [f"{c} {name_map.get(c, '')}".strip() for c in sorted(removals)]
-            header += f"_Out:_ {', '.join(names)}\n"
+            header += f"_除外:_ {', '.join(names)}\n"
 
     # 推奨度でソート（S > A > B > C）
     if has_rec:

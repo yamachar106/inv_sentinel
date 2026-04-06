@@ -316,7 +316,7 @@ def run_breakout_jp(dry_run: bool = False) -> tuple[list[str], str]:
             name = code_to_name.get(row["code"], "")
             gc_label = "GC済" if row.get("gc_status") else "GC待ち"
             ea = f" {row.get('ea_tag', '')}" if row.get("ea_tag") else ""
-            tag = "BREAKOUT+黒字転換" if row["signal"] == "breakout" else "PRE-BREAK+黒字転換"
+            tag = "ブレイクアウト+黒字転換" if row["signal"] == "breakout" else "プレブレイク+黒字転換"
             print(f"    [{tag}] {row['code']} {name} ({gc_label}){ea}")
 
         if not dry_run:
@@ -343,6 +343,7 @@ def run_breakout_us(
     universe: str = "us_all",
     limit: int = 0,
     dry_run: bool = False,
+    regime_header: str | None = None,
 ) -> tuple[list[str], str]:
     """US ブレイクアウト監視を実行（2段階通知対応）"""
     codes = load_universe(universe)
@@ -381,7 +382,7 @@ def run_breakout_us(
         gc_pending = df[df["gc_status"] == False]
 
         if not dry_run:
-            notify_breakout(df, date.today().isoformat(), market="US")
+            notify_breakout(df, date.today().isoformat(), market="US", regime_header=regime_header)
 
             if not gc_pending.empty:
                 pending_signals = {}
@@ -589,7 +590,7 @@ def build_digest(
     sell_signals: list | None = None,
 ) -> str:
     """統合ダイジェストメッセージを構築"""
-    lines = [f"*Daily Digest* ({today})\n"]
+    lines = [f"*デイリーダイジェスト* ({today})\n"]
 
     if regime_header:
         lines.append(regime_header)
@@ -615,7 +616,7 @@ def build_digest(
 
         parts = [f"{len(codes)}件検出"]
         if n_new > 0:
-            parts.append(f"NEW: {n_new}")
+            parts.append(f"新規: {n_new}")
         if n_cont > 0:
             parts.append(f"継続: {n_cont}")
         lines.append(f"[{key}] {' | '.join(parts)}")
@@ -668,6 +669,13 @@ def main():
     all_enriched: dict[str, list[dict]] = {}
     start_time = time.time()
 
+    # ---- 相場環境判定（早期実行: ブレイクアウト通知ヘッダーに使用）----
+    regime_header = None
+    regime_dict = None
+    if args.strategy is None or args.strategy == "breakout":
+        print("\n[0.5] 相場環境判定")
+        regime_header, regime_dict = run_market_regime(dry_run=args.dry_run)
+
     # ---- 本決算シーズン: TDnet開示銘柄のキャッシュ自動無効化 ----
     if args.market is None or args.market == "JP":
         n_refreshed = _auto_refresh_earnings_cache(today)
@@ -712,6 +720,7 @@ def main():
             universe=args.universe,
             limit=args.limit,
             dry_run=args.dry_run,
+            regime_header=regime_header,
         )
         if key:
             all_signals[key] = codes
@@ -722,10 +731,8 @@ def main():
     if args.strategy is None or args.strategy == "breakout":
         _check_pending_gc(today, dry_run=args.dry_run)
 
-    # ---- 相場環境判定 ----
-    regime_header = None
-    regime_dict = None
-    if args.strategy is None:
+    # ---- 相場環境判定（step 0.5 で実行済み、strategyフィルタ時のみここで実行）----
+    if regime_header is None and args.strategy is None:
         print("\n[6] 相場環境判定")
         regime_header, regime_dict = run_market_regime(dry_run=args.dry_run)
 
