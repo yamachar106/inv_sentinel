@@ -2,53 +2,35 @@
   "date": "2026-04-06",
   "signals": {
     "breakout:US": [
-      "GSAT",
-      "RLAY"
+      "AEHR"
     ]
   },
   "enriched": {
     "breakout:US": [
       {
-        "code": "GSAT",
+        "code": "AEHR",
         "signal": "breakout",
-        "close": 77.7300033569336,
-        "high_52w": 78.30000305175781,
-        "distance_pct": -0.7279689305343168,
-        "volume_ratio": 4.3927564372389005,
-        "rsi": 69.95600430749863,
-        "above_sma_50": true,
-        "above_sma_200": true,
-        "gc_status": true,
-        "ea_tag": "",
-        "rs_score": 75.0,
-        "sector": "Consumer Discretionary",
-        "name": "Globalstar Inc. Common Stock",
-        "market_cap": 9992529470.0
-      },
-      {
-        "code": "RLAY",
-        "signal": "breakout",
-        "close": 12.539999961853027,
-        "high_52w": 13.039999961853027,
-        "distance_pct": -3.834355839437812,
-        "volume_ratio": 3.050855017566974,
-        "rsi": 68.28859597357362,
+        "close": 52.15999984741211,
+        "high_52w": 52.61000061035156,
+        "distance_pct": -0.8553521340406729,
+        "volume_ratio": 3.808902941696539,
+        "rsi": 67.62728692953701,
         "above_sma_50": true,
         "above_sma_200": true,
         "gc_status": true,
         "ea_tag": "",
         "rs_score": 100.0,
-        "sector": "Health Care",
-        "name": "Relay Therapeutics Inc. Common Stock",
-        "market_cap": 2241221645.0
+        "sector": "Industrials",
+        "name": "Aehr Test Systems Common Stock",
+        "market_cap": 1357403797.0
       }
     ]
   },
   "regime": {
     "trend": "BULL",
-    "price": 53413.6796875,
-    "sma50": 54729.40203125,
-    "sma200": 48008.50337890625,
-    "description": "BULL: 日経225 53,414円 (SMA50: 54,729 > SMA200: 48,009)"
+    "price": 53123.48828125,
+    "sma50": 54716.62125,
+    "sma200": 47932.4925390625,
+    "description": "BULL: 日経225 53,123円 (SMA50: 54,717 > SMA200: 47,932)"
   }
 }
