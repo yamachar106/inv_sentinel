@@ -49,7 +49,7 @@ from screener.signal_store import (
     save_signals, load_previous_signals, diff_signals, format_diff_summary,
 )
 from screener.tdnet import get_earnings_codes, get_market_change_codes
-from screener.universe import load_universe, fetch_us_stocks
+from screener.universe import load_universe, fetch_us_stocks, fetch_jp_stocks
 
 
 def _auto_refresh_earnings_cache(today: str) -> int:
@@ -287,43 +287,74 @@ def _df_to_enriched(df) -> list[dict]:
     return records
 
 
-def run_breakout_jp(dry_run: bool = False) -> tuple[list[str], str]:
-    """JP ブレイクアウト監視を実行（2段階通知対応+EA付加）"""
-    code_to_name, label = load_latest_watchlist()
-    if not code_to_name:
-        print("  [SKIP] JPウォッチリストなし")
+def run_breakout_jp(
+    universe: str = "jp_all",
+    limit: int = 0,
+    dry_run: bool = False,
+) -> tuple[list[str], str]:
+    """JP ブレイクアウト監視を実行（東証全銘柄スキャン+黒字転換加点）"""
+    from screener.config import (
+        BREAKOUT_MAX_MARKET_CAP_JP, BREAKOUT_MAX_MARKET_CAP_JP_LOOSE,
+    )
+
+    codes = load_universe(universe)
+    if not codes:
+        print(f"  [SKIP] ユニバース '{universe}' 取得失敗")
         return [], "", None
 
-    codes = list(code_to_name.keys())
-    print(f"  ウォッチリスト ({label}): {len(codes)}件")
+    if limit > 0:
+        codes = codes[:limit]
+    print(f"  ユニバース ({universe}): {len(codes)}銘柄")
+
+    # 黒字転換ウォッチリストを加点要素として取得
+    kuroten_codes, kuroten_label = load_latest_watchlist()
+    kuroten_set = set(kuroten_codes.keys()) if kuroten_codes else set()
+    if kuroten_set:
+        print(f"  黒字転換ウォッチリスト ({kuroten_label}): {len(kuroten_set)}件（加点対象）")
 
     df = check_breakout_batch(codes, market="JP")
     signal_codes = df["code"].tolist() if not df.empty else []
 
     if not df.empty:
-        # RS Ranking スコア付加（JPは小ウォッチリストなのでフィルタせず付記のみ）
-        if RS_ENABLED:
-            _enrich_with_rs(df, signal_codes, market="JP")
+        # 黒字転換フラグを付与（品質スコアで+1加点）
+        df["is_kuroten"] = df["code"].isin(kuroten_set)
 
+        # RS Ranking フィルタ（USと同様に適用）
+        if RS_ENABLED:
+            df = _apply_rs_filter(df, market="JP", min_pct=RS_MIN_PERCENTILE_JP)
+            signal_codes = df["code"].tolist() if not df.empty else []
+
+    if not df.empty:
+        # シグナル銘柄の時価総額チェック（yfinanceで取得、シグナル分のみ）
+        df = _filter_jp_market_cap(df, BREAKOUT_MAX_MARKET_CAP_JP_LOOSE)
+        signal_codes = df["code"].tolist() if not df.empty else []
+
+    if not df.empty:
         # Earnings Accelerationチェック（シグナル銘柄のみ）
         _enrich_with_earnings(df, signal_codes, market="JP")
 
-        # 2段階通知: GC済みとGC待ちに分離
-        gc_ready = df[df["gc_status"] == True]
+        # JP銘柄メタ情報を付加（企業名・セクター）
+        _enrich_with_jp_meta(df)
+
+        # 時価総額200億以下を優先マーク
+        if "market_cap" in df.columns:
+            df["is_priority_mcap"] = df["market_cap"].apply(
+                lambda x: x > 0 and x <= BREAKOUT_MAX_MARKET_CAP_JP
+            )
+
         gc_pending = df[df["gc_status"] == False]
 
         for _, row in df.iterrows():
-            name = code_to_name.get(row["code"], "")
+            name = row.get("name", "")
             gc_label = "GC済" if row.get("gc_status") else "GC待ち"
             ea = f" {row.get('ea_tag', '')}" if row.get("ea_tag") else ""
-            tag = "ブレイクアウト+黒字転換" if row["signal"] == "breakout" else "プレブレイク+黒字転換"
-            print(f"    [{tag}] {row['code']} {name} ({gc_label}){ea}")
+            kuroten_tag = " [黒字転換]" if row.get("is_kuroten") else ""
+            tag = "ブレイクアウト" if row["signal"] == "breakout" else "プレブレイク"
+            print(f"    [{tag}] {row['code']} {name} ({gc_label}){ea}{kuroten_tag}")
 
         if not dry_run:
-            # Stage 1: 全シグナルを準備通知（GC状態を付記）
             notify_breakout(df, date.today().isoformat(), market="JP")
 
-            # GC未達のシグナルをペンディングに保存
             if not gc_pending.empty:
                 pending_signals = {}
                 for _, row in gc_pending.iterrows():
@@ -339,13 +370,62 @@ def run_breakout_jp(dry_run: bool = False) -> tuple[list[str], str]:
     return signal_codes, "breakout:JP", df
 
 
+def _filter_jp_market_cap(df, max_mcap: float):
+    """シグナル銘柄の時価総額をyfinanceで取得し、上限超えを除外"""
+    import yfinance as yf
+    codes = df["code"].tolist()
+    tickers = [f"{c}.T" for c in codes]
+    mcap_data = {}
+
+    # バッチ取得（info APIは1件ずつだが、シグナル数は少ない）
+    for code, ticker in zip(codes, tickers):
+        try:
+            info = yf.Ticker(ticker).info
+            mcap = info.get("marketCap", 0) or 0
+            mcap_data[code] = mcap
+        except Exception:
+            mcap_data[code] = 0
+
+    df["market_cap"] = df["code"].map(mcap_data)
+
+    n_before = len(df)
+    # 時価総額データなし（0）は通す、取得できた中で上限超えのみ除外
+    df = df[~((df["market_cap"] > 0) & (df["market_cap"] > max_mcap))].reset_index(drop=True)
+    n_removed = n_before - len(df)
+    if n_removed > 0:
+        print(f"  時価総額フィルタ: {n_removed}件除外 (>{max_mcap/1e8:.0f}億円), 残り{len(df)}件")
+    return df
+
+
+def _enrich_with_jp_meta(df) -> None:
+    """JPブレイクアウト結果にセクター・企業名を付加する"""
+    if df.empty:
+        return
+    try:
+        stocks = fetch_jp_stocks()
+        meta = {s["code"]: s for s in stocks}
+        # 既にnameがなければ付加
+        if "name" not in df.columns or df["name"].isna().all():
+            df["name"] = df["code"].map(lambda c: meta.get(c, {}).get("name", ""))
+        else:
+            # 空のnameだけ埋める
+            df["name"] = df.apply(
+                lambda r: r["name"] if r.get("name") else meta.get(r["code"], {}).get("name", ""),
+                axis=1,
+            )
+        df["sector"] = df["code"].map(lambda c: meta.get(c, {}).get("sector_33", ""))
+    except Exception as e:
+        print(f"  [WARN] JPメタデータ取得失敗: {e}")
+
+
 def run_breakout_us(
     universe: str = "us_all",
     limit: int = 0,
     dry_run: bool = False,
     regime_header: str | None = None,
+    regime_trend: str = "",
 ) -> tuple[list[str], str]:
-    """US ブレイクアウト監視を実行（2段階通知対応）"""
+    """US ブレイクアウト監視を実行（2段階通知対応、BEAR時は出来高閾値引上げ+ショート候補検出）"""
     codes = load_universe(universe)
     if not codes:
         print(f"  [SKIP] ユニバース '{universe}' 取得失敗")
@@ -354,8 +434,10 @@ def run_breakout_us(
     if limit > 0:
         codes = codes[:limit]
     print(f"  ユニバース ({universe}): {len(codes)}銘柄")
+    if regime_trend == "BEAR":
+        print("  ⚠️ BEAR相場モード: 出来高閾値5x / ショート候補検出ON")
 
-    df = check_breakout_batch(codes, market="US")
+    df = check_breakout_batch(codes, market="US", regime=regime_trend)
     signal_codes = df["code"].tolist() if not df.empty else []
 
     if not df.empty:
@@ -641,6 +723,8 @@ def main():
                         help="特定市場のみ実行")
     parser.add_argument("--universe", type=str, default="us_all",
                         help="USユニバース (デフォルト: us_all)")
+    parser.add_argument("--jp-universe", type=str, default="jp_all",
+                        help="JPユニバース (デフォルト: jp_all, jp_growth, jp_standard, jp_prime)")
     parser.add_argument("--limit", type=int, default=0,
                         help="USチェック銘柄数の上限（テスト用）")
     parser.add_argument("--dry-run", action="store_true",
@@ -687,7 +771,11 @@ def main():
              (args.strategy is None or args.strategy == "breakout")
     if run_jp:
         print("\n[1] JP ブレイクアウト監視")
-        codes, key, df_jp = run_breakout_jp(dry_run=args.dry_run)
+        codes, key, df_jp = run_breakout_jp(
+            universe=args.jp_universe,
+            limit=args.limit if args.market == "JP" else 0,
+            dry_run=args.dry_run,
+        )
         if key:
             all_signals[key] = codes
             if df_jp is not None and not df_jp.empty:
@@ -721,6 +809,7 @@ def main():
             limit=args.limit,
             dry_run=args.dry_run,
             regime_header=regime_header,
+            regime_trend=regime_dict.get("trend", "") if regime_dict else "",
         )
         if key:
             all_signals[key] = codes

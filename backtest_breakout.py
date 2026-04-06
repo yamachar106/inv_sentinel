@@ -211,6 +211,24 @@ def backtest_single(
         else:
             momentum_6m = None
 
+        # GC検出: エントリー時点でSMA20 > SMA50 かつ直近でクロスしたか
+        gc_at_entry = False
+        sma20_val = row.get("sma_20")
+        sma50_val = row.get("sma_50")
+        if pd.notna(sma20_val) and pd.notna(sma50_val) and sma20_val > sma50_val:
+            gc_at_entry = True
+
+        # SMA位置
+        above_sma50 = bool(entry_price > sma50_val) if pd.notna(sma50_val) else False
+        sma200_val = row.get("sma_200")
+        above_sma200 = bool(entry_price > sma200_val) if pd.notna(sma200_val) else False
+
+        # 60日間の日次リターン（SL/TPスイープ用）
+        daily_returns_60d = []
+        if future_end > entry_idx + 1:
+            fc = df["close"].iloc[entry_idx+1:future_end].values
+            daily_returns_60d = [float((p - entry_price) / entry_price) for p in fc]
+
         event = {
             "ticker": ticker,
             "signal_date": str(signal_date.date()),
@@ -225,6 +243,10 @@ def backtest_single(
             "trade_return": trade_return,
             "trade_days": trade_days,
             "momentum_6m": momentum_6m,
+            "gc_at_entry": gc_at_entry,
+            "above_sma50": above_sma50,
+            "above_sma200": above_sma200,
+            "daily_returns_60d": daily_returns_60d,
             **returns,
         }
         events.append(event)
@@ -403,6 +425,8 @@ def main():
                         help=f"バックテスト期間 (デフォルト: {BACKTEST_PERIOD}, 拡大: 5y)")
     parser.add_argument("--save", action="store_true",
                         help="結果をCSVに保存")
+    parser.add_argument("--save-json", type=str, default=None,
+                        help="結果をJSONに保存（パス指定）")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
@@ -439,6 +463,15 @@ def main():
         path = save_results_csv(all_events, args)
         if path:
             print(f"\n[SAVED] {path}")
+
+    if args.save_json and all_events:
+        import json as _json
+        from pathlib import Path as _Path
+        out = _Path(args.save_json)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with open(out, "w", encoding="utf-8") as fp:
+            _json.dump(all_events, fp, ensure_ascii=False, default=str)
+        print(f"\n[SAVED JSON] {out} ({len(all_events)} events)")
 
 
 if __name__ == "__main__":

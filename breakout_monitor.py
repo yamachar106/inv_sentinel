@@ -19,6 +19,7 @@ import argparse
 from datetime import date
 
 from screener.breakout import check_breakout_batch
+from screener.market_regime import detect_regime
 from screener.notifier import notify_breakout
 from screener.reporter import load_latest_watchlist
 from screener.universe import load_universe
@@ -51,12 +52,12 @@ def main():
             return
         print(f"ユニバース ({args.universe}): {len(codes)}銘柄")
     elif args.market == "JP":
-        code_to_name, label = load_latest_watchlist()
-        if not code_to_name:
-            print("[ERROR] ウォッチリストが見つかりません。--codes または --universe で指定してください。")
+        # デフォルト: 東証全銘柄スキャン
+        codes = load_universe("jp_all")
+        if not codes:
+            print("[ERROR] JP銘柄ユニバースの取得に失敗しました。")
             return
-        codes = list(code_to_name.keys())
-        print(f"ウォッチリスト ({label}): {len(codes)}件")
+        print(f"ユニバース (jp_all): {len(codes)}銘柄")
     else:
         print("[ERROR] US市場では --codes または --universe を指定してください。")
         print("  例: --universe sp500")
@@ -66,10 +67,23 @@ def main():
         codes = codes[:args.limit]
         print(f"  → 上限適用: {len(codes)}件")
 
+    # US市場の場合、相場環境を判定してBEARロジック適用
+    regime_trend = ""
+    regime_header = None
+    if args.market == "US":
+        regime = detect_regime("^GSPC")
+        if regime:
+            regime_trend = regime.trend
+            from screener.market_regime import format_regime_header
+            regime_header = format_regime_header(regime)
+            print(f"  相場環境: {regime.description}")
+            if regime_trend == "BEAR":
+                print("  ⚠️ BEAR相場モード: 出来高閾値5x / ショート候補検出ON")
+
     # ブレイクアウト判定
     print(f"\nブレイクアウト監視開始 (market={args.market}, date={today})")
     print("=" * 60)
-    df = check_breakout_batch(codes, market=args.market)
+    df = check_breakout_batch(codes, market=args.market, regime=regime_trend)
 
     # 結果表示
     print("=" * 60)
@@ -82,7 +96,8 @@ def main():
         print(f"検出: {len(df)}件 (ブレイクアウト: {n_breakout} | プレブレイクアウト: {n_pre})")
         print()
         for _, row in df.iterrows():
-            tag = "BREAKOUT" if row["signal"] == "breakout" else "PRE-BREAK"
+            sig = row["signal"]
+            tag = "SHORT" if sig == "short_candidate" else ("BREAKOUT" if sig == "breakout" else "PRE-BREAK")
             if is_us:
                 price_str = f"${row['close']:,.2f}"
             else:
@@ -94,7 +109,7 @@ def main():
     # Slack通知
     if not args.no_notify and not df.empty:
         print(f"\nSlack通知送信中...")
-        ok = notify_breakout(df, today, market=args.market)
+        ok = notify_breakout(df, today, market=args.market, regime_header=regime_header)
         if ok:
             print("Slack通知完了")
         else:

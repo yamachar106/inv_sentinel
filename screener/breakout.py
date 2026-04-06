@@ -21,6 +21,8 @@ from screener.config import (
     BREAKOUT_SMA_LONG,
     BREAKOUT_VOLUME_RATIO,
     BREAKOUT_VOLUME_RATIO_US,
+    BREAKOUT_VOLUME_RATIO_US_BEAR,
+    BREAKOUT_BEAR_SHORT_ENABLED,
     BREAKOUT_PREBREAK_VOL,
     BREAKOUT_PREBREAK_VOL_US,
     BREAKOUT_NEAR_HIGH_UPPER,
@@ -183,10 +185,24 @@ def calculate_breakout_indicators(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _evaluate_signal(latest: pd.Series, ticker: str, market: str) -> dict | None:
-    """最新行からシグナルを判定する（check_breakoutの内部ロジック）"""
+def _evaluate_signal(
+    latest: pd.Series, ticker: str, market: str, regime: str = "",
+) -> dict | None:
+    """最新行からシグナルを判定する（check_breakoutの内部ロジック）
+
+    Args:
+        regime: 相場環境 ("BULL", "NEUTRAL", "BEAR")。BEAR時はUS出来高閾値を引上げ。
+    """
     is_us = market.upper() == "US"
-    vol_threshold = BREAKOUT_VOLUME_RATIO_US if is_us else BREAKOUT_VOLUME_RATIO
+    is_bear = regime.upper() == "BEAR" if regime else False
+
+    # BEAR+US: 出来高閾値を5xに引上げ（BT検証: Vol>=5xのみPF1.67）
+    if is_us and is_bear:
+        vol_threshold = BREAKOUT_VOLUME_RATIO_US_BEAR
+    elif is_us:
+        vol_threshold = BREAKOUT_VOLUME_RATIO_US
+    else:
+        vol_threshold = BREAKOUT_VOLUME_RATIO
     prebreak_vol_threshold = BREAKOUT_PREBREAK_VOL_US if is_us else BREAKOUT_PREBREAK_VOL
 
     vol_ratio = float(latest["volume_ratio"]) if pd.notna(latest["volume_ratio"]) else 0.0
@@ -230,6 +246,14 @@ def _evaluate_signal(latest: pd.Series, ticker: str, market: str) -> dict | None
     if near_high and above_sma20 and above_sma50 and vol_ratio > prebreak_vol_threshold:
         result["signal"] = "pre_breakout"
         return result
+
+    # BEAR+US: GCなし+Vol>=3xの銘柄をショート候補として検出
+    # BT検証: BEAR GCなしショート 勝率62%, PF1.53, n=61
+    if is_bear and is_us and BREAKOUT_BEAR_SHORT_ENABLED:
+        base_vol = BREAKOUT_VOLUME_RATIO_US  # 通常閾値(3x)でショート候補検出
+        if (is_new_high or near_high) and vol_ratio > base_vol and not gc_status:
+            result["signal"] = "short_candidate"
+            return result
 
     return None
 
@@ -286,6 +310,7 @@ def check_breakout(ticker: str, market: str = "JP") -> dict | None:
 def check_breakout_batch(
     codes: list[str],
     market: str = "JP",
+    regime: str = "",
 ) -> pd.DataFrame:
     """
     複数銘柄を一括チェックする。
@@ -296,6 +321,7 @@ def check_breakout_batch(
     Args:
         codes: 証券コードのリスト (例: ["7974", "6758"] or ["AAPL", "MSFT"])
         market: "JP" (東証) or "US" (米国)
+        regime: 相場環境 ("BULL", "NEUTRAL", "BEAR")
 
     Returns:
         シグナルが出た銘柄のみの DataFrame
@@ -320,7 +346,7 @@ def check_breakout_batch(
             continue
 
         df = calculate_breakout_indicators(df)
-        hit = _evaluate_signal(df.iloc[-1], ticker, market.upper())
+        hit = _evaluate_signal(df.iloc[-1], ticker, market.upper(), regime=regime)
         if hit:
             hit["code"] = code
             results.append(hit)

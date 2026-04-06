@@ -2,10 +2,12 @@
 銘柄ユニバース管理
 
 米国全上場銘柄（NYSE / NASDAQ / AMEX）をNASDAQ Screener APIから取得・キャッシュ。
+日本株はJPX公開データから東証全銘柄を取得。
 時価総額・セクターでフィルタリングし、ブレイクアウト監視対象を絞り込む。
 """
 
 import csv
+import io
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -183,12 +185,141 @@ def get_us_tickers(
     return [s["symbol"] for s in filtered]
 
 
+# =========================================================================
+# JP（日本株）ユニバース
+# =========================================================================
+
+# JPX 東証上場銘柄一覧（Excel → CSV変換不要のCSV版）
+_JPX_LISTED_URL = (
+    "https://www.jpx.co.jp/markets/statistics-equities/misc/tvdivq0000001vg2-att/data_j.xls"
+)
+
+
+def fetch_jp_stocks() -> list[dict]:
+    """
+    JPX公式の東証上場銘柄一覧を取得・キャッシュする。
+
+    Returns:
+        [{code, name, market_segment, sector_33}, ...]
+    """
+    cache_path = UNIVERSE_DIR / "jp_stocks.json"
+
+    # キャッシュチェック
+    if cache_path.exists():
+        data = json.loads(cache_path.read_text(encoding="utf-8"))
+        cached_date = datetime.fromisoformat(data.get("updated", "2000-01-01"))
+        if datetime.now() - cached_date < timedelta(days=UNIVERSE_CACHE_DAYS):
+            return data["stocks"]
+
+    stocks = _fetch_jpx_listed()
+    if not stocks:
+        if cache_path.exists():
+            data = json.loads(cache_path.read_text(encoding="utf-8"))
+            print("[WARN] JPX銘柄一覧取得失敗、古いキャッシュを使用")
+            return data["stocks"]
+        # 最終フォールバック: IR Bankから取得
+        return _fetch_jp_stocks_irbank_fallback()
+
+    # キャッシュ保存
+    UNIVERSE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_data = {
+        "updated": datetime.now().isoformat(),
+        "count": len(stocks),
+        "stocks": stocks,
+    }
+    cache_path.write_text(json.dumps(cache_data, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"  JP stocks: {len(stocks)}銘柄を取得・キャッシュ保存")
+    return stocks
+
+
+def _fetch_jpx_listed() -> list[dict]:
+    """JPX東証上場銘柄一覧をダウンロード・パースする"""
+    try:
+        import pandas as pd
+        req = Request(_JPX_LISTED_URL, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        })
+        with urlopen(req, timeout=60) as resp:
+            raw = resp.read()
+        # JPXファイルはExcel形式(.xls)
+        df = pd.read_excel(io.BytesIO(raw), dtype=str)
+
+        stocks = []
+        for _, row in df.iterrows():
+            code = str(row.iloc[1]).strip() if len(row) > 1 else ""
+            if not code or not code.isdigit() or len(code) != 4:
+                continue
+            name = str(row.iloc[2]).strip() if len(row) > 2 else ""
+            segment = str(row.iloc[3]).strip() if len(row) > 3 else ""
+            sector = str(row.iloc[5]).strip() if len(row) > 5 else ""
+
+            stocks.append({
+                "code": code,
+                "name": name,
+                "market_segment": segment,
+                "sector_33": sector,
+            })
+        return stocks
+    except Exception as e:
+        print(f"[WARN] JPX銘柄一覧取得エラー: {e}")
+        return []
+
+
+def _fetch_jp_stocks_irbank_fallback() -> list[dict]:
+    """IR Bankから銘柄コード一覧を取得する（JPXフォールバック用）"""
+    try:
+        from screener.irbank import get_company_codes
+        companies = get_company_codes()
+        return [
+            {"code": c["code"], "name": c.get("name", ""),
+             "market_segment": "", "sector_33": c.get("category", "")}
+            for c in companies
+        ]
+    except Exception as e:
+        print(f"[WARN] IR Bank銘柄一覧取得エラー: {e}")
+        return []
+
+
+def get_jp_tickers(
+    segments: set[str] | None = None,
+) -> list[str]:
+    """
+    フィルタ済みの日本株コードリストを返す。
+
+    Args:
+        segments: 対象市場区分 (例: {"グロース", "スタンダード"})。Noneなら全区分
+
+    Returns:
+        証券コードリスト
+    """
+    from screener.exclusion import filter_jp_companies
+
+    stocks = fetch_jp_stocks()
+    if not stocks:
+        return []
+
+    # 市場区分フィルタ
+    if segments:
+        stocks = [s for s in stocks if any(seg in s.get("market_segment", "") for seg in segments)]
+
+    # REIT/ETF/インフラファンド等の除外
+    stocks = filter_jp_companies(stocks)
+
+    return [s["code"] for s in stocks]
+
+
 def load_universe(name: str, **kwargs) -> list[str]:
     """
     指定名のユニバースを読み込む。
 
     Args:
         name: ユニバース名
+            --- JP ---
+            "jp_all"     — 東証全銘柄（ETF/REIT除外）
+            "jp_growth"  — グロース市場
+            "jp_standard"— スタンダード市場
+            "jp_prime"   — プライム市場
+            --- US ---
             "us_all"  — 全米株（フィルタ付き）
             "us_large" — 大型株 ($10B-$200B)
             "us_mid"   — 中型株 ($2B-$10B)
@@ -197,10 +328,21 @@ def load_universe(name: str, **kwargs) -> list[str]:
             その他     — data/universe/{name}.csv からカスタム読み込み
 
     Returns:
-        ティッカーリスト
+        ティッカーリスト（JP=証券コード、US=ティッカー）
     """
     name_lower = name.lower()
 
+    # --- JP presets ---
+    if name_lower == "jp_all":
+        return get_jp_tickers()
+    if name_lower == "jp_growth":
+        return get_jp_tickers(segments={"グロース"})
+    if name_lower == "jp_standard":
+        return get_jp_tickers(segments={"スタンダード"})
+    if name_lower == "jp_prime":
+        return get_jp_tickers(segments={"プライム"})
+
+    # --- US presets ---
     if name_lower == "us_all":
         return get_us_tickers(
             min_market_cap=kwargs.get("min_market_cap", DEFAULT_MIN_MARKET_CAP),
