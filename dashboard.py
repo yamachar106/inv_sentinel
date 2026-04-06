@@ -298,6 +298,22 @@ tr:hover td { background:rgba(88,166,255,.04); }
 .enriched-tag { display:inline-flex; align-items:center; gap:3px; padding:1px 6px; border-radius:3px; font-size:11px; background:var(--surface2); color:var(--text-muted); border:1px solid var(--border); }
 .enriched-tag .etag-label { color:var(--text-dim); }
 
+/* Earnings calendar */
+.earnings-cal { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:16px; margin-bottom:20px; }
+.earnings-cal h3 { font-size:14px; font-weight:600; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+.earnings-cal .cal-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+.earnings-cal .cal-item { padding:10px 12px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); position:relative; }
+.earnings-cal .cal-item.active { border-color:var(--accent); background:rgba(88,166,255,.06); }
+.earnings-cal .cal-item .cal-quarter { font-size:13px; font-weight:600; margin-bottom:4px; }
+.earnings-cal .cal-item .cal-period { font-size:11px; color:var(--text-muted); margin-bottom:6px; }
+.earnings-cal .cal-item .cal-desc { font-size:11px; color:var(--text-dim); line-height:1.5; }
+.earnings-cal .cal-item .cal-badge { position:absolute; top:8px; right:10px; font-size:10px; padding:1px 6px; border-radius:3px; font-weight:600; }
+.earnings-cal .cal-item .cal-badge.now { background:rgba(88,166,255,.2); color:var(--accent); }
+.earnings-cal .cal-item .cal-badge.next { background:rgba(210,153,34,.15); color:var(--yellow); }
+.earnings-cal .cal-prep { margin-top:12px; padding:10px 14px; background:rgba(210,153,34,.06); border:1px solid rgba(210,153,34,.18); border-radius:6px; font-size:12px; color:var(--text-muted); line-height:1.7; }
+.earnings-cal .cal-prep strong { color:var(--yellow); }
+@media (max-width:768px) { .earnings-cal .cal-grid { grid-template-columns:1fr 1fr; } }
+
 /* Signals */
 .signal-day { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px 16px; margin-bottom:10px; }
 .signal-day .day-header { font-weight:600; font-size:14px; margin-bottom:10px; display:flex; align-items:center; gap:10px; }
@@ -384,6 +400,7 @@ tr:hover td { background:rgba(88,166,255,.04); }
       <div class="loading"><div class="spinner"></div></div>
     </div>
     <div id="overview-sell-alerts"></div>
+    <div id="earnings-calendar"></div>
     <div class="section-header">ウォッチリスト<span class="count" id="wl-count"></span></div>
     <div id="overview-watchlist"><div class="loading"><div class="spinner"></div></div></div>
   </div>
@@ -597,6 +614,68 @@ function renderOverview(regime, portfolio, watchlist, stats, signals) {
   } else {
     $('#overview-watchlist').innerHTML = '<div class="empty">\u30A6\u30A9\u30C3\u30C1\u30EA\u30B9\u30C8\u306A\u3057</div>';
   }
+
+  // 決算カレンダー
+  renderEarningsCalendar();
+}
+
+// ─── 決算カレンダー ───
+
+function renderEarningsCalendar() {
+  const now = new Date();
+  const m = now.getMonth() + 1; // 1-12
+
+  // 3月期決算企業ベースの決算シーズン（発表時期）
+  const seasons = [
+    { q: 'Q3決算', period: '1月下旬〜2月中旬', months: [1,2], desc: '10-12月期。通期着地が見え始める時期。進捗率チェックが重要。', prep: 'フェイクフィルタの進捗率判定が有効に機能する時期。ウォッチリスト銘柄の進捗率を重点確認。' },
+    { q: '本決算 (Q4/FY)', period: '4月下旬〜5月中旬', months: [4,5], desc: '通期確定＋来期予想が出る最重要シーズン。黒字転換シグナルの信頼度が最も高い。', prep: 'IR Bankデータが一斉更新。キャッシュ無効化を確認。ウォッチリストが大幅入替になるため、スクリーニングを複数回実行して安定性を確認。' },
+    { q: 'Q1決算', period: '7月下旬〜8月中旬', months: [7,8], desc: '新年度の初動。来期予想に対する進捗の第一報。意外性のある転換が出やすい。', prep: '前年度の本決算で赤字だった銘柄がQ1で黒字転換するケースに注目。新規ウォッチリスト候補の発掘期。' },
+    { q: 'Q2決算 (中間)', period: '10月下旬〜11月中旬', months: [10,11], desc: '中間決算。上方修正・下方修正が出やすく、トレンド転換の確認に重要。', prep: '保有銘柄の中間決算を重点チェック。2Q連続赤字転落なら売却ルール発動。利益成長の加速/鈍化を確認。' },
+  ];
+
+  // 現在どのシーズンか、次はどれか
+  let activeIdx = -1;
+  let nextIdx = -1;
+  for (let i = 0; i < seasons.length; i++) {
+    if (seasons[i].months.includes(m)) { activeIdx = i; break; }
+  }
+  if (activeIdx === -1) {
+    // シーズン外: 次のシーズンを探す
+    const order = [0,1,2,3]; // Q3(1-2), 本決算(4-5), Q1(7-8), Q2(10-11)
+    for (let i = 0; i < order.length; i++) {
+      if (seasons[order[i]].months[0] > m) { nextIdx = order[i]; break; }
+    }
+    if (nextIdx === -1) nextIdx = 0; // 年末→来年Q3
+  }
+
+  let html = '<div class="earnings-cal">';
+  html += '<h3>\u{1F4C5} 決算カレンダー（3月期決算ベース）</h3>';
+  html += '<div class="cal-grid">';
+
+  seasons.forEach((s, i) => {
+    const isActive = i === activeIdx;
+    const isNext = i === nextIdx;
+    html += '<div class="cal-item' + (isActive ? ' active' : '') + '">';
+    if (isActive) html += '<span class="cal-badge now">NOW</span>';
+    else if (isNext) html += '<span class="cal-badge next">NEXT</span>';
+    html += '<div class="cal-quarter">' + s.q + '</div>';
+    html += '<div class="cal-period">' + s.period + '</div>';
+    html += '<div class="cal-desc">' + s.desc + '</div>';
+    html += '</div>';
+  });
+
+  html += '</div>';
+
+  // 事前準備セクション（アクティブまたは次のシーズン）
+  const prepSeason = activeIdx >= 0 ? seasons[activeIdx] : seasons[nextIdx];
+  const prepLabel = activeIdx >= 0 ? prepSeason.q + '（進行中）' : prepSeason.q + '（次回）';
+  html += '<div class="cal-prep">';
+  html += '<strong>' + prepLabel + ' の事前準備:</strong><br>';
+  html += prepSeason.prep;
+  html += '</div>';
+
+  html += '</div>';
+  $('#earnings-calendar').innerHTML = html;
 }
 
 // ─── ウォッチリスト ───

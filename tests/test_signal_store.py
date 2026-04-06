@@ -138,7 +138,7 @@ class TestFormatDiffSummary:
             }
         }
         result = format_diff_summary(diff)
-        assert "NEW: 1" in result
+        assert "新規: 1" in result
         assert "継続: 1" in result
 
     def test_format_disappeared(self):

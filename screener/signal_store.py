@@ -134,7 +134,7 @@ def format_diff_summary(diff: dict[str, dict[str, list[str]]]) -> str:
     for key, info in sorted(diff.items()):
         parts = []
         if info["new"]:
-            parts.append(f"NEW: {len(info['new'])}")
+            parts.append(f"新規: {len(info['new'])}")
         if info["continuing"]:
             parts.append(f"継続: {len(info['continuing'])}")
         if info["disappeared"]:
