@@ -1,32 +1,12 @@
-name: Daily Breakout Monitor
+name: MEGA BreakOut Daily
 
 on:
   schedule:
-    # JP市場終了後: 16:00 JST = 07:00 UTC（月〜金）
-    - cron: "0 7 * * 1-5"
-    # US市場終了後: 06:00 JST = 21:00 UTC 前日（月〜金）
+    # US市場終了後: 06:00 JST = 21:00 UTC（月〜金）
     - cron: "0 21 * * 1-5"
 
   workflow_dispatch:
     inputs:
-      strategy:
-        description: "Strategy to run (breakout / kuroten / all)"
-        required: false
-        type: choice
-        options:
-          - all
-          - breakout
-          - kuroten
-        default: all
-      market:
-        description: "Market (JP / US / all)"
-        required: false
-        type: choice
-        options:
-          - all
-          - JP
-          - US
-        default: all
       universe:
         description: "US universe preset"
         required: false
@@ -34,11 +14,10 @@ on:
         options:
           - us_all
           - us_mid
-          - us_small
           - sp500
         default: us_all
       limit:
-        description: "US stock limit (0 = all)"
+        description: "Stock limit (0 = all)"
         required: false
         type: number
         default: 0
@@ -58,17 +37,14 @@ permissions:
 
 env:
   SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-  SLACK_WEBHOOK_KUROTEN_JP: ${{ secrets.SLACK_WEBHOOK_KUROTEN_JP }}
-  SLACK_WEBHOOK_BREAKOUT_JP: ${{ secrets.SLACK_WEBHOOK_BREAKOUT_JP }}
-  SLACK_WEBHOOK_BREAKOUT_US: ${{ secrets.SLACK_WEBHOOK_BREAKOUT_US }}
   SLACK_WEBHOOK_MEGA_US: ${{ secrets.SLACK_WEBHOOK_MEGA_US }}
   GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
   PYTHONIOENCODING: utf-8
 
 jobs:
-  daily-run:
+  mega-daily:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -98,35 +74,16 @@ jobs:
       - name: Determine run parameters
         id: params
         run: |
-          # スケジュール実行時: cronの時刻でJP/USを自動判定
-          HOUR=$(date -u +%H)
           ARGS=""
 
           if [ "${{ github.event_name }}" = "schedule" ]; then
-            if [ "$HOUR" = "07" ]; then
-              # 07:00 UTC = 16:00 JST → JP市場終了後
-              ARGS="--market JP"
-              echo "trigger=schedule-jp" >> $GITHUB_OUTPUT
-            else
-              # 21:00 UTC = 06:00 JST → US市場終了後
-              ARGS="--market US"
-              echo "trigger=schedule-us" >> $GITHUB_OUTPUT
-            fi
+            echo "trigger=schedule" >> $GITHUB_OUTPUT
           else
             echo "trigger=manual" >> $GITHUB_OUTPUT
 
-            # 手動実行時のパラメータ
-            STRATEGY="${{ github.event.inputs.strategy }}"
-            MARKET="${{ github.event.inputs.market }}"
             UNIVERSE="${{ github.event.inputs.universe }}"
             LIMIT="${{ github.event.inputs.limit }}"
 
-            if [ "$STRATEGY" != "all" ] && [ -n "$STRATEGY" ]; then
-              ARGS="$ARGS --strategy $STRATEGY"
-            fi
-            if [ "$MARKET" != "all" ] && [ -n "$MARKET" ]; then
-              ARGS="$ARGS --market $MARKET"
-            fi
             if [ -n "$UNIVERSE" ]; then
               ARGS="$ARGS --universe $UNIVERSE"
             fi
@@ -144,13 +101,12 @@ jobs:
           echo "args=$ARGS" >> $GITHUB_OUTPUT
           echo "Run args: $ARGS"
 
-      - name: Run daily monitor
+      - name: Run MEGA daily monitor
         run: |
           echo "Running: python daily_run.py ${{ steps.params.outputs.args }}"
           python daily_run.py ${{ steps.params.outputs.args }}
 
       - name: Refresh dashboard cache
-        if: steps.params.outputs.trigger != 'schedule-jp'
         run: |
           echo "Refreshing MEGA dashboard cache..."
           python dashboard/refresh_cache.py || echo "Cache refresh failed (non-critical)"
@@ -159,13 +115,13 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          for dir in data/signals data/universe data/watchlist data/cache; do
+          for dir in data/signals data/universe data/cache; do
             [ -d "$dir" ] && git add "$dir/"
           done
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Daily signals $(date -u +%Y-%m-%d) [${{ steps.params.outputs.trigger }}]"
+            git commit -m "MEGA signals $(date -u +%Y-%m-%d) [${{ steps.params.outputs.trigger }}]"
             git push
           fi
 
@@ -176,7 +132,7 @@ jobs:
           if [ -n "$WEBHOOK" ]; then
             curl -s -X POST "$WEBHOOK" \
               -H 'Content-Type: application/json' \
-              -d "{\"text\":\"🚨 *Pipeline FAILED* (${{ steps.params.outputs.trigger }})\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\n即座に確認してください。BOシグナルを逃す可能性があります。\"}" \
+              -d "{\"text\":\"🚨 *MEGA Pipeline FAILED* (${{ steps.params.outputs.trigger }})\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\n即座に確認してください。BOシグナルを逃す可能性があります。\"}" \
               --retry 3 --retry-delay 5
           fi
 
@@ -184,7 +140,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: daily-run-${{ steps.params.outputs.trigger }}-${{ github.run_id }}
+          name: mega-${{ steps.params.outputs.trigger }}-${{ github.run_id }}
           path: |
             data/signals/
             data/logs/
