@@ -239,13 +239,37 @@ def _logo_html(logo_url: str, size: int = 32) -> str:
     )
 
 
+TECHNICALS_CACHE = ROOT / "data" / "cache" / "mega_technicals.json"
+
+
+def _load_technicals_cache() -> pd.DataFrame | None:
+    """プリビルドキャッシュからテクニカルデータをロード（当日のみ有効）"""
+    if TECHNICALS_CACHE.exists():
+        try:
+            data = json.loads(TECHNICALS_CACHE.read_text(encoding="utf-8"))
+            if data.get("_date") == datetime.now().date().isoformat():
+                rows = data.get("rows", [])
+                if rows:
+                    df = pd.DataFrame(rows)
+                    df["sma200"] = df["sma200"].apply(lambda v: v if v is not None else np.nan)
+                    return df
+        except (json.JSONDecodeError, ValueError):
+            pass
+    return None
+
+
 @st.cache_data(ttl=300)
 def fetch_technicals(tickers: list[str]) -> pd.DataFrame:
-    """yfinanceでMega全銘柄のテクニカルデータを取得"""
+    """テクニカルデータを取得。プリキャッシュがあれば即座に返す。"""
+    # プリキャッシュ優先（refresh_cache.pyで事前構築）
+    cached = _load_technicals_cache()
+    if cached is not None:
+        return cached
+
     if not tickers:
         return pd.DataFrame()
 
-    # 一括ダウンロード (1年分)
+    # フォールバック: yfinanceからライブ取得
     data = yf.download(tickers, period="1y", progress=False, threads=True)
     if data.empty:
         return pd.DataFrame()
@@ -268,27 +292,22 @@ def fetch_technicals(tickers: list[str]) -> pd.DataFrame:
             high_52w = float(close.max())
             dist_pct = (current - high_52w) / high_52w * 100
 
-            # SMA
             sma20 = float(close.rolling(20).mean().iloc[-1])
             sma50 = float(close.rolling(50).mean().iloc[-1])
             sma200 = float(close.rolling(200).mean().iloc[-1]) if len(close) >= 200 else np.nan
 
-            # RSI (14日)
             delta = close.diff()
             gain = delta.clip(lower=0).rolling(14).mean()
             loss = (-delta.clip(upper=0)).rolling(14).mean()
             rs = gain.iloc[-1] / loss.iloc[-1] if loss.iloc[-1] != 0 else 100
             rsi = float(100 - (100 / (1 + rs)))
 
-            # GC判定
             gc = sma20 > sma50 if not np.isnan(sma50) else False
 
-            # 出来高比率
             vol_avg = float(volume.rolling(50).mean().iloc[-1])
             vol_today = float(volume.iloc[-1])
             vol_ratio = vol_today / vol_avg if vol_avg > 0 else 0
 
-            # シグナル判定
             above_sma200 = current > sma200 if not np.isnan(sma200) else False
             if dist_pct >= 0 and vol_ratio >= 1.5 and above_sma200:
                 signal = "BO"
