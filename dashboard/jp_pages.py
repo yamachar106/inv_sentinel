@@ -465,14 +465,16 @@ def render_jp_scoreboard():
         return
 
     # ─── サマリー指標 ───
-    n_s = len(df[df["総合ランク"] == "S"])
-    n_a = len(df[df["総合ランク"] == "A"])
+    n_s_total = len(df[df["総合ランク"] == "S"])
+    n_a_total = len(df[df["総合ランク"] == "A"])
+    n_s_str = len(df[df["地力ランク"] == "S"])
+    n_a_str = len(df[df["地力ランク"] == "A"])
     n_sma200_ok = len(df[df["SMA200上"]])
     n_gc = len(df[df["GC"]])
 
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("S ランク", f"{n_s}銘柄", help="総合スコア75+")
-    c2.metric("A ランク", f"{n_a}銘柄", help="総合スコア55+")
+    c1.metric("総合 S/A", f"{n_s_total+n_a_total}銘柄", help="総合=地力40%+タイミング60%（リアルタイム変動）")
+    c2.metric("地力 S/A", f"{n_s_str+n_a_str}銘柄", help="地力=10年BTベース（月次固定）")
     c3.metric("SMA200上", f"{n_sma200_ok}/{len(df)}", help="200日移動平均の上")
     c4.metric("GC状態", f"{n_gc}/{len(df)}", help="SMA20 > SMA50")
     month = datetime.now().month
@@ -481,17 +483,26 @@ def render_jp_scoreboard():
 
     st.divider()
 
-    # ─── S/Aフィルタ ───
-    show_all = st.toggle("B/Cランクも表示", value=False)
+    # ─── フィルタ ───
+    filter_mode = st.radio(
+        "表示フィルタ",
+        ["地力 S/A（安定）", "総合 S/A（タイミング込み）", "全銘柄"],
+        horizontal=True,
+        help="地力=月次固定 / 総合=地力40%+タイミング60%（リアルタイム変動）",
+    )
 
-    if show_all:
-        display_df = df.copy()
-    else:
+    if filter_mode == "地力 S/A（安定）":
+        display_df = df[df["地力ランク"].isin(["S", "A"])].copy()
+    elif filter_mode == "総合 S/A（タイミング込み）":
         display_df = df[df["総合ランク"].isin(["S", "A"])].copy()
+    else:
+        display_df = df.copy()
 
     if display_df.empty:
         st.info("条件に合う銘柄がありません")
         return
+
+    st.caption(f"{len(display_df)}銘柄表示中")
 
     # ─── カード表示 ───
     for _, row in display_df.iterrows():
