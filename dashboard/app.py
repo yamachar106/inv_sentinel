@@ -543,10 +543,36 @@ def _fetch_fundamentals(ticker: str) -> dict:
         return {}
 
 
+def _build_bt_context(rsi: float, gc_ok: bool) -> str:
+    """BT条件別統計をAIプロンプト用のテキストに変換"""
+    bt = _load_bt_stats()
+    if not bt:
+        return ""
+    rsi_key = "rsi_70plus" if rsi >= 70 else "rsi_50_70" if rsi >= 50 else "rsi_under50"
+    rsi_label = "RSI≥70" if rsi >= 70 else "RSI 50-70" if rsi >= 50 else "RSI<50"
+    gc_key = "gc_yes" if gc_ok else "gc_no"
+    gc_label = "GC済み" if gc_ok else "GC未"
+
+    lines = []
+    all_bo = bt.get("all_bo", {})
+    if all_bo.get("n"):
+        lines.append(f"  全BO (n={all_bo['n']}): EV{all_bo['ev']:+.1f}%, 勝率{all_bo['wr']:.0f}%, PF{all_bo['pf']}")
+    rsi_s = bt.get(rsi_key, {})
+    if rsi_s.get("n"):
+        lines.append(f"  ★この銘柄の条件: {rsi_label} (n={rsi_s['n']}): EV{rsi_s['ev']:+.1f}%, 勝率{rsi_s['wr']:.0f}%")
+    gc_s = bt.get(gc_key, {})
+    if gc_s.get("n"):
+        lines.append(f"  ★この銘柄の条件: {gc_label} (n={gc_s['n']}): EV{gc_s['ev']:+.1f}%, 勝率{gc_s['wr']:.0f}%")
+    spike = bt.get("spike_bo", {})
+    if spike.get("n"):
+        lines.append(f"  急騰BO/初日+8% (n={spike['n']}): EV{spike['ev']:+.1f}%, 勝率{spike['wr']:.0f}%")
+    return "\n".join(lines)
+
+
 def _render_full_analysis(
     ticker: str, row: pd.Series, meta: dict, company_info: dict,
 ):
-    """BO/PB銘柄のフル分析をインライン表示"""
+    """BO/PB銘柄のフル分析をインライン表示（統合AIレポート）"""
     info = company_info.get(ticker, {})
     industry = info.get("industry", "")
     summary = info.get("summary", "")
@@ -554,13 +580,17 @@ def _render_full_analysis(
     mcap_b = (meta.get("marketCap", 0) or 0) / 1e9
     is_bo = row["signal"] == "BO"
 
-    # ─── ステータスバッジ ───
     gc_ok = row.get("gc", False)
     sma200_ok = row.get("above_sma200", False)
     rsi = row.get("rsi", 0) or 0
     vol_ratio = row.get("vol_ratio", 0) or 0
     dist = row.get("dist_pct", 0)
 
+    sl = row["close"] * (1 + MEGA_STOP_LOSS)
+    tp = row["close"] * (1 + MEGA_PROFIT_TARGET)
+    sma200_gap = (row["close"] / row["sma200"] - 1) * 100 if row.get("sma200") and row["sma200"] > 0 else 0
+
+    # ─── ステータスバッジ ───
     def _badge(label, value, color):
         return (
             f'<span style="display:inline-block;margin:2px 3px;padding:3px 10px;'
@@ -582,78 +612,14 @@ def _render_full_analysis(
     ])
     st.markdown(f'<div style="display:flex;flex-wrap:wrap;">{badges}</div>', unsafe_allow_html=True)
 
-    # ─── メトリクス + SL/TP ───
-    sl = row["close"] * (1 + MEGA_STOP_LOSS)
-    tp = row["close"] * (1 + MEGA_PROFIT_TARGET)
-    sma200_gap = (row["close"] / row["sma200"] - 1) * 100 if row.get("sma200") and row["sma200"] > 0 else 0
-
+    # ─── メトリクス ───
     mc1, mc2, mc3, mc4 = st.columns(4)
     mc1.metric("Price", f"${row['close']:,.2f}")
     mc2.metric("SL (-20%)", f"${sl:,.2f}")
     mc3.metric("TP (+40%)", f"${tp:,.2f}")
     mc4.metric("SMA200乖離", f"{sma200_gap:+.0f}%")
 
-    # ─── ファンダメンタルズ ───
-    funda = _fetch_fundamentals(ticker)
-    if funda:
-        fc1, fc2, fc3, fc4, fc5 = st.columns(5)
-        pe = funda.get("forward_pe")
-        fc1.metric("Forward P/E", f"{pe:.1f}" if pe else "N/A")
-        margin = funda.get("profit_margin")
-        fc2.metric("利益率", f"{margin:.1%}" if margin is not None else "N/A")
-        rev_g = funda.get("revenue_growth")
-        fc3.metric("売上成長", f"{rev_g:+.1%}" if rev_g is not None else "N/A")
-        target = funda.get("target_mean")
-        if target:
-            vs_target = (row["close"] / target - 1) * 100
-            color = "inverse" if vs_target > 10 else "normal" if vs_target < -5 else "off"
-            fc4.metric("目標株価", f"${target:,.0f}", f"{vs_target:+.0f}%", delta_color=color)
-        else:
-            fc4.metric("目標株価", "N/A")
-        rec = funda.get("recommendation", "")
-        fc5.metric("推奨", rec.upper() if rec else "N/A")
-
-    # ─── BT条件別統計 ───
-    bt = _load_bt_stats()
-    if bt:
-        st.markdown("**BT条件別統計** (SL-20%/TP+40%)")
-        # この銘柄に該当する条件をハイライト
-        rsi_key = "rsi_70plus" if rsi >= 70 else "rsi_50_70" if rsi >= 50 else "rsi_under50"
-        bt_rows = []
-        conditions = [
-            ("全BO", "all_bo", True),
-            ("RSI≥70 BO", "rsi_70plus", rsi_key == "rsi_70plus"),
-            ("RSI 50-70 BO", "rsi_50_70", rsi_key == "rsi_50_70"),
-            ("RSI<50 BO", "rsi_under50", rsi_key == "rsi_under50"),
-            ("急騰BO (初日+8%)", "spike_bo", False),
-            ("GC済み", "gc_yes", gc_ok),
-            ("GC未", "gc_no", not gc_ok),
-        ]
-        for label, key, is_current in conditions:
-            s = bt.get(key, {})
-            if s.get("n", 0) > 0:
-                bt_rows.append({
-                    "条件": f"{'→ ' if is_current else ''}{label}",
-                    "n": s["n"],
-                    "EV": f"{s['ev']:+.1f}%",
-                    "勝率": f"{s['wr']:.0f}%",
-                    "PF": s["pf"],
-                })
-        if bt_rows:
-            st.dataframe(pd.DataFrame(bt_rows), hide_index=True, use_container_width=True)
-
-    # ─── AI分析 ───
-    if os.getenv("GOOGLE_API_KEY"):
-        analysis = analyze_breakout_factors(
-            ticker, meta.get("name", ""), industry, row["close"],
-            row["high_52w"], row["dist_pct"], rsi, vol_ratio,
-            gc_ok, row.get("sma20", 0), row.get("sma50", 0), row.get("sma200", 0),
-            mcap_b, sma200_ok, summary, is_pb=(not is_bo),
-        )
-        if analysis:
-            st.markdown(analysis)
-
-    # ─── チャート ───
+    # ─── チャート（AI分析の前に表示 — 視覚的コンテキスト） ───
     chart_data = fetch_ticker_chart(ticker, period="1y")
     if not chart_data.empty:
         close_series = chart_data["Close"]
@@ -682,13 +648,33 @@ def _render_full_analysis(
         fig.add_hline(y=tp, line_dash="dash", line_color="#22c55e",
                       annotation_text=f"TP ${tp:,.2f}")
         fig.update_layout(
-            height=400, template="plotly_dark",
+            height=350, template="plotly_dark",
             margin=dict(t=10, b=10),
             showlegend=True,
             legend=dict(orientation="h", yanchor="bottom", y=1.02),
             xaxis_title="", yaxis_title="$",
         )
         st.plotly_chart(fig, use_container_width=True)
+
+    # ─── 統合AI分析レポート ───
+    funda = _fetch_fundamentals(ticker)
+    bt_context = _build_bt_context(rsi, gc_ok)
+
+    if os.getenv("GOOGLE_API_KEY"):
+        analysis = _generate_comprehensive_analysis(
+            ticker=ticker, name=meta.get("name", ""), industry=industry,
+            summary=summary, mcap_b=mcap_b, sector=sector,
+            close=row["close"], high_52w=row["high_52w"], dist_pct=dist,
+            rsi=rsi, vol_ratio=vol_ratio, gc=gc_ok,
+            sma20=row.get("sma20", 0), sma50=row.get("sma50", 0),
+            sma200=row.get("sma200", 0), sma200_gap=sma200_gap,
+            above_sma200=sma200_ok, sl=sl, tp=tp,
+            funda=funda, bt_context=bt_context, is_bo=is_bo,
+        )
+        if analysis:
+            st.markdown(analysis)
+    else:
+        st.caption("GOOGLE_API_KEY未設定のためAI分析は利用不可")
 
     # Red flags
     flags = get_red_flags(row.to_dict(), sector)
@@ -719,14 +705,22 @@ def _save_ai_cache(analyses: dict) -> None:
     AI_CACHE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def analyze_breakout_factors(ticker: str, name: str, industry: str,
-                             close: float, high_52w: float, dist_pct: float,
-                             rsi: float, vol_ratio: float, gc: bool,
-                             sma20: float, sma50: float, sma200: float,
-                             mcap_b: float, above_sma200: bool,
-                             summary: str = "", is_pb: bool = True) -> str:
-    """Gemini Flash + Google検索グラウンディングでBO/PB候補を分析。"""
-    cache_key = f"{ticker}_{'pb' if is_pb else 'bo'}"
+def _generate_comprehensive_analysis(
+    ticker: str, name: str, industry: str, summary: str,
+    mcap_b: float, sector: str,
+    close: float, high_52w: float, dist_pct: float,
+    rsi: float, vol_ratio: float, gc: bool,
+    sma20: float, sma50: float, sma200: float,
+    sma200_gap: float, above_sma200: bool,
+    sl: float, tp: float,
+    funda: dict, bt_context: str, is_bo: bool,
+) -> str:
+    """Gemini Flash + Google検索で統合分析レポートを生成。
+
+    INTCで出したようなクオリティ:
+    背景・アナリスト目標株価・BT統計を踏まえたエントリー判断・推奨方針
+    """
+    cache_key = f"{ticker}_full_{'bo' if is_bo else 'pb'}"
     cache = _load_ai_cache()
     if cache_key in cache:
         return cache[cache_key]
@@ -737,48 +731,95 @@ def analyze_breakout_factors(ticker: str, name: str, industry: str,
 
     from google.genai import types
 
-    sma200_gap = (close / sma200 - 1) * 100 if sma200 > 0 else 0
+    # ファンダメンタルズ文字列
+    funda_lines = []
+    if funda:
+        pe = funda.get("forward_pe")
+        if pe:
+            funda_lines.append(f"Forward P/E: {pe:.1f}")
+        margin = funda.get("profit_margin")
+        if margin is not None:
+            funda_lines.append(f"利益率: {margin:.1%}")
+        rev_g = funda.get("revenue_growth")
+        if rev_g is not None:
+            funda_lines.append(f"売上成長: {rev_g:+.1%}")
+        earn_g = funda.get("earnings_growth")
+        if earn_g is not None:
+            funda_lines.append(f"EPS成長: {earn_g:+.1%}")
+        target_mean = funda.get("target_mean")
+        target_low = funda.get("target_low")
+        target_high = funda.get("target_high")
+        if target_mean:
+            vs = (close / target_mean - 1) * 100
+            funda_lines.append(
+                f"アナリスト目標株価: ${target_mean:,.0f} "
+                f"(現在値比{vs:+.0f}%, "
+                f"レンジ ${target_low:,.0f}-${target_high:,.0f})"
+            )
+        rec = funda.get("recommendation")
+        if rec:
+            funda_lines.append(f"アナリスト推奨: {rec.upper()}")
+        short_pct = funda.get("short_pct")
+        if short_pct:
+            funda_lines.append(f"空売り比率: {short_pct:.1%}")
+    funda_text = "\n".join(funda_lines) if funda_lines else "取得不可"
 
-    if is_pb:
-        prompt = f"""あなたはプロの株式アナリストです。以下のMega ($200B+) 銘柄は52W高値まであと{abs(dist_pct):.1f}%です。
-ブレイクアウトのカタリストとなりうる要因を最新ニュースから分析してください。
+    # セクタープロファイル
+    sp = SECTOR_PROFILES.get(sector, {})
+    sector_text = ""
+    if sp:
+        sector_text = f"セクター: {sector} ({sp.get('tag', '')}, 過去EV{sp.get('ev', 0):+.1f}%, 勝率{sp.get('wr', 0):.0f}%)"
 
-■ 企業情報
+    signal_type = "確定BO（52W高値更新）" if is_bo else f"PB候補（52W高値まであと{abs(dist_pct):.1f}%）"
+
+    prompt = f"""あなたはプロの株式アナリスト兼トレーダーです。
+以下のMega Cap銘柄について、最新ニュース・業界動向・アナリストレポートをWeb検索で調べ、
+**この銘柄に今エントリーすべきか**を総合判断してください。
+
+━━━ 銘柄情報 ━━━
 銘柄: {ticker} ({name})
 業種: {industry}
-事業概要: {summary[:150] if summary else "N/A"}
+事業概要: {summary[:200] if summary else "N/A"}
 時価総額: ${mcap_b:,.0f}B
+シグナル: {signal_type}
 
-■ テクニカルデータ
+━━━ テクニカル指標 ━━━
 現在値: ${close:,.2f}
 52W高値: ${high_52w:,.2f} (距離: {dist_pct:+.1f}%)
-SMA200上方: {"はい" if above_sma200 else "いいえ"}
-
-■ 出力フォーマット（日本語、合計200字以内）
-**BO触媒候補**: ブレイクアウトのきっかけになりうる材料（決算・ニュース・業界動向）を2-3行
-**リスク**: 今後の懸念材料（1行）"""
-    else:
-        prompt = f"""あなたはプロの株式アナリストです。以下のMega ($200B+) 銘柄が52W高値を更新（確定BO）しました。
-最新ニュース・業界動向を踏まえ、「今エントリーすべきか」を判断してください。
-
-■ 企業情報
-銘柄: {ticker} ({name})
-業種: {industry}
-事業概要: {summary[:150] if summary else "N/A"}
-時価総額: ${mcap_b:,.0f}B
-
-■ テクニカルデータ
-現在値: ${close:,.2f} (52W高値更新)
-RSI: {rsi:.1f}
-出来高倍率: {vol_ratio:.1f}x
+RSI(14): {rsi:.1f}
+出来高倍率(20日平均比): {vol_ratio:.1f}x
 SMA20: ${sma20:,.2f} / SMA50: ${sma50:,.2f} / SMA200: ${sma200:,.2f}
 SMA200乖離: {sma200_gap:+.0f}%
-GC (SMA20>50): {"はい" if gc else "いいえ"}
+GC (SMA20>SMA50): {"済" if gc else "未"}
+SMA200上方: {"はい" if above_sma200 else "いいえ"}
+SL(損切り): ${sl:,.2f} (-20%)
+TP(利確): ${tp:,.2f} (+40%)
 
-■ 出力フォーマット（日本語、合計300字以内）
-**上昇の背景**: なぜ今52W高値を更新したか（材料・ニュース・業界動向）2-3行
-**エントリー判断**: 今買うべきか。過熱リスク・追撃リスクを考慮して1-2行
-**リスク**: RSI{rsi:.0f}、SMA200乖離{sma200_gap:+.0f}%を踏まえた懸念（1行）"""
+━━━ ファンダメンタルズ ━━━
+{funda_text}
+
+━━━ {sector_text} ━━━
+
+━━━ 過去のバックテスト統計 (SL-20%/TP+40%, 60日) ━━━
+{bt_context if bt_context else "データなし"}
+
+━━━ 出力フォーマット（日本語） ━━━
+
+### 株価推移の背景
+なぜ今この株価水準にあるのか。直近の決算内容、業界ニュース、マクロ要因、
+カタリストとなった材料を具体的に3-5行で解説。
+
+### アナリスト評価
+主要アナリストの目標株価・レーティング、コンセンサス予想との比較。
+現在値が目標株価を上回っている/下回っている場合はその意味を解説。2-3行。
+
+### エントリー判断
+上記すべて（テクニカル・ファンダ・BT統計・ニュース）を踏まえた総合判断。
+「買い」「見送り」「押し目待ち」のいずれかを明確に結論し、その理由を述べる。
+具体的な推奨エントリー価格帯があれば記載。3-4行。
+
+### リスク要因
+この銘柄固有のリスクと、現在のテクニカル状況から見た注意点を2-3行。"""
 
     try:
         response = client.models.generate_content(
@@ -794,6 +835,29 @@ GC (SMA20>50): {"はい" if gc else "いいえ"}
         return result
     except Exception as e:
         return f"(分析エラー: {e})"
+
+
+def analyze_breakout_factors(ticker: str, name: str, industry: str,
+                             close: float, high_52w: float, dist_pct: float,
+                             rsi: float, vol_ratio: float, gc: bool,
+                             sma20: float, sma50: float, sma200: float,
+                             mcap_b: float, above_sma200: bool,
+                             summary: str = "", is_pb: bool = True) -> str:
+    """後方互換用ラッパー（US Detailページから呼ばれる）。"""
+    funda = _fetch_fundamentals(ticker)
+    bt_context = _build_bt_context(rsi, gc)
+    sma200_gap = (close / sma200 - 1) * 100 if sma200 > 0 else 0
+    sl = close * (1 + MEGA_STOP_LOSS)
+    tp = close * (1 + MEGA_PROFIT_TARGET)
+    return _generate_comprehensive_analysis(
+        ticker=ticker, name=name, industry=industry, summary=summary,
+        mcap_b=mcap_b, sector="",
+        close=close, high_52w=high_52w, dist_pct=dist_pct,
+        rsi=rsi, vol_ratio=vol_ratio, gc=gc,
+        sma20=sma20, sma50=sma50, sma200=sma200,
+        sma200_gap=sma200_gap, above_sma200=above_sma200,
+        sl=sl, tp=tp, funda=funda, bt_context=bt_context, is_bo=(not is_pb),
+    )
 
 
 @st.cache_data(ttl=300)
@@ -1377,33 +1441,27 @@ def render_ticker_detail(df_tech: pd.DataFrame, universe: list[dict], company_in
         for f in flags:
             st.warning(f":warning: {f}")
 
-    # ── AI Analysis ──
+    # ── AI Analysis (comprehensive) ──
     if os.getenv("GOOGLE_API_KEY"):
         if is_bo:
             st.success("**確定BO: BT勝率85% EV+11.3%. 翌日寄り成行買い.**")
-            with st.expander("AI分析: エントリー判断", expanded=True):
-                analysis = analyze_breakout_factors(
-                    selected, meta.get("name", ""), industry, row["close"],
-                    row["high_52w"], row["dist_pct"], row["rsi"], row["vol_ratio"],
-                    row["gc"], row["sma20"], row["sma50"], row["sma200"],
-                    mcap_b, row["above_sma200"], summary, is_pb=False,
-                )
-                if analysis:
-                    st.markdown(analysis)
-                else:
-                    st.caption("分析を取得できませんでした")
-        else:
-            with st.expander("AI分析: BO触媒候補", expanded=True):
-                analysis = analyze_breakout_factors(
-                    selected, meta.get("name", ""), industry, row["close"],
-                    row["high_52w"], row["dist_pct"], row["rsi"], row["vol_ratio"],
-                    row["gc"], row["sma20"], row["sma50"], row["sma200"],
-                    mcap_b, row["above_sma200"], summary, is_pb=True,
-                )
-                if analysis:
-                    st.markdown(analysis)
-                else:
-                    st.caption("分析を取得できませんでした")
+        funda = _fetch_fundamentals(selected)
+        bt_context = _build_bt_context(rsi, gc_ok)
+        sma200_gap_val = (row["close"] / row["sma200"] - 1) * 100 if row.get("sma200") and row["sma200"] > 0 else 0
+        with st.expander("AI統合分析", expanded=True):
+            analysis = _generate_comprehensive_analysis(
+                ticker=selected, name=meta.get("name", ""), industry=industry,
+                summary=summary, mcap_b=mcap_b, sector=sector,
+                close=row["close"], high_52w=row["high_52w"], dist_pct=row["dist_pct"],
+                rsi=rsi, vol_ratio=vol_ratio, gc=gc_ok,
+                sma20=row["sma20"], sma50=row["sma50"], sma200=row["sma200"],
+                sma200_gap=sma200_gap_val, above_sma200=row["above_sma200"],
+                sl=sl, tp=tp, funda=funda, bt_context=bt_context, is_bo=is_bo,
+            )
+            if analysis:
+                st.markdown(analysis)
+            else:
+                st.caption("分析を取得できませんでした")
 
     # ── Chart ──
     chart_data = fetch_ticker_chart(selected, period="1y")
