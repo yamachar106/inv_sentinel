@@ -4,10 +4,12 @@ JP MEGA ¥1兆+ S/Aスコアリング ダッシュボードページ
 3ページ構成:
 - Scoreboard: S/A銘柄の総合スコア一覧（リアルタイム）
 - Ranking: 地力スコアランキング + ランク分布
-- Detail: 個別銘柄のスコア内訳 + チャート
+- Detail: 個別銘柄のスコア内訳 + チャート + AI分析
 """
 
 import json
+import os
+import time
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -203,6 +205,141 @@ def _format_mcap_jpy(mcap: float) -> str:
     return ""
 
 
+JP_AI_CACHE = ROOT / "data" / "cache" / "mega_jp_ai_analysis.json"
+
+
+def _load_jp_ai_cache() -> dict:
+    if JP_AI_CACHE.exists():
+        try:
+            data = json.loads(JP_AI_CACHE.read_text(encoding="utf-8"))
+            if data.get("_date") == datetime.now().date().isoformat():
+                return data.get("analyses", {})
+        except (json.JSONDecodeError, ValueError):
+            pass
+    return {}
+
+
+def _save_jp_ai_cache(analyses: dict) -> None:
+    JP_AI_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    data = {"_date": datetime.now().date().isoformat(), "analyses": analyses}
+    JP_AI_CACHE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _generate_jp_analysis(
+    code: str, name: str,
+    close: float, high_52w: float, dist_pct: float,
+    rsi: float, vol_ratio: float, gc: bool,
+    sma200: float, above_sma200: bool,
+    strength_score: float, strength_rank: str,
+    timing_score: float, total_score: float, total_rank: str,
+    bt_ev: float, bt_wr: float, bt_pf: float, bt_n: int,
+    bear_ev: float, mcap: float,
+    sl_price: float, tp_price: float,
+) -> str:
+    """JP MEGA銘柄のGemini AI分析レポートを生成"""
+    cache_key = code
+    cache = _load_jp_ai_cache()
+    if cache_key in cache:
+        return cache[cache_key]
+
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        try:
+            api_key = st.secrets["GOOGLE_API_KEY"]
+        except (KeyError, FileNotFoundError):
+            return ""
+    if not api_key:
+        return ""
+
+    try:
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=api_key)
+    except Exception:
+        return ""
+
+    mcap_text = _format_mcap_jpy(mcap)
+    sma200_gap = (close / sma200 - 1) * 100 if sma200 and sma200 > 0 else 0
+
+    prompt = f"""あなたはプロの日本株アナリスト兼トレーダーです。
+以下のJP MEGA銘柄（時価総額¥1兆+）について、最新ニュース・業界動向・アナリストレポートをWeb検索で調べ、
+**この銘柄に今エントリーすべきか**を総合判断してください。
+
+━━━ 銘柄情報 ━━━
+銘柄: {code} ({name})
+時価総額: {mcap_text}
+
+━━━ テクニカル指標 ━━━
+現在値: ¥{close:,.0f}
+52W高値: ¥{high_52w:,.0f} (距離: {dist_pct:+.1f}%)
+RSI(14): {rsi:.1f}
+出来高倍率(50日平均比): {vol_ratio:.1f}x
+SMA200: ¥{sma200:,.0f} (乖離: {sma200_gap:+.0f}%)
+GC (SMA20>SMA50): {"済" if gc else "未"}
+SMA200上方: {"はい" if above_sma200 else "いいえ"}
+SL(損切り-20%): ¥{sl_price:,.0f}
+TP(利確+40%): ¥{tp_price:,.0f}
+
+━━━ スコアリング ━━━
+総合ランク: {total_rank} ({total_score:.0f}pt)
+地力ランク: {strength_rank} ({strength_score:.0f}pt) — 10年BT検証ベース
+タイミング: {timing_score:.0f}pt
+
+━━━ バックテスト実績 (SL-20%/TP+40%, 60日) ━━━
+EV: {bt_ev:+.1f}%, 勝率: {bt_wr:.0f}%, PF: {bt_pf:.2f}, n={bt_n}
+BEAR期EV: {bear_ev:+.1f}%
+
+━━━ 出力フォーマット（日本語） ━━━
+
+### 株価推移の背景
+なぜ今この株価水準にあるのか。直近の決算内容、業界ニュース、マクロ要因、
+カタリストとなった材料を具体的に3-5行で解説。
+
+### アナリスト評価
+主要アナリストの目標株価・レーティング、コンセンサス予想との比較。2-3行。
+
+### エントリー判断
+テクニカル・ファンダ・BT統計・ニュースを踏まえた総合判断。
+「買い」「見送り」「押し目待ち」のいずれかを明確に結論し、その理由を述べる。3-4行。
+
+### リスク要因
+この銘柄固有のリスクと、現在のテクニカル状況から見た注意点を2-3行。"""
+
+    last_err = None
+    for attempt in range(3):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    tools=[types.Tool(google_search=types.GoogleSearch())],
+                ),
+            )
+            try:
+                result = response.text or ""
+            except Exception:
+                result = ""
+                try:
+                    candidates = response.candidates or []
+                    if candidates:
+                        parts = candidates[0].content.parts or []
+                        result = "\n".join(p.text for p in parts if hasattr(p, "text") and p.text)
+                except Exception:
+                    pass
+            result = result.strip()
+            if result:
+                cache[cache_key] = result
+                _save_jp_ai_cache(cache)
+                return result
+        except Exception as e:
+            last_err = e
+            if "503" in str(e) and attempt < 2:
+                time.sleep(3 * (attempt + 1))
+                continue
+            break
+    return "(Gemini一時障害中。しばらく待ってリロードしてください)"
+
+
 def _build_scoreboard_data(
     strength_data: dict, prices: dict, names: dict | None = None,
 ) -> pd.DataFrame:
@@ -369,6 +506,8 @@ def render_jp_scoreboard():
 
             # Col 1: コード + 社名 + ランク
             with cols[0]:
+                strength_rank = row['地力ランク']
+                sr_color = RANK_COLORS.get(strength_rank, "#6b7280")
                 st.markdown(
                     f"<span style='font-size:1.3em;font-weight:bold;opacity:{opacity}'>"
                     f"<span style='color:{color}'>[{rank}]</span> {row['コード']}"
@@ -376,7 +515,12 @@ def render_jp_scoreboard():
                     unsafe_allow_html=True,
                 )
                 st.caption(f"{name}")
-                st.caption(f"地力{row['地力ランク']} | {_format_mcap_jpy(row['時価総額'])}")
+                st.markdown(
+                    f"<small>総合<span style='color:{color};font-weight:bold'>{rank}</span> "
+                    f"(地力<span style='color:{sr_color}'>{strength_rank}</span>+タイミング) "
+                    f"| {_format_mcap_jpy(row['時価総額'])}</small>",
+                    unsafe_allow_html=True,
+                )
 
             # Col 2: スコア
             with cols[1]:
@@ -683,12 +827,16 @@ def render_jp_detail():
     # ─── ヘッダー ───
     rank_color = RANK_COLORS.get(total_rank, "#6b7280")
     strength_rank = info.get("rank", "?")
+    sr_color = RANK_COLORS.get(strength_rank, "#6b7280")
 
     st.markdown(
-        f"## <span style='color:{rank_color}'>[{total_rank}]</span> {selected_code} {company_name} "
-        f"<span style='font-size:0.6em;color:#666'>"
-        f"地力{strength_rank} | {_format_mcap_jpy(info.get('mcap', 0))}</span>",
+        f"## <span style='color:{rank_color}'>総合[{total_rank}]</span> {selected_code} {company_name}",
         unsafe_allow_html=True,
+    )
+    st.caption(
+        f"総合ランク **{total_rank}** = 地力 **{strength_rank}** ({info.get('strength_score', 0):.0f}pt) × 40% "
+        f"+ タイミング ({timing['score']:.0f}pt) × 60% "
+        f"→ **{total:.0f}pt** | {_format_mcap_jpy(info.get('mcap', 0))}"
     )
 
     # ─── スコアサマリー ───
@@ -884,3 +1032,45 @@ def render_jp_detail():
             yaxis_title="¥",
         )
         st.plotly_chart(fig_chart, use_container_width=True)
+
+    # ─── AI分析レポート ───
+    st.divider()
+    st.subheader("AI分析レポート")
+
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        try:
+            api_key = st.secrets["GOOGLE_API_KEY"]
+        except (KeyError, FileNotFoundError):
+            pass
+
+    if api_key:
+        analysis = _generate_jp_analysis(
+            code=selected_code,
+            name=company_name,
+            close=close,
+            high_52w=price_data.get("high_52w", 0),
+            dist_pct=price_data.get("dist_pct", 0),
+            rsi=price_data.get("rsi", 0),
+            vol_ratio=price_data.get("vol_ratio", 0),
+            gc=price_data.get("gc", False),
+            sma200=price_data.get("sma200", 0),
+            above_sma200=price_data.get("above_sma200", False),
+            strength_score=info.get("strength_score", 0),
+            strength_rank=strength_rank,
+            timing_score=timing["score"],
+            total_score=total,
+            total_rank=total_rank,
+            bt_ev=info.get("ev", 0),
+            bt_wr=info.get("wr", 0),
+            bt_pf=info.get("pf", 0),
+            bt_n=info.get("n", 0),
+            bear_ev=info.get("bear_ev", 0),
+            mcap=info.get("mcap", 0),
+            sl_price=sl_price if close else 0,
+            tp_price=tp_price if close else 0,
+        )
+        if analysis:
+            st.markdown(analysis)
+    else:
+        st.caption("GOOGLE_API_KEY未設定のためAI分析は利用不可")
