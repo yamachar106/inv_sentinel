@@ -114,9 +114,23 @@ def load_mega_universe() -> list[dict]:
 COMPANY_INFO_CACHE = ROOT / "data" / "cache" / "mega_company_info.json"
 
 
+def _get_google_api_key() -> str | None:
+    """GOOGLE_API_KEYを環境変数 → st.secrets の順で取得"""
+    key = os.getenv("GOOGLE_API_KEY")
+    if key:
+        return key
+    try:
+        key = st.secrets.get("GOOGLE_API_KEY")
+        if key:
+            return key
+    except Exception:
+        pass
+    return None
+
+
 def _get_gemini_client():
     """Gemini クライアントを取得（APIキー未設定ならNone）"""
-    api_key = os.getenv("GOOGLE_API_KEY")
+    api_key = _get_google_api_key()
     if not api_key:
         return None
     try:
@@ -660,7 +674,7 @@ def _render_full_analysis(
     funda = _fetch_fundamentals(ticker)
     bt_context = _build_bt_context(rsi, gc_ok)
 
-    if os.getenv("GOOGLE_API_KEY"):
+    if _get_google_api_key():
         analysis = _generate_comprehensive_analysis(
             ticker=ticker, name=meta.get("name", ""), industry=industry,
             summary=summary, mcap_b=mcap_b, sector=sector,
@@ -1442,7 +1456,7 @@ def render_ticker_detail(df_tech: pd.DataFrame, universe: list[dict], company_in
             st.warning(f":warning: {f}")
 
     # ── AI Analysis (comprehensive) ──
-    if os.getenv("GOOGLE_API_KEY"):
+    if _get_google_api_key():
         if is_bo:
             st.success("**確定BO: BT勝率85% EV+11.3%. 翌日寄り成行買い.**")
         funda = _fetch_fundamentals(selected)
