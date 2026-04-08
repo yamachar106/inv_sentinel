@@ -68,7 +68,7 @@ env:
 jobs:
   daily-run:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
       - name: Checkout repository
@@ -149,11 +149,17 @@ jobs:
           echo "Running: python daily_run.py ${{ steps.params.outputs.args }}"
           python daily_run.py ${{ steps.params.outputs.args }}
 
+      - name: Refresh dashboard cache
+        if: steps.params.outputs.trigger != 'schedule-jp'
+        run: |
+          echo "Refreshing MEGA dashboard cache..."
+          python dashboard/refresh_cache.py || echo "Cache refresh failed (non-critical)"
+
       - name: Commit signal history
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          for dir in data/signals data/universe data/watchlist; do
+          for dir in data/signals data/universe data/watchlist data/cache; do
             [ -d "$dir" ] && git add "$dir/"
           done
           if git diff --cached --quiet; then
