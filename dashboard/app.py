@@ -38,6 +38,8 @@ except Exception:
 from screener.config import (
     MEGA_THRESHOLD_US, MEGA_STOP_LOSS, MEGA_PROFIT_TARGET,
 )
+from screener.performance import compute_stats as _compute_perf_stats
+from screener.portfolio import load_portfolio
 
 # ページ設定
 st.set_page_config(
@@ -428,7 +430,8 @@ def load_daily_signals() -> list[dict]:
         if path.exists():
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
-                enriched = data.get("enriched", {}).get("breakout:US", [])
+                enriched_map = data.get("enriched", {})
+                enriched = enriched_map.get("mega:US", enriched_map.get("breakout:US", []))
                 for s in enriched:
                     mcap = s.get("market_cap", 0) or 0
                     if mcap >= MEGA_THRESHOLD_US:
@@ -1158,6 +1161,60 @@ def render_todays_action(df_tech: pd.DataFrame, universe: list[dict], company_in
 
 # ─── Page 2: Performance ─────────────────────────────
 
+def _load_signal_cumulative_stats() -> dict:
+    """全シグナルファイルからUS/JP累計統計を算出"""
+    signals_dir = ROOT / "data" / "signals"
+    empty = {
+        "total_days": 0,
+        "us": {"bo": 0, "pb": 0, "unique_bo": set(), "unique_pb": set()},
+        "jp": {"total": 0, "s_rank": 0, "a_rank": 0, "bo": 0, "unique": set()},
+    }
+    if not signals_dir.exists():
+        return empty
+
+    stats = json.loads(json.dumps({"total_days": 0}))  # simple counter
+    us = {"bo": 0, "pb": 0, "unique_bo": set(), "unique_pb": set()}
+    jp = {"total": 0, "s_rank": 0, "a_rank": 0, "bo": 0, "unique": set()}
+    total_days = 0
+
+    for f in sorted(signals_dir.glob("????-??-??.json")):
+        total_days += 1
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+            enriched_map = data.get("enriched", {})
+
+            # US: mega:US or breakout:US (全シグナル、Mega閾値なし)
+            us_enriched = enriched_map.get("mega:US", enriched_map.get("breakout:US", []))
+            for s in us_enriched:
+                sig = s.get("signal", "")
+                code = s.get("code", "")
+                if sig in ("breakout", "breakout_overheated"):
+                    us["bo"] += 1
+                    us["unique_bo"].add(code)
+                elif sig == "pre_breakout":
+                    us["pb"] += 1
+                    us["unique_pb"].add(code)
+
+            # JP: mega:JP
+            jp_enriched = enriched_map.get("mega:JP", [])
+            for s in jp_enriched:
+                code = s.get("code", "")
+                rank = s.get("total_rank", "")
+                bo_sig = s.get("bo_signal", "")
+                jp["total"] += 1
+                jp["unique"].add(code)
+                if rank == "S":
+                    jp["s_rank"] += 1
+                elif rank == "A":
+                    jp["a_rank"] += 1
+                if bo_sig in ("breakout", "pre_breakout"):
+                    jp["bo"] += 1
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    return {"total_days": total_days, "us": us, "jp": jp}
+
+
 def render_performance():
     st.header("\U0001f4c8 Performance (実績トラッキング)")
 
@@ -1169,10 +1226,7 @@ def render_performance():
     records = load_daily_signals()
     bo_records = [r for r in records if r.get("signal") in ("breakout", "breakout_overheated")]
 
-    # ── Top: Key Metrics ──
-    # Calculate actual performance (placeholder until we have exit data)
-    # For now, show system uptime and BT comparison
-    first_signal_date = get_latest_pipeline_date()  # approximate
+    # ── System uptime ──
     signals_dir = ROOT / "data" / "signals"
     all_dates = []
     if signals_dir.exists():
@@ -1185,22 +1239,98 @@ def render_performance():
     else:
         uptime_days = 0
 
-    col1, col2, col3, col4 = st.columns(4)
+    # ═══ Section 1: Live Trade Performance ═══
+    perf_stats = _compute_perf_stats()
+    portfolio = load_portfolio()
+    positions = portfolio.get("positions", {})
 
-    # Until we have actual trade exits, show BT targets
+    st.subheader("Live Performance (実トレード)")
+    if perf_stats["total_trades"] > 0:
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric("勝率", f"{perf_stats['win_rate']:.1%}")
+        c2.metric("PF", f"{perf_stats['profit_factor']:.2f}" if perf_stats['profit_factor'] != float('inf') else "INF")
+        c3.metric("平均リターン", f"{perf_stats['avg_return']:+.1%}")
+        c4.metric("総損益", f"{perf_stats['total_profit']:+,.0f}")
+        c5.metric("トレード数", f"{perf_stats['total_trades']} ({perf_stats['wins']}W/{perf_stats['losses']}L)")
+
+        col_bw1, col_bw2 = st.columns(2)
+        best = perf_stats.get("best_trade", {})
+        worst = perf_stats.get("worst_trade", {})
+        if best:
+            col_bw1.success(f"Best: {best.get('code','')} {best.get('return_pct',0):+.1%} ({best.get('sell_reason','')})")
+        if worst:
+            col_bw2.error(f"Worst: {worst.get('code','')} {worst.get('return_pct',0):+.1%} ({worst.get('sell_reason','')})")
+    else:
+        st.info("決済済みトレードなし — ポジションクローズ時に自動記録されます")
+
+    st.markdown("---")
+
+    # ═══ Section 2: Open Positions ═══
+    st.subheader(f"Open Positions ({len(positions)})")
+    if positions:
+        pos_rows = []
+        for code, pos in positions.items():
+            pos_rows.append({
+                "Code": code,
+                "Strategy": pos.get("strategy", ""),
+                "Market": pos.get("market", ""),
+                "Buy Date": pos.get("buy_date", ""),
+                "Buy Price": pos.get("buy_price", 0),
+                "Shares": pos.get("shares", 0),
+                "Peak": pos.get("peak_price", 0),
+                "Notes": pos.get("notes", ""),
+            })
+        df_pos = pd.DataFrame(pos_rows)
+        st.dataframe(df_pos, use_container_width=True, hide_index=True)
+    else:
+        st.info("保有ポジションなし — `python -m screener.portfolio add` で追加")
+
+    st.markdown("---")
+
+    # ═══ Section 3: BT Baseline + System Metrics ═══
+    st.subheader("System Metrics")
+    col1, col2, col3, col4 = st.columns(4)
     col1.metric("BT勝率 (BO)", f"{BT_WR:.0f}%", help="バックテスト確認済み")
     col2.metric("BT EV (BO)", f"+{BT_EV:.1f}%", help="バックテスト確認済み")
     col3.metric("システム稼働", f"{uptime_days}日")
 
-    # Confidence bar based on sample size
     n_bo_signals = len(bo_records)
-    # Need ~20+ BO events for statistical confidence
     confidence = min(100, int(n_bo_signals / 20 * 100))
     col4.metric("BO検出数 (30日)", n_bo_signals)
 
     st.progress(confidence / 100, text=f"確信度: {confidence}% (BO {n_bo_signals}/20件で統計的有意)")
 
-    # ── Middle: BO Signal History ──
+    # ═══ Section 4: Cumulative Signal Stats ═══
+    cum_stats = _load_signal_cumulative_stats()
+    st.markdown("---")
+    st.subheader("Signal Cumulative Stats (全期間)")
+    us = cum_stats["us"]
+    jp = cum_stats["jp"]
+
+    # US row
+    st.caption("US Mega")
+    uc1, uc2, uc3, uc4, uc5 = st.columns(5)
+    uc1.metric("稼働日数", cum_stats["total_days"])
+    uc2.metric("US BO累計", us["bo"])
+    uc3.metric("US PB累計", us["pb"])
+    uc4.metric("US BO銘柄数", len(us["unique_bo"]))
+    uc5.metric("US PB銘柄数", len(us["unique_pb"]))
+
+    if us["unique_pb"]:
+        upgraded = us["unique_bo"] & us["unique_pb"]
+        upgrade_rate = len(upgraded) / len(us["unique_pb"])
+        st.caption(f"US PB→BO昇格率: {upgrade_rate:.0%} ({len(upgraded)}/{len(us['unique_pb'])})")
+
+    # JP row
+    st.caption("JP Mega (¥1兆+)")
+    jc1, jc2, jc3, jc4, jc5 = st.columns(5)
+    jc1.metric("JP シグナル累計", jp["total"])
+    jc2.metric("S評価", jp["s_rank"])
+    jc3.metric("A評価", jp["a_rank"])
+    jc4.metric("BO検出", jp["bo"])
+    jc5.metric("JP 銘柄数", len(jp["unique"]))
+
+    # ═══ Section 5: BO Signal History (30日) ═══
     st.markdown("---")
     st.subheader("BO Signal History (30日間)")
 
@@ -1210,7 +1340,6 @@ def render_performance():
         df_bo = pd.DataFrame(bo_records)
         df_bo = df_bo.sort_values("date", ascending=False)
 
-        # Add sector tag
         df_bo["sector_tag"] = df_bo["sector"].map(lambda s: _get_sector_tag(s))
 
         display_cols = ["date", "ticker", "name", "sector_tag", "close", "volume_ratio"]
@@ -1226,7 +1355,7 @@ def render_performance():
             hide_index=True,
         )
 
-    # Also show PB signals
+    # PB signals
     pb_records = [r for r in records if r.get("signal") == "pre_breakout"]
     if pb_records:
         st.subheader("PB Signal History (30日間)")
@@ -1240,7 +1369,7 @@ def render_performance():
             hide_index=True,
         )
 
-    # ── Bottom: BT Sector Performance Bubble Chart ──
+    # ═══ Section 6: BT Sector Performance Bubble Chart ═══
     st.markdown("---")
     st.subheader("セクター別パフォーマンス (BT)")
 
@@ -1281,7 +1410,6 @@ def render_performance():
             ),
         ))
 
-    # Add zero line
     fig.add_hline(y=0, line_dash="dash", line_color="#64748b", opacity=0.5)
     fig.add_vline(x=50, line_dash="dash", line_color="#64748b", opacity=0.5)
 

@@ -346,6 +346,14 @@ def main():
             _send_slack(webhook, digest)
             print("ダイジェスト通知完了")
 
+    # ---- ダッシュボードキャッシュ更新 ----
+    print("\n[10] ダッシュボードキャッシュ更新")
+    try:
+        from dashboard.refresh_cache import main as refresh_cache_main
+        refresh_cache_main()
+    except Exception as e:
+        print(f"  [WARN] キャッシュ更新失敗: {e}")
+
 
 if __name__ == "__main__":
     main()
