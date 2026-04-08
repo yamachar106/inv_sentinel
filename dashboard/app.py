@@ -253,6 +253,17 @@ def _logo_html(logo_url: str, size: int = 32) -> str:
 TECHNICALS_CACHE = ROOT / "data" / "cache" / "mega_technicals.json"
 
 
+def _get_technicals_cache_date() -> str:
+    """キャッシュの日付を返す"""
+    if TECHNICALS_CACHE.exists():
+        try:
+            data = json.loads(TECHNICALS_CACHE.read_text(encoding="utf-8"))
+            return data.get("_date", "")
+        except (json.JSONDecodeError, ValueError):
+            pass
+    return ""
+
+
 def _load_technicals_cache() -> pd.DataFrame | None:
     """プリビルドキャッシュからテクニカルデータをロード（当日のみ有効）"""
     if TECHNICALS_CACHE.exists():
@@ -275,6 +286,7 @@ def fetch_technicals(tickers: list[str]) -> pd.DataFrame:
     # プリキャッシュ優先（refresh_cache.pyで事前構築）
     cached = _load_technicals_cache()
     if cached is not None:
+        st.session_state["tech_data_date"] = _get_technicals_cache_date()
         return cached
 
     if not tickers:
@@ -284,6 +296,10 @@ def fetch_technicals(tickers: list[str]) -> pd.DataFrame:
     data = yf.download(tickers, period="1y", progress=False, threads=True)
     if data.empty:
         return pd.DataFrame()
+
+    # データの最終日付を記録
+    last_date = data.index[-1]
+    st.session_state["tech_data_date"] = str(last_date.date()) if hasattr(last_date, 'date') else str(last_date)[:10]
 
     rows = []
     for ticker in tickers:
@@ -507,6 +523,14 @@ def render_sidebar():
     # radioの選択をsession_stateに同期
     if PAGES.index(page) != st.session_state.get("page", 0):
         st.session_state["page"] = PAGES.index(page)
+
+    st.sidebar.divider()
+
+    # データ日時表示
+    data_date = st.session_state.get("tech_data_date", "")
+    if data_date:
+        st.sidebar.caption(f"Price data: {data_date}")
+    st.sidebar.caption(f"Updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 
     st.sidebar.divider()
     st.sidebar.markdown(
