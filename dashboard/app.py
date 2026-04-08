@@ -72,10 +72,13 @@ MONTHLY_STATS = {
 }
 
 PAGES = [
-    "\U0001f3af Today's Action",
-    "\U0001f4c8 Performance",
-    "\U0001f50d Ticker Detail",
-    "\U0001f5fa Sector Map",
+    "\U0001f3af US Action",
+    "\U0001f4c8 US Performance",
+    "\U0001f50d US Detail",
+    "\U0001f5fa US Sector",
+    "\U0001f3ef JP Scoreboard",
+    "\U0001f4ca JP Ranking",
+    "\U0001f50d JP Detail",
 ]
 
 
@@ -541,7 +544,7 @@ def fetch_ticker_chart(ticker: str, period: str = "6mo") -> pd.DataFrame:
 def _navigate_to_detail(ticker: str):
     """PipelineからTicker Detailへ遷移"""
     st.session_state["detail_ticker"] = ticker
-    st.session_state["page"] = PAGES.index("\U0001f50d Ticker Detail")
+    st.session_state["page"] = PAGES.index("\U0001f50d US Detail")
 
 
 def _get_sector_tag(sector: str) -> str:
@@ -554,15 +557,23 @@ def _get_sector_tag(sector: str) -> str:
 
 def render_sidebar():
     st.sidebar.title("\U0001f451 MEGA-BreakOut")
-    st.sidebar.caption("Pipeline Visibility + Performance Tracker")
+    st.sidebar.caption("US $200B+ BO × JP ¥1兆+ S/A 並走戦略")
     st.sidebar.divider()
 
     default_idx = st.session_state.get("page", 0)
+
+    # US / JP グループ表示
+    st.sidebar.markdown("**🇺🇸 US MEGA**")
+    us_pages = [p for p in PAGES if "US" in p]
+    st.sidebar.markdown("**🇯🇵 JP MEGA**")
+    jp_pages = [p for p in PAGES if "JP" in p]
+
     page = st.sidebar.radio(
         "ページ",
         PAGES,
         index=default_idx,
         label_visibility="collapsed",
+        format_func=lambda p: p,
     )
     selected_idx = PAGES.index(page)
     if selected_idx != default_idx:
@@ -573,27 +584,42 @@ def render_sidebar():
     # データ日時
     data_date = st.session_state.get("tech_data_date", "")
     if data_date:
-        st.sidebar.caption(f"Price data: {data_date}")
+        st.sidebar.caption(f"US Price data: {data_date}")
     st.sidebar.caption(f"Updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 
-    # 季節インジケーター
+    # 季節インジケーター（US/JP切り替え）
     month = datetime.now().month
-    m_stats = MONTHLY_STATS.get(month, {})
-    ev = m_stats.get("ev", 0)
-    wr = m_stats.get("wr", 0)
-    ev_color = "green" if ev > 0 else "red"
-    st.sidebar.markdown(
-        f"**{month}月の過去実績**: "
-        f"EV :{ev_color}[{ev:+.1f}%] / 勝率 {wr:.0f}%"
-    )
-
-    st.sidebar.divider()
-    st.sidebar.markdown(
-        "**BT実績 (641件)**\n"
-        "- BO: 勝率85% EV+11.3%\n"
-        "- 全体: 勝率65% EV+5.12%\n"
-        "- SL-20%/TP+40%"
-    )
+    is_jp_page = "JP" in page
+    if is_jp_page:
+        from dashboard.jp_pages import JP_MONTHLY_STATS
+        jp_ev = JP_MONTHLY_STATS.get(month, 0)
+        ev_color = "green" if jp_ev > 0 else "red"
+        st.sidebar.markdown(
+            f"**{month}月 JP過去EV**: :{ev_color}[{jp_ev:+.1f}%]"
+        )
+        st.sidebar.divider()
+        st.sidebar.markdown(
+            "**JP BT実績 (S/A)**\n"
+            "- EV+7.13% 勝率69.2%\n"
+            "- PF 3.70\n"
+            "- SL-20%/TP+40%"
+        )
+    else:
+        m_stats = MONTHLY_STATS.get(month, {})
+        ev = m_stats.get("ev", 0)
+        wr = m_stats.get("wr", 0)
+        ev_color = "green" if ev > 0 else "red"
+        st.sidebar.markdown(
+            f"**{month}月の過去実績**: "
+            f"EV :{ev_color}[{ev:+.1f}%] / 勝率 {wr:.0f}%"
+        )
+        st.sidebar.divider()
+        st.sidebar.markdown(
+            "**US BT実績 (641件)**\n"
+            "- BO: 勝率85% EV+11.3%\n"
+            "- 全体: 勝率65% EV+5.12%\n"
+            "- SL-20%/TP+40%"
+        )
     return page
 
 
@@ -1327,19 +1353,32 @@ def render_sector_map(df_tech: pd.DataFrame, universe: list[dict]):
 def main():
     page = render_sidebar()
 
-    # データロード
+    # ─── JP ページ ───
+    if "JP" in page:
+        from dashboard.jp_pages import (
+            render_jp_scoreboard, render_jp_ranking, render_jp_detail,
+        )
+        if page == "\U0001f3ef JP Scoreboard":
+            render_jp_scoreboard()
+        elif page == "\U0001f4ca JP Ranking":
+            render_jp_ranking()
+        elif page == "\U0001f50d JP Detail":
+            render_jp_detail()
+        return
+
+    # ─── US ページ ───
     with st.spinner("Megaユニバースを読み込み中..."):
         universe = load_mega_universe()
         tickers = [s["symbol"] for s in universe]
 
     needs_tech = page in (
-        "\U0001f3af Today's Action",
-        "\U0001f50d Ticker Detail",
-        "\U0001f5fa Sector Map",
+        "\U0001f3af US Action",
+        "\U0001f50d US Detail",
+        "\U0001f5fa US Sector",
     )
     needs_company_info = page in (
-        "\U0001f3af Today's Action",
-        "\U0001f50d Ticker Detail",
+        "\U0001f3af US Action",
+        "\U0001f50d US Detail",
     )
 
     df_tech = pd.DataFrame()
@@ -1352,16 +1391,16 @@ def main():
     if needs_company_info:
         company_info = fetch_company_info(tickers)
 
-    if page == "\U0001f3af Today's Action":
+    if page == "\U0001f3af US Action":
         render_todays_action(df_tech, universe, company_info)
 
-    elif page == "\U0001f4c8 Performance":
+    elif page == "\U0001f4c8 US Performance":
         render_performance()
 
-    elif page == "\U0001f50d Ticker Detail":
+    elif page == "\U0001f50d US Detail":
         render_ticker_detail(df_tech, universe, company_info)
 
-    elif page == "\U0001f5fa Sector Map":
+    elif page == "\U0001f5fa US Sector":
         render_sector_map(df_tech, universe)
 
 

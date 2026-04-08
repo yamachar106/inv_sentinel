@@ -20,6 +20,7 @@ from screener.config import (
     BREAKOUT_US_PRE_MIN_QUALITY,
     MEGA_THRESHOLD_US, MEGA_STOP_LOSS, MEGA_PROFIT_TARGET,
     MEGA_NOTIFY_ALSO_US_CHANNEL,
+    MEGA_JP_STOP_LOSS, MEGA_JP_PROFIT_TARGET,
 )
 
 
@@ -1045,6 +1046,169 @@ def _build_mega_us_summary(
             f"\u6b74\u4ee3\u52dd\u738785% | EV+11.3% | \u8a73\u7d30\u306fMega\u30c1\u30e3\u30f3\u30cd\u30eb\u3092\u78ba\u8a8d"
         )
     return f"\U0001f451 Mega PB: {', '.join(tickers)} \u2014 \u8a73\u7d30\u306fMega\u30c1\u30e3\u30f3\u30cd\u30eb"
+
+
+def _format_mcap_jpy(mcap: float) -> str:
+    """時価総額を読みやすい形式に変換 (¥1.2兆, ¥500億等)"""
+    if mcap >= 1_000_000_000_000:
+        return f"¥{mcap / 1_000_000_000_000:.1f}兆"
+    if mcap >= 100_000_000_000:
+        return f"¥{mcap / 100_000_000:,.0f}億"
+    return ""
+
+
+def notify_mega_jp(
+    signals: list[dict],
+    date_str: str,
+    regime_header: str | None = None,
+) -> bool:
+    """JP MEGA ¥1兆+ S/Aスコアリング通知を送信する。
+
+    signals は mega_jp.scan_mega_jp() の返却値。
+    """
+    if not signals:
+        return False
+
+    mega_url = _resolve_webhook_url("mega", "JP")
+    if not mega_url:
+        mega_url = _resolve_webhook_url()
+    if not mega_url:
+        print("[WARN] SLACK_WEBHOOK_URL が未設定のためJP Mega通知をスキップ")
+        return False
+
+    msg = _build_mega_jp_message(signals, date_str, regime_header)
+    return _send_slack(mega_url, msg)
+
+
+def _build_mega_jp_message(
+    signals: list[dict],
+    date_str: str,
+    regime_header: str | None = None,
+) -> str:
+    """JP MEGA S/Aスコアリング通知メッセージを構築"""
+    lines = [f"*🏯 JP MEGA ¥1兆+ S/Aスコアリング* ({date_str})"]
+
+    if regime_header:
+        lines.append(regime_header)
+
+    n_s = sum(1 for s in signals if s["total_rank"] == "S")
+    n_a = sum(1 for s in signals if s["total_rank"] == "A")
+    n_bo = sum(1 for s in signals if s.get("bo_signal") == "breakout")
+    n_pb = sum(1 for s in signals if s.get("bo_signal") == "pre_breakout")
+    lines.append(f"対象: S{n_s} A{n_a} | BO:{n_bo} PB:{n_pb} 監視:{len(signals)-n_bo-n_pb}\n")
+
+    # BO銘柄を先頭に
+    bo_signals = [s for s in signals if s.get("bo_signal") == "breakout"]
+    pb_signals = [s for s in signals if s.get("bo_signal") == "pre_breakout"]
+    watch_signals = [s for s in signals if s.get("bo_signal") not in ("breakout", "pre_breakout")]
+
+    if bo_signals:
+        lines.append("━" * 25)
+        lines.append("🚨 *確定BO — 翌日寄り成行買い*")
+        lines.append("━" * 25)
+        for s in bo_signals:
+            lines.extend(_format_mega_jp_signal(s))
+        lines.append("")
+
+    if pb_signals:
+        lines.append("👑 *Pre-Breakout — 監視継続*")
+        for s in pb_signals:
+            lines.extend(_format_mega_jp_signal(s, compact=True))
+        lines.append("")
+
+    if watch_signals:
+        lines.append("📊 *S/A監視銘柄*")
+        for s in watch_signals[:10]:  # 上位10銘柄まで
+            lines.extend(_format_mega_jp_signal(s, compact=True))
+        if len(watch_signals) > 10:
+            lines.append(f"  ...他{len(watch_signals)-10}銘柄")
+        lines.append("")
+
+    # BT実績
+    lines.append("*📈 歴代実績 (BT 10年)*")
+    lines.append("  S/A: 勝率69% | EV+7.1% | PF 3.70 | 年205回")
+    lines.append("  _BEAR年(2022)でもS/A EV+3.52%（黒字）_")
+
+    return "\n".join(lines)
+
+
+def _format_mega_jp_signal(signal: dict, compact: bool = False) -> list[str]:
+    """1銘柄分のシグナル行を生成"""
+    code = signal["code"]
+    close = signal.get("close", 0)
+    total = signal.get("total_score", 0)
+    total_rank = signal.get("total_rank", "?")
+    strength = signal.get("strength_score", 0)
+    strength_rank = signal.get("strength_rank", "?")
+    timing = signal.get("timing_score", 0)
+    mcap = signal.get("mcap", 0)
+    mcap_str = _format_mcap_jpy(mcap)
+    dist = signal.get("dist_pct", 0)
+    gc = signal.get("gc", False)
+    vol = signal.get("vol_ratio", 0)
+    rsi = signal.get("rsi", 0)
+
+    rank_emoji = {"S": "🟢", "A": "🟡", "B": "⚪", "C": "🔴"}.get(total_rank, "⚪")
+
+    lines = []
+
+    if compact:
+        gc_mark = "GC✓" if gc else ""
+        bo_tag = ""
+        if signal.get("bo_signal") == "pre_breakout":
+            bo_tag = " [PB]"
+        lines.append(
+            f"  {rank_emoji} *{code}* ¥{close:,.0f} | 総合{total:.0f}({total_rank}) "
+            f"地力{strength:.0f}({strength_rank}) | 高値{dist:+.1f}% {gc_mark} {mcap_str}{bo_tag}"
+        )
+    else:
+        lines.append(f"{rank_emoji} *{code}* ¥{close:,.0f} {mcap_str}")
+        lines.append(
+            f"  総合 *{total:.0f}* ({total_rank}) | "
+            f"地力 {strength:.0f}({strength_rank}) | "
+            f"タイミング {timing:.0f}"
+        )
+        # テクニカル
+        tech = []
+        if dist >= 0:
+            tech.append("🔥新高値突破")
+        else:
+            tech.append(f"高値まで{abs(dist):.1f}%")
+        tech.append(f"出来高 {vol:.1f}倍")
+        if rsi >= 75:
+            tech.append(f"RSI {rsi:.0f} (過熱)")
+        elif 40 <= rsi <= 65:
+            tech.append(f"RSI {rsi:.0f} (適温)")
+        else:
+            tech.append(f"RSI {rsi:.0f}")
+        if gc:
+            tech.append("GC✓(買いサイン)")
+        else:
+            tech.append("⚠️GCなし")
+        lines.append("  " + " | ".join(tech))
+
+        # BT実績
+        bt_ev = signal.get("bt_ev", 0)
+        bt_wr = signal.get("bt_wr", 0)
+        lines.append(f"  BT実績: EV{bt_ev:+.1f}% 勝率{bt_wr:.0f}%")
+
+        # SL/TP
+        sl_price = close * (1 + MEGA_JP_STOP_LOSS)
+        tp_price = close * (1 + MEGA_JP_PROFIT_TARGET)
+        lines.append(
+            f"  *推奨*: SL ¥{sl_price:,.0f} ({MEGA_JP_STOP_LOSS:+.0%}) | "
+            f"TP ¥{tp_price:,.0f} ({MEGA_JP_PROFIT_TARGET:+.0%})"
+        )
+
+        # リンク
+        lines.append(
+            f"  <https://finance.yahoo.co.jp/quote/{code}.T|Yahoo>"
+            f" | <https://irbank.net/{code}|IR Bank>"
+            f" | <https://www.tradingview.com/chart/?symbol=TSE:{code}|TV>"
+        )
+        lines.append("")
+
+    return lines
 
 
 def notify_portfolio_summary(

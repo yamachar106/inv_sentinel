@@ -29,8 +29,9 @@ from screener.breakout import check_breakout_batch
 from screener.config import MEGA_THRESHOLD_US
 from screener.healthcheck import run_healthcheck
 from screener.market_regime import detect_regime, format_regime_header
+from screener.mega_jp import scan_mega_jp, check_monthly_refresh
 from screener.notifier import (
-    notify_mega, _clean_us_name,
+    notify_mega, notify_mega_jp, _clean_us_name,
     _resolve_webhook_url, _send_slack,
 )
 from screener.signal_store import (
@@ -170,6 +171,7 @@ def build_digest(
     mega_signals: list[dict],
     today: str,
     regime_header: str | None = None,
+    mega_jp_signals: list[dict] | None = None,
 ) -> str:
     """ダイジェストメッセージを構築"""
     lines = [f"*MEGA Daily Digest* ({today})\n"]
@@ -178,19 +180,31 @@ def build_digest(
         lines.append(regime_header)
         lines.append("")
 
-    if not mega_signals:
+    has_any = False
+
+    # US MEGA
+    if mega_signals:
+        has_any = True
+        n_bo = sum(1 for s in mega_signals if s["tier"] in ("BO", "UPGRADE"))
+        n_pb = sum(1 for s in mega_signals if s["tier"] == "PB")
+        if n_bo > 0:
+            lines.append(f"🚨 *US確定BO: {n_bo}件* — 翌日寄り成行買い")
+        if n_pb > 0:
+            lines.append(f"👑 US PB候補: {n_pb}件 — 監視継続")
+
+    # JP MEGA
+    if mega_jp_signals:
+        has_any = True
+        n_s = sum(1 for s in mega_jp_signals if s["total_rank"] == "S")
+        n_a = sum(1 for s in mega_jp_signals if s["total_rank"] == "A")
+        n_bo_jp = sum(1 for s in mega_jp_signals if s.get("bo_signal") == "breakout")
+        lines.append(f"🏯 *JP S/A: {n_s+n_a}件* (S:{n_s} A:{n_a} BO:{n_bo_jp})")
+
+    if not has_any:
         lines.append("シグナルなし — 待機継続")
-        return "\n".join(lines)
+    else:
+        lines.append("\n_詳細は MEGA チャンネルを確認_")
 
-    n_bo = sum(1 for s in mega_signals if s["tier"] in ("BO", "UPGRADE"))
-    n_pb = sum(1 for s in mega_signals if s["tier"] == "PB")
-
-    if n_bo > 0:
-        lines.append(f"🚨 *確定BO: {n_bo}件* — 翌日寄り成行買い")
-    if n_pb > 0:
-        lines.append(f"👑 PB候補: {n_pb}件 — 監視継続")
-
-    lines.append("\n_詳細は MEGA チャンネルを確認_")
     return "\n".join(lines)
 
 
@@ -275,17 +289,38 @@ def main():
             regime_header=regime_header,
         )
 
+    # ---- JP MEGA 地力スコア月次更新チェック ----
+    print("\n[5] JP MEGA ¥1兆+ S/Aスコアリング")
+    try:
+        if check_monthly_refresh():
+            print("  地力スコア月次更新完了")
+    except Exception as e:
+        print(f"  [WARN] 地力スコア更新失敗: {e}")
+    mega_jp_signals = []
+    try:
+        mega_jp_signals = scan_mega_jp(regime=regime_trend, dry_run=args.dry_run)
+        if mega_jp_signals and not args.dry_run:
+            notify_mega_jp(mega_jp_signals, today, regime_header=regime_header)
+            print(f"  JP Mega通知送信: {len(mega_jp_signals)}件")
+    except Exception as e:
+        print(f"  [ERROR] JP MEGA スキャン失敗: {e}")
+
     # ---- シグナル保存 ----
     print("\n" + "=" * 60)
     all_signals = {}
     all_enriched = {}
     if df is not None and not df.empty:
-        # Mega分のみ保存
+        # Mega US分
         mega_codes = [s["code"] for s in mega_signals]
         all_signals["mega:US"] = mega_codes
         df_mega = df[df["code"].isin(mega_codes)] if mega_codes else df.iloc[:0]
         if not df_mega.empty:
             all_enriched["mega:US"] = _df_to_enriched(df_mega)
+
+    # Mega JP分
+    if mega_jp_signals:
+        all_signals["mega:JP"] = [s["code"] for s in mega_jp_signals]
+        all_enriched["mega:JP"] = mega_jp_signals
 
     save_signals(
         all_signals, today,
@@ -301,7 +336,11 @@ def main():
     print(f"\n完了 ({elapsed:.0f}秒)")
 
     if not args.dry_run:
-        digest = build_digest(mega_signals, today, regime_header=regime_header)
+        digest = build_digest(
+            mega_signals, today,
+            regime_header=regime_header,
+            mega_jp_signals=mega_jp_signals,
+        )
         webhook = _resolve_webhook_url("mega", "US")
         if webhook:
             _send_slack(webhook, digest)

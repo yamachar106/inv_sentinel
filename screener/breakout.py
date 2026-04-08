@@ -311,6 +311,7 @@ def check_breakout_batch(
     codes: list[str],
     market: str = "JP",
     regime: str = "",
+    prefetched_ohlcv: dict[str, pd.DataFrame] | None = None,
 ) -> pd.DataFrame:
     """
     複数銘柄を一括チェックする。
@@ -322,6 +323,7 @@ def check_breakout_batch(
         codes: 証券コードのリスト (例: ["7974", "6758"] or ["AAPL", "MSFT"])
         market: "JP" (東証) or "US" (米国)
         regime: 相場環境 ("BULL", "NEUTRAL", "BEAR")
+        prefetched_ohlcv: 事前取得済みOHLCVデータ。指定時はAPI呼び出しをスキップ
 
     Returns:
         シグナルが出た銘柄のみの DataFrame
@@ -332,10 +334,14 @@ def check_breakout_batch(
     code_to_ticker = {code: f"{code}{suffix}" for code in codes}
     tickers = list(code_to_ticker.values())
 
-    # バッチOHLCV取得
-    print(f"  バッチOHLCV取得開始 ({len(tickers)}銘柄, {BATCH_SIZE}銘柄/バッチ)")
-    ohlcv_data = fetch_ohlcv_batch(tickers)
-    print(f"  OHLCV取得完了: {len(ohlcv_data)}/{len(tickers)}銘柄")
+    # バッチOHLCV取得（プリフェッチ済みならスキップ）
+    if prefetched_ohlcv is not None:
+        ohlcv_data = prefetched_ohlcv
+        print(f"  プリフェッチ済みOHLCV使用 ({len(ohlcv_data)}銘柄)")
+    else:
+        print(f"  バッチOHLCV取得開始 ({len(tickers)}銘柄, {BATCH_SIZE}銘柄/バッチ)")
+        ohlcv_data = fetch_ohlcv_batch(tickers)
+        print(f"  OHLCV取得完了: {len(ohlcv_data)}/{len(tickers)}銘柄")
 
     # 指標計算 + シグナル判定
     results = []
