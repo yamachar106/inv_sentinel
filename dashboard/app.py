@@ -974,12 +974,94 @@ def render_ticker_detail(df_tech: pd.DataFrame, universe: list[dict], company_in
         )
         st.caption(f"{industry} | {sector}")
 
-    # ── Key Metrics (prominently: price, 52W high, distance, SMA200) ──
+    # ── Status Dashboard ──
+    # Signal classification
+    signal = row["signal"]
+    if signal == "BO":
+        signal_label = "確定BO"
+        signal_color = "#4ade80"
+        signal_bg = "#1a472a"
+    elif signal == "PB":
+        signal_label = "PB候補"
+        signal_color = "#60a5fa"
+        signal_bg = "#1e3a5f"
+    else:
+        signal_label = "監視中"
+        signal_color = "#94a3b8"
+        signal_bg = "#334155"
+
+    # Status badges
+    gc_ok = row.get("gc", False)
+    sma200_ok = row.get("above_sma200", False)
+    rsi = row.get("rsi", 0)
+    vol_ratio = row.get("vol_ratio", 0)
+    dist = row["dist_pct"]
+
+    # RSI zone
+    if rsi >= 70:
+        rsi_label, rsi_color = "過熱", "#ef4444"
+    elif rsi >= 50:
+        rsi_label, rsi_color = "強気", "#4ade80"
+    elif rsi >= 30:
+        rsi_label, rsi_color = "中立", "#fbbf24"
+    else:
+        rsi_label, rsi_color = "弱気", "#ef4444"
+
+    # Volume
+    if vol_ratio >= 3.0:
+        vol_label, vol_color = "急騰", "#ef4444"
+    elif vol_ratio >= 1.5:
+        vol_label, vol_color = "活発", "#4ade80"
+    else:
+        vol_label, vol_color = "通常", "#94a3b8"
+
+    # Sector profile
+    sp = SECTOR_PROFILES.get(sector, {})
+    sector_ev = sp.get("ev", 0)
+    sector_wr = sp.get("wr", 0)
+
+    # Month stats
+    m_stats = MONTHLY_STATS.get(datetime.now().month, {})
+    month_ev = m_stats.get("ev", 0)
+
+    def _badge(label, value, color):
+        return (
+            f'<span style="display:inline-block; margin:2px 4px; padding:4px 12px; '
+            f'border-radius:6px; background:{color}22; border:1px solid {color}; '
+            f'color:{color}; font-size:0.85em; font-weight:600;">'
+            f'{label}: {value}</span>'
+        )
+
+    # Signal banner
+    st.markdown(
+        f'<div style="background:{signal_bg}; border:2px solid {signal_color}; '
+        f'border-radius:8px; padding:12px 16px; margin-bottom:12px; text-align:center;">'
+        f'<span style="font-size:1.4em; color:{signal_color}; font-weight:bold;">'
+        f'{signal_label}</span></div>',
+        unsafe_allow_html=True,
+    )
+
+    # Status badges row
+    badges = "".join([
+        _badge("GC", "済" if gc_ok else "未", "#4ade80" if gc_ok else "#ef4444"),
+        _badge("SMA200", "上方" if sma200_ok else "下方", "#4ade80" if sma200_ok else "#ef4444"),
+        _badge("52W距離", f"{dist:+.1f}%", "#4ade80" if dist >= 0 else "#60a5fa"),
+        _badge("RSI", f"{rsi:.0f} {rsi_label}", rsi_color),
+        _badge("出来高", f"{vol_ratio:.1f}x {vol_label}", vol_color),
+        _badge("セクターEV", f"{sector_ev:+.1f}%", "#4ade80" if sector_ev > 2 else "#ef4444" if sector_ev < 0 else "#fbbf24"),
+        _badge("今月EV", f"{month_ev:+.1f}%", "#4ade80" if month_ev > 2 else "#ef4444" if month_ev < 0 else "#fbbf24"),
+    ])
+    st.markdown(
+        f'<div style="display:flex; flex-wrap:wrap; justify-content:center; margin-bottom:12px;">{badges}</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Key Metrics ──
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Price", f"${row['close']:,.2f}")
     c2.metric("52W高値", f"${row['high_52w']:,.2f}")
-    c3.metric("距離", f"{row['dist_pct']:+.1f}%")
-    c4.metric("SMA200上方", "\u2705" if row["above_sma200"] else "\u274c")
+    c3.metric("SMA20/50", f"${row['sma20']:,.2f} / ${row['sma50']:,.2f}")
+    c4.metric("SMA200", f"${row['sma200']:,.2f}" if row["sma200"] else "N/A")
     c5.metric("MCap", f"${mcap_b:,.0f}B")
 
     # SL/TP
