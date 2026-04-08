@@ -38,6 +38,17 @@
 | **yfinance** (無料) | 株価・時価総額 | 株価500〜2,500円・時価総額500億円以下フィルタ |
 | **NASDAQ Screener API** (無料) | 全米株7,000+銘柄のシンボル・時価総額・セクター | 米国株ユニバース管理 |
 | **EDINET API** (無料) | H1累計(半期報告書)・FY(有報)のXBRL | クロスチェック用（`--edinet`フラグ） |
+| **Gemini Flash API** (無料) | AI分析・企業情報翻訳 | ダッシュボードAI分析 (1,000 RPD無料枠) |
+
+---
+
+## ダッシュボード
+
+- **本番URL**: https://mega-breakout.streamlit.app
+- **ホスティング**: Streamlit Community Cloud（GitHub連携、自動デプロイ）
+- **ローカル起動**: `streamlit run dashboard/app.py`
+- **キャッシュ更新**: `python dashboard/refresh_cache.py`（daily_run.py後に実行推奨）
+- **Secrets**: Streamlit Cloud の Settings → Secrets に `GOOGLE_API_KEY` を設定
 
 ---
 
