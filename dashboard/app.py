@@ -1,6 +1,6 @@
 """
-MEGA-BreakOut Dashboard
-Mega ($200B+) 企業のブレイクアウト状況を監視するダッシュボード
+MEGA-BreakOut Dashboard v2
+Design philosophy: Never miss a BO, track system performance, monitor PB→BO pipeline.
 """
 
 import sys
@@ -12,15 +12,14 @@ sys.path.insert(0, str(ROOT))
 
 import json
 import time
-import hashlib
-import streamlit as st
-import pandas as pd
+import os
 import numpy as np
+import pandas as pd
 import yfinance as yf
+import streamlit as st
+import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
-
-import os
 
 try:
     from dotenv import load_dotenv
@@ -48,10 +47,56 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ─── 定数 ─────────────────────────────────────────────
+
+SECTOR_PROFILES = {
+    "Technology": {"tag": "大化け狙い", "wr": 43.6, "ev": 4.74, "bigwin": 16.0, "color": "#60a5fa"},
+    "Telecommunications": {"tag": "安定型", "wr": 75.9, "ev": 5.89, "bigwin": 3.4, "color": "#34d399"},
+    "Finance": {"tag": "堅実", "wr": 56.5, "ev": 4.22, "bigwin": 4.3, "color": "#a78bfa"},
+    "Industrials": {"tag": "バランス型", "wr": 59.5, "ev": 3.80, "bigwin": 7.1, "color": "#fbbf24"},
+    "Consumer Discretionary": {"tag": "普通", "wr": 50.7, "ev": 3.41, "bigwin": 9.9, "color": "#fb923c"},
+    "Energy": {"tag": "変動大", "wr": 46.2, "ev": 2.69, "bigwin": 17.9, "color": "#f87171"},
+    "Health Care": {"tag": "LLY以外微妙", "wr": 41.4, "ev": 1.72, "bigwin": 5.7, "color": "#94a3b8"},
+    "Basic Materials": {"tag": "データ少", "wr": 50.0, "ev": 0.68, "bigwin": 0.0, "color": "#94a3b8"},
+    "Consumer Staples": {"tag": "非推奨", "wr": 33.3, "ev": -1.08, "bigwin": 0.0, "color": "#ef4444"},
+    "Real Estate": {"tag": "非推奨", "wr": 31.8, "ev": -1.55, "bigwin": 0.0, "color": "#ef4444"},
+}
+
+MONTHLY_STATS = {
+    1: {"ev": 3.10, "wr": 47.5}, 2: {"ev": -0.64, "wr": 42.1},
+    3: {"ev": 2.85, "wr": 48.0}, 4: {"ev": 3.45, "wr": 50.0},
+    5: {"ev": 2.90, "wr": 46.8}, 6: {"ev": 6.52, "wr": 63.6},
+    7: {"ev": -0.30, "wr": 38.5}, 8: {"ev": -0.64, "wr": 40.0},
+    9: {"ev": 6.30, "wr": 55.0}, 10: {"ev": 6.05, "wr": 52.3},
+    11: {"ev": 6.86, "wr": 55.4}, 12: {"ev": 2.50, "wr": 48.0},
+}
+
+PAGES = [
+    "\U0001f3af Today's Action",
+    "\U0001f4c8 Performance",
+    "\U0001f50d Ticker Detail",
+    "\U0001f5fa Sector Map",
+]
+
+
+# ─── Red Flags ─────────────────────────────────────────
+
+def get_red_flags(row: dict, sector: str) -> list[str]:
+    """赤旗条件をチェック。問題なければ空リスト。"""
+    flags = []
+    if SECTOR_PROFILES.get(sector, {}).get("ev", 0) < 0:
+        flags.append("BO戦略が機能しにくいセクター")
+    if row.get("vol_ratio", 0) > 5.0:
+        flags.append("出来高過大 (ブローオフリスク)")
+    month = datetime.now().month
+    if month in (7, 8):
+        flags.append("夏枯れ月 (過去マイナスリターン)")
+    return flags
+
 
 # ─── データ取得 ───────────────────────────────────────
 
-@st.cache_data(ttl=300)  # 5分キャッシュ
+@st.cache_data(ttl=300)
 def load_mega_universe() -> list[dict]:
     """US Mega ($200B+) 銘柄をNASDAQ APIキャッシュから取得"""
     from screener.universe import fetch_us_stocks
@@ -79,7 +124,6 @@ def _get_gemini_client():
 
 
 def _load_company_info_cache() -> dict:
-    """ローカルキャッシュからロード（1日有効）"""
     if COMPANY_INFO_CACHE.exists():
         try:
             data = json.loads(COMPANY_INFO_CACHE.read_text(encoding="utf-8"))
@@ -92,7 +136,6 @@ def _load_company_info_cache() -> dict:
 
 
 def _save_company_info_cache(info: dict) -> None:
-    """ローカルキャッシュに保存"""
     COMPANY_INFO_CACHE.parent.mkdir(parents=True, exist_ok=True)
     data = {"_date": datetime.now().date().isoformat(), "tickers": info}
     COMPANY_INFO_CACHE.write_text(
@@ -106,7 +149,6 @@ def _translate_company_info_batch(items: list[dict]) -> list[dict]:
     if not client or not items:
         return items
 
-    # 10件ずつバッチ翻訳
     batch_size = 10
     for start in range(0, len(items), batch_size):
         batch = items[start:start + batch_size]
@@ -129,7 +171,6 @@ def _translate_company_info_batch(items: list[dict]) -> list[dict]:
                 model="gemini-2.5-flash", contents=prompt,
             )
             text = response.text.strip()
-            # ```json ... ``` を除去
             if text.startswith("```"):
                 text = text.split("\n", 1)[1] if "\n" in text else text[7:]
                 if text.endswith("```"):
@@ -166,18 +207,14 @@ def _fill_missing_summaries(items: list[dict]) -> None:
             text = response.text.strip()
             item["summary"] = text
             if not item.get("industry"):
-                item["industry"] = text.split("。")[0] if "。" in text else ""
+                item["industry"] = text.split("\u3002")[0] if "\u3002" in text else ""
         except Exception:
             pass
 
 
-@st.cache_data(ttl=86400)  # 24時間キャッシュ
+@st.cache_data(ttl=86400)
 def fetch_company_info(tickers: list[str]) -> dict:
-    """yfinanceから企業情報を取得。ロゴ(Google Favicon) + 日本語翻訳付き。
-
-    Returns:
-        {ticker: {logo_url, summary, industry, industry_en, summary_en, website, domain}}
-    """
+    """yfinanceから企業情報を取得。ロゴ(Google Favicon) + 日本語翻訳付き。"""
     cached = _load_company_info_cache()
     if all(t in cached for t in tickers):
         return cached
@@ -192,7 +229,6 @@ def fetch_company_info(tickers: list[str]) -> dict:
             info = yf.Ticker(ticker).info
             website = info.get("website", "") or ""
             domain = urlparse(website).netloc if website else ""
-            # Google Favicon API (Clearbitは終了)
             logo_url = f"https://www.google.com/s2/favicons?domain={domain}&sz=128" if domain else ""
 
             summary_en = info.get("longBusinessSummary", "") or ""
@@ -220,13 +256,11 @@ def fetch_company_info(tickers: list[str]) -> dict:
 
     progress.empty()
 
-    # Geminiで日本語翻訳
     items_to_translate = [it for it in raw_items if it["industry_en"] or it["summary_en"]]
     if items_to_translate:
         with st.spinner("企業情報を日本語に翻訳中..."):
             _translate_company_info_batch(items_to_translate)
 
-    # summaryが空の銘柄はGeminiで生成
     items_no_summary = [it for it in raw_items if not it.get("summary")]
     if items_no_summary:
         _fill_missing_summaries(items_no_summary)
@@ -239,22 +273,10 @@ def fetch_company_info(tickers: list[str]) -> dict:
     return result
 
 
-def _logo_html(logo_url: str, size: int = 32) -> str:
-    """ロゴ画像のHTMLタグ（取得失敗時は空文字）"""
-    if not logo_url:
-        return ""
-    return (
-        f'<img src="{logo_url}" width="{size}" height="{size}" '
-        f'style="border-radius:4px; vertical-align:middle; margin-right:8px;" '
-        f'onerror="this.style.display=\'none\'">'
-    )
-
-
 TECHNICALS_CACHE = ROOT / "data" / "cache" / "mega_technicals.json"
 
 
 def _get_technicals_cache_date() -> str:
-    """キャッシュの日付を返す"""
     if TECHNICALS_CACHE.exists():
         try:
             data = json.loads(TECHNICALS_CACHE.read_text(encoding="utf-8"))
@@ -265,7 +287,6 @@ def _get_technicals_cache_date() -> str:
 
 
 def _load_technicals_cache() -> pd.DataFrame | None:
-    """プリビルドキャッシュからテクニカルデータをロード（当日のみ有効）"""
     if TECHNICALS_CACHE.exists():
         try:
             data = json.loads(TECHNICALS_CACHE.read_text(encoding="utf-8"))
@@ -283,7 +304,6 @@ def _load_technicals_cache() -> pd.DataFrame | None:
 @st.cache_data(ttl=300)
 def fetch_technicals(tickers: list[str]) -> pd.DataFrame:
     """テクニカルデータを取得。プリキャッシュがあれば即座に返す。"""
-    # プリキャッシュ優先（refresh_cache.pyで事前構築）
     cached = _load_technicals_cache()
     if cached is not None:
         st.session_state["tech_data_date"] = _get_technicals_cache_date()
@@ -292,12 +312,10 @@ def fetch_technicals(tickers: list[str]) -> pd.DataFrame:
     if not tickers:
         return pd.DataFrame()
 
-    # フォールバック: yfinanceからライブ取得
     data = yf.download(tickers, period="1y", progress=False, threads=True)
     if data.empty:
         return pd.DataFrame()
 
-    # データの最終日付を記録
     last_date = data.index[-1]
     st.session_state["tech_data_date"] = str(last_date.date()) if hasattr(last_date, 'date') else str(last_date)[:10]
 
@@ -364,7 +382,7 @@ def fetch_technicals(tickers: list[str]) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=600)
-def load_signal_history() -> list[dict]:
+def load_signal_history() -> dict:
     """data/signals/mega_pb_tracker.json を読み込む"""
     tracker_path = ROOT / "data" / "signals" / "mega_pb_tracker.json"
     if tracker_path.exists():
@@ -403,10 +421,35 @@ def load_daily_signals() -> list[dict]:
                             "rs_score": s.get("rs_score", 0),
                             "gc_status": s.get("gc_status", False),
                             "market_cap": mcap,
+                            "sector": s.get("sector", ""),
+                            "name": s.get("name", ""),
+                            "high_52w": s.get("high_52w", 0),
+                            "distance_pct": s.get("distance_pct", 0),
                         })
             except (json.JSONDecodeError, ValueError):
                 pass
     return records
+
+
+def get_latest_pipeline_date() -> str | None:
+    """最新のシグナルファイルの日付を返す"""
+    signals_dir = ROOT / "data" / "signals"
+    if not signals_dir.exists():
+        return None
+    dates = []
+    for f in signals_dir.glob("????-??-??.json"):
+        dates.append(f.stem)
+    return max(dates) if dates else None
+
+
+def get_last_bo_from_signals() -> dict | None:
+    """直近のBO確定シグナルを探す"""
+    records = load_daily_signals()
+    bos = [r for r in records if r.get("signal") in ("breakout", "breakout_overheated")]
+    if bos:
+        bos.sort(key=lambda x: x["date"], reverse=True)
+        return bos[0]
+    return None
 
 
 # ─── AI分析 (Gemini Flash) ────────────────────────────
@@ -415,7 +458,6 @@ AI_CACHE = ROOT / "data" / "cache" / "mega_ai_analysis.json"
 
 
 def _load_ai_cache() -> dict:
-    """AI分析キャッシュ（1日有効）"""
     if AI_CACHE.exists():
         try:
             data = json.loads(AI_CACHE.read_text(encoding="utf-8"))
@@ -437,8 +479,12 @@ def analyze_breakout_factors(ticker: str, name: str, industry: str,
                              rsi: float, vol_ratio: float, gc: bool,
                              sma20: float, sma50: float, sma200: float,
                              mcap_b: float, above_sma200: bool,
-                             summary: str = "") -> str:
-    """Gemini Flash + Google検索グラウンディングでブレイクアウト要因を分析"""
+                             summary: str = "", is_pb: bool = True) -> str:
+    """Gemini Flash + Google検索グラウンディングでPB候補のブレイクアウト要因を分析。
+    BOの場合は固定メッセージ、PBの場合のみAI分析。"""
+    if not is_pb:
+        return "**確定BO: 過去勝率85%. 迷わず実行.**"
+
     cache = _load_ai_cache()
     if ticker in cache:
         return cache[ticker]
@@ -449,7 +495,8 @@ def analyze_breakout_factors(ticker: str, name: str, industry: str,
 
     from google.genai import types
 
-    prompt = f"""あなたはプロの株式アナリストです。以下のMega ($200B+) 銘柄について、最新ニュースを検索し、ブレイクアウト/高値更新の要因を日本語で分析してください。
+    prompt = f"""あなたはプロの株式アナリストです。以下のMega ($200B+) 銘柄は52W高値まであと{abs(dist_pct):.1f}%です。
+ブレイクアウトのカタリストとなりうる要因を最新ニュースから分析してください。
 
 ■ 企業情報
 銘柄: {ticker} ({name})
@@ -460,16 +507,11 @@ def analyze_breakout_factors(ticker: str, name: str, industry: str,
 ■ テクニカルデータ
 現在値: ${close:,.2f}
 52W高値: ${high_52w:,.2f} (距離: {dist_pct:+.1f}%)
-SMA20: ${sma20:,.2f} / SMA50: ${sma50:,.2f} / SMA200: ${sma200:,.2f}
 SMA200上方: {"はい" if above_sma200 else "いいえ"}
-RSI(14): {rsi:.0f}
-出来高比率(vs50日平均): {vol_ratio:.1f}x
-ゴールデンクロス(SMA20>SMA50): {"あり" if gc else "なし"}
 
-■ 出力フォーマット（日本語、合計300字以内）
-**直近の材料**: 最新の決算・ニュース・業界動向から株価を押し上げている要因（2-3行）
-**テクニカル評価**: 上記データに基づく強さ/弱さの評価（1-2行）
-**リスク・注意点**: 今後の懸念材料や注意すべきイベント（1-2行）"""
+■ 出力フォーマット（日本語、合計200字以内）
+**BO触媒候補**: ブレイクアウトのきっかけになりうる材料（決算・ニュース・業界動向）を2-3行
+**リスク**: 今後の懸念材料（1行）"""
 
     try:
         response = client.models.generate_content(
@@ -487,32 +529,35 @@ RSI(14): {rsi:.0f}
         return f"(分析エラー: {e})"
 
 
+@st.cache_data(ttl=300)
 def fetch_ticker_chart(ticker: str, period: str = "6mo") -> pd.DataFrame:
     """個別銘柄のOHLCVデータを取得"""
     data = yf.download(ticker, period=period, progress=False)
     return data
 
 
-# ─── UI ───────────────────────────────────────────────
-
-PAGES = ["\U0001f4ca Overview", "\U0001f3af Watchlist", "\U0001f4c8 Signal History", "\U0001f50d Ticker Detail", "\U0001f4dd Strategy Stats"]
-
+# ─── Navigation ───────────────────────────────────────
 
 def _navigate_to_detail(ticker: str):
-    """Watchlistからticker detailへ遷移"""
+    """PipelineからTicker Detailへ遷移"""
     st.session_state["detail_ticker"] = ticker
     st.session_state["page"] = PAGES.index("\U0001f50d Ticker Detail")
 
 
+def _get_sector_tag(sector: str) -> str:
+    """セクターの性格タグを返す"""
+    profile = SECTOR_PROFILES.get(sector, {})
+    return profile.get("tag", "")
+
+
+# ─── Sidebar ──────────────────────────────────────────
+
 def render_sidebar():
-    """サイドバー"""
     st.sidebar.title("\U0001f451 MEGA-BreakOut")
-    st.sidebar.caption("Mega ($200B+) Breakout Monitor")
+    st.sidebar.caption("Pipeline Visibility + Performance Tracker")
     st.sidebar.divider()
 
-    # session_stateでページ遷移を制御
     default_idx = st.session_state.get("page", 0)
-
     page = st.sidebar.radio(
         "ページ",
         PAGES,
@@ -520,111 +565,47 @@ def render_sidebar():
         key="page_radio",
         label_visibility="collapsed",
     )
-    # radioの選択をsession_stateに同期
     if PAGES.index(page) != st.session_state.get("page", 0):
         st.session_state["page"] = PAGES.index(page)
 
     st.sidebar.divider()
 
-    # データ日時表示
+    # データ日時
     data_date = st.session_state.get("tech_data_date", "")
     if data_date:
         st.sidebar.caption(f"Price data: {data_date}")
     st.sidebar.caption(f"Updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+
+    # 季節インジケーター
+    month = datetime.now().month
+    m_stats = MONTHLY_STATS.get(month, {})
+    ev = m_stats.get("ev", 0)
+    wr = m_stats.get("wr", 0)
+    ev_color = "green" if ev > 0 else "red"
+    st.sidebar.markdown(
+        f"**{month}月の過去実績**: "
+        f"EV :{ev_color}[{ev:+.1f}%] / 勝率 {wr:.0f}%"
+    )
 
     st.sidebar.divider()
     st.sidebar.markdown(
         "**BT実績 (641件)**\n"
         "- BO: 勝率85% EV+11.3%\n"
         "- 全体: 勝率65% EV+5.12%\n"
-        "- BEAR: 唯一EVプラス"
+        "- SL-20%/TP+40%"
     )
     return page
 
 
-def render_overview(df_tech: pd.DataFrame, universe: list[dict], company_info: dict):
-    """Overview: 全Mega銘柄テーブル"""
-    st.header("\U0001f4ca Mega Universe Overview")
+# ─── Page 1: Today's Action ──────────────────────────
 
-    meta_map = {s["symbol"]: s for s in universe}
+def render_todays_action(df_tech: pd.DataFrame, universe: list[dict], company_info: dict):
+    st.header("\U0001f3af Today's Action")
 
     if df_tech.empty:
         st.warning("テクニカルデータの取得に失敗しました")
         return
 
-    df = df_tech.copy()
-    df["name"] = df["ticker"].map(lambda t: meta_map.get(t, {}).get("name", ""))
-    df["sector"] = df["ticker"].map(lambda t: meta_map.get(t, {}).get("sector", ""))
-    df["industry"] = df["ticker"].map(lambda t: company_info.get(t, {}).get("industry", ""))
-    df["mcap_b"] = df["ticker"].map(
-        lambda t: (meta_map.get(t, {}).get("marketCap", 0) or 0) / 1e9
-    )
-
-    # サマリー
-    n_bo = len(df[df["signal"] == "BO"])
-    n_pb = len(df[df["signal"] == "PB"])
-    n_above_sma200 = len(df[df["above_sma200"]])
-    n_gc = len(df[df["gc"]])
-
-    col1, col2, col3, col4, col5 = st.columns(5)
-    col1.metric("Mega銘柄", len(df))
-    col2.metric("\U0001f6a8 BO", n_bo)
-    col3.metric("\U0001f451 PB", n_pb)
-    col4.metric("SMA200\u2191", n_above_sma200)
-    col5.metric("GC\u2713", n_gc)
-
-    # フィルタ
-    col_f1, col_f2 = st.columns(2)
-    with col_f1:
-        signal_filter = st.multiselect("シグナル", ["BO", "PB", "-"], default=["BO", "PB", "-"])
-    with col_f2:
-        sector_filter = st.multiselect("セクター", sorted(df["sector"].unique()), default=[])
-
-    df_show = df[df["signal"].isin(signal_filter)]
-    if sector_filter:
-        df_show = df_show[df_show["sector"].isin(sector_filter)]
-
-    # テーブル (industry + 52W高値追加)
-    display_df = df_show[[
-        "signal", "ticker", "name", "industry", "close", "high_52w", "dist_pct",
-        "rsi", "gc", "above_sma200", "vol_ratio", "mcap_b",
-    ]].copy()
-    display_df.columns = [
-        "Signal", "Ticker", "Name", "Industry", "Price", "52W High",
-        "52W Dist%", "RSI", "GC", "SMA200\u2191", "Vol Ratio", "MCap($B)",
-    ]
-
-    st.dataframe(
-        display_df.style
-        .format({
-            "Price": "${:,.2f}",
-            "52W High": "${:,.2f}",
-            "52W Dist%": "{:+.1f}%",
-            "RSI": "{:.0f}",
-            "Vol Ratio": "{:.1f}x",
-            "MCap($B)": "${:,.0f}B",
-        })
-        .map(
-            lambda v: "background-color: #1a472a; color: #4ade80" if v == "BO"
-            else "background-color: #1e3a5f; color: #60a5fa" if v == "PB"
-            else "",
-            subset=["Signal"],
-        ),
-        height=600,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-def render_watchlist(df_tech: pd.DataFrame, universe: list[dict], company_info: dict):
-    """Watchlist: PB接近中の注目銘柄"""
-    st.header("\U0001f3af Pre-Breakout Watchlist")
-    st.caption("52W高値まで5%以内 + SMA200上方の銘柄")
-
-    if df_tech.empty:
-        st.warning("データなし")
-        return
-
     meta_map = {s["symbol"]: s for s in universe}
     df = df_tech.copy()
     df["name"] = df["ticker"].map(lambda t: meta_map.get(t, {}).get("name", ""))
@@ -633,142 +614,320 @@ def render_watchlist(df_tech: pd.DataFrame, universe: list[dict], company_info: 
         lambda t: (meta_map.get(t, {}).get("marketCap", 0) or 0) / 1e9
     )
 
-    # PB候補: 52W高値まで5%以内 + SMA200上
-    watchlist = df[
-        (df["dist_pct"] >= -5) &
-        (df["above_sma200"] == True)
-    ].sort_values("dist_pct", ascending=False)
+    bo_df = df[df["signal"] == "BO"]
+    pb_df = df[df["signal"] == "PB"].sort_values("dist_pct", ascending=False)
+    n_bo = len(bo_df)
+    n_pb = len(pb_df)
 
-    if watchlist.empty:
-        st.info("現在PB候補なし")
-        return
+    # ── Top Section: Action Summary ──
+    last_bo = get_last_bo_from_signals()
 
-    st.metric("PB候補", len(watchlist))
-
-    for _, row in watchlist.iterrows():
-        dist = row["dist_pct"]
-        ticker = row["ticker"]
-        name = row["name"]
-        info = company_info.get(ticker, {})
-        logo_url = info.get("logo_url", "")
-        industry = info.get("industry", "")
-        summary = info.get("summary", "")
-        mcap_b = row["mcap_b"]
-
-        # 距離バー (0%=ブレイクアウト, -5%=遠い)
-        progress = max(0, min(1, (dist + 5) / 5))
-
-        if dist >= 0:
-            icon = "\U0001f525"
-            status = "**ブレイクアウト!**"
-        elif dist >= -1:
-            icon = "\U0001f534"
-            status = f"あと **{abs(dist):.1f}%**"
-        elif dist >= -2:
-            icon = "\U0001f7e0"
-            status = f"あと {abs(dist):.1f}%"
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if n_bo > 0:
+            st.markdown(
+                f'<div style="background:#1a472a; border:2px solid #4ade80; border-radius:12px; '
+                f'padding:20px; text-align:center;">'
+                f'<span style="font-size:3em; color:#4ade80;">{n_bo}</span><br>'
+                f'<span style="font-size:1.2em; color:#4ade80;">確定BO</span></div>',
+                unsafe_allow_html=True,
+            )
         else:
-            icon = "\U0001f7e1"
-            status = f"あと {abs(dist):.1f}%"
+            st.markdown(
+                '<div style="background:#1e293b; border:1px solid #475569; border-radius:12px; '
+                'padding:20px; text-align:center;">'
+                '<span style="font-size:3em; color:#94a3b8;">0</span><br>'
+                '<span style="font-size:1.2em; color:#94a3b8;">確定BO</span></div>',
+                unsafe_allow_html=True,
+            )
+    with col2:
+        pb_color = "#60a5fa" if n_pb > 0 else "#94a3b8"
+        pb_bg = "#1e3a5f" if n_pb > 0 else "#1e293b"
+        pb_border = "#60a5fa" if n_pb > 0 else "#475569"
+        st.markdown(
+            f'<div style="background:{pb_bg}; border:1px solid {pb_border}; border-radius:12px; '
+            f'padding:20px; text-align:center;">'
+            f'<span style="font-size:3em; color:{pb_color};">{n_pb}</span><br>'
+            f'<span style="font-size:1.2em; color:{pb_color};">昇格監視中</span></div>',
+            unsafe_allow_html=True,
+        )
+    with col3:
+        if last_bo:
+            bo_date = datetime.strptime(last_bo["date"], "%Y-%m-%d").date()
+            days_ago = (datetime.now().date() - bo_date).days
+            st.markdown(
+                f'<div style="background:#1e293b; border:1px solid #475569; border-radius:12px; '
+                f'padding:20px; text-align:center;">'
+                f'<span style="font-size:1.5em; color:#fbbf24;">{last_bo["ticker"]}</span><br>'
+                f'<span style="color:#94a3b8;">{last_bo["date"]}</span><br>'
+                f'<span style="color:#94a3b8;">{days_ago}日前</span></div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                '<div style="background:#1e293b; border:1px solid #475569; border-radius:12px; '
+                'padding:20px; text-align:center;">'
+                '<span style="font-size:1.2em; color:#94a3b8;">前回のBO</span><br>'
+                '<span style="color:#64748b;">データなし</span></div>',
+                unsafe_allow_html=True,
+            )
 
-        gc_str = "\u2705GC" if row["gc"] else "\u23f3GC待ち"
-        rsi_str = f"RSI {row['rsi']:.0f}"
+    # ── BO confirmed tickers (if any) ──
+    if n_bo > 0:
+        st.markdown("---")
+        st.subheader("確定BO")
+        for _, row in bo_df.iterrows():
+            ticker = row["ticker"]
+            name = row["name"]
+            sector = row["sector"]
+            tag = _get_sector_tag(sector)
+            sl = row["close"] * (1 + MEGA_STOP_LOSS)
+            tp = row["close"] * (1 + MEGA_PROFIT_TARGET)
+            st.markdown(
+                f'<div style="background:#1a472a; border:2px solid #4ade80; border-radius:8px; padding:16px; margin-bottom:8px;">'
+                f'<span style="font-size:1.5em; color:#4ade80; font-weight:bold;">'
+                f'{ticker}</span> '
+                f'<span style="color:#e2e8f0;">{name}</span> '
+                f'<span style="background:#334155; padding:2px 8px; border-radius:4px; color:#94a3b8;">{tag}</span><br>'
+                f'<span style="color:#e2e8f0;">Price: ${row["close"]:,.2f} | '
+                f'SL: ${sl:,.2f} | TP: ${tp:,.2f}</span><br>'
+                f'<span style="color:#4ade80; font-weight:bold;">過去勝率85%. 迷わず実行.</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            # Button to navigate to detail
+            if st.button(f"詳細を見る: {ticker}", key=f"bo_detail_{ticker}"):
+                _navigate_to_detail(ticker)
+                st.rerun()
 
-        with st.container():
-            # ロゴ + 企業名ヘッダー
-            logo_col, main_col, action_col = st.columns([1, 7, 2])
-            with logo_col:
-                if logo_url:
-                    st.image(logo_url, width=56)
-                else:
-                    st.markdown(f"### {icon}")
-            with main_col:
-                # 銘柄名クリックでTicker Detailへ遷移
-                btn_col, title_col = st.columns([1, 8])
-                with btn_col:
-                    if st.button(f"{ticker}", key=f"nav_{ticker}", help="Ticker Detailを開く"):
-                        _navigate_to_detail(ticker)
-                        st.rerun()
-                with title_col:
-                    st.markdown(f"### {icon} {name}")
-                st.caption(f"{industry} | ${mcap_b:,.0f}B")
-                st.progress(progress, text=f"52W高値 **${row['high_52w']:,.2f}** まで {status}")
-                st.caption(f"${row['close']:,.2f} | {gc_str} | {rsi_str} | Vol {row['vol_ratio']:.1f}x")
-                if summary:
-                    with st.expander("事業内容", expanded=False):
-                        st.write(summary)
-                # AI分析
-                if os.getenv("GOOGLE_API_KEY"):
-                    with st.expander("AI分析 (最新ニュース込み)", expanded=False):
-                        analysis = analyze_breakout_factors(
-                            ticker, name, industry, row["close"],
-                            row["high_52w"], dist, row["rsi"], row["vol_ratio"],
-                            row["gc"], row["sma20"], row["sma50"], row["sma200"],
-                            mcap_b, row["above_sma200"], summary,
-                        )
-                        if analysis:
-                            st.markdown(analysis)
-                        else:
-                            st.caption("分析を取得できませんでした")
-            with action_col:
-                sl = row["close"] * (1 + MEGA_STOP_LOSS)
-                tp = row["close"] * (1 + MEGA_PROFIT_TARGET)
-                st.metric("52W高値", f"${row['high_52w']:,.2f}")
-                st.metric("SL", f"${sl:,.0f}")
-                st.metric("TP", f"${tp:,.0f}")
-            st.divider()
+    # ── Middle Section: PB→BO Pipeline ──
+    st.markdown("---")
+    st.subheader("PB \u2192 BO Pipeline")
+    st.caption("52W高値まで5%以内 + SMA200上方 — 距離が近い順")
 
-
-def render_signal_history():
-    """Signal History: 過去のシグナル履歴"""
-    st.header("\U0001f4c8 Signal History")
-
-    records = load_daily_signals()
-    tracker = load_signal_history()
-
-    if not records:
-        st.info("直近30日間のMegaシグナルなし")
+    if pb_df.empty:
+        st.info("現在PB候補なし")
     else:
-        df = pd.DataFrame(records)
-        df = df.sort_values("date", ascending=False)
+        for _, row in pb_df.iterrows():
+            ticker = row["ticker"]
+            name = row["name"]
+            sector = row["sector"]
+            tag = _get_sector_tag(sector)
+            dist = row["dist_pct"]
+            info = company_info.get(ticker, {})
 
-        # シグナルタイプ別カウント
-        c1, c2, c3 = st.columns(3)
-        n_bo = len(df[df["signal"].isin(["breakout", "breakout_overheated"])])
-        n_pb = len(df[df["signal"] == "pre_breakout"])
-        c1.metric("BO (30日間)", n_bo)
-        c2.metric("PB (30日間)", n_pb)
-        c3.metric("ユニーク銘柄", df["ticker"].nunique())
+            # Progress bar (0% = far, 100% = at 52W high)
+            progress = max(0.0, min(1.0, (dist + 5) / 5))
 
-        display_df = df[["date", "ticker", "signal", "close", "volume_ratio", "rs_score", "gc_status"]].copy()
-        display_df.columns = ["Date", "Ticker", "Signal", "Close", "Vol Ratio", "RS", "GC"]
+            # Red flags
+            flags = get_red_flags(row.to_dict(), sector)
+
+            # Layout
+            main_col, btn_col = st.columns([9, 1])
+            with main_col:
+                # Ticker line
+                tag_html = f'<span style="background:#334155; padding:2px 8px; border-radius:4px; font-size:0.85em; color:{SECTOR_PROFILES.get(sector, {}).get("color", "#94a3b8")};">{tag}</span>'
+                st.markdown(
+                    f'**{ticker}** {name} {tag_html} '
+                    f'&nbsp; ${row["close"]:,.2f} \u2192 52W高値 ${row["high_52w"]:,.2f}',
+                    unsafe_allow_html=True,
+                )
+                st.progress(progress, text=f"あと **{abs(dist):.1f}%**")
+
+                # Red flags (only shown when present)
+                if flags:
+                    flag_text = " | ".join(flags)
+                    st.caption(f":warning: {flag_text}")
+
+            with btn_col:
+                if st.button("\U0001f50d", key=f"pb_nav_{ticker}", help="Ticker Detail"):
+                    _navigate_to_detail(ticker)
+                    st.rerun()
+
+            st.markdown("<div style='margin-bottom:4px;'></div>", unsafe_allow_html=True)
+
+    # ── Bottom Section: Pipeline Health ──
+    st.markdown("---")
+    st.subheader("Pipeline Health")
+
+    h_col1, h_col2, h_col3 = st.columns(3)
+    data_date = st.session_state.get("tech_data_date", "N/A")
+    h_col1.metric("最終データ更新", data_date)
+
+    latest_signal_date = get_latest_pipeline_date()
+    h_col2.metric("最終パイプライン実行", latest_signal_date or "N/A")
+
+    if latest_signal_date:
+        try:
+            sig_date = datetime.strptime(latest_signal_date, "%Y-%m-%d").date()
+            days_since = (datetime.now().date() - sig_date).days
+            if days_since > 2:
+                h_col3.markdown(
+                    f':warning: **パイプライン未実行 {days_since}日**',
+                )
+            else:
+                h_col3.metric("経過日数", f"{days_since}日")
+        except ValueError:
+            h_col3.metric("経過日数", "N/A")
+    else:
+        h_col3.markdown(":warning: **シグナルファイルなし**")
+
+
+# ─── Page 2: Performance ─────────────────────────────
+
+def render_performance():
+    st.header("\U0001f4c8 Performance (実績トラッキング)")
+
+    # BT baseline
+    BT_WR = 85.0
+    BT_EV = 11.3
+
+    # Load BO events from signals
+    records = load_daily_signals()
+    bo_records = [r for r in records if r.get("signal") in ("breakout", "breakout_overheated")]
+
+    # ── Top: Key Metrics ──
+    # Calculate actual performance (placeholder until we have exit data)
+    # For now, show system uptime and BT comparison
+    first_signal_date = get_latest_pipeline_date()  # approximate
+    signals_dir = ROOT / "data" / "signals"
+    all_dates = []
+    if signals_dir.exists():
+        for f in signals_dir.glob("????-??-??.json"):
+            all_dates.append(f.stem)
+    all_dates.sort()
+    first_date = all_dates[0] if all_dates else None
+    if first_date:
+        uptime_days = (datetime.now().date() - datetime.strptime(first_date, "%Y-%m-%d").date()).days
+    else:
+        uptime_days = 0
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    # Until we have actual trade exits, show BT targets
+    col1.metric("BT勝率 (BO)", f"{BT_WR:.0f}%", help="バックテスト確認済み")
+    col2.metric("BT EV (BO)", f"+{BT_EV:.1f}%", help="バックテスト確認済み")
+    col3.metric("システム稼働", f"{uptime_days}日")
+
+    # Confidence bar based on sample size
+    n_bo_signals = len(bo_records)
+    # Need ~20+ BO events for statistical confidence
+    confidence = min(100, int(n_bo_signals / 20 * 100))
+    col4.metric("BO検出数 (30日)", n_bo_signals)
+
+    st.progress(confidence / 100, text=f"確信度: {confidence}% (BO {n_bo_signals}/20件で統計的有意)")
+
+    # ── Middle: BO Signal History ──
+    st.markdown("---")
+    st.subheader("BO Signal History (30日間)")
+
+    if not bo_records:
+        st.info("直近30日間のMega BOシグナルなし")
+    else:
+        df_bo = pd.DataFrame(bo_records)
+        df_bo = df_bo.sort_values("date", ascending=False)
+
+        # Add sector tag
+        df_bo["sector_tag"] = df_bo["sector"].map(lambda s: _get_sector_tag(s))
+
+        display_cols = ["date", "ticker", "name", "sector_tag", "close", "volume_ratio"]
+        display_df = df_bo[display_cols].copy()
+        display_df.columns = ["Date", "Ticker", "Name", "Sector", "Entry Price", "Vol Ratio"]
+
         st.dataframe(
             display_df.style.format({
-                "Close": "${:,.2f}",
+                "Entry Price": "${:,.2f}",
                 "Vol Ratio": "{:.1f}x",
-                "RS": "{:.0f}",
             }),
             use_container_width=True,
             hide_index=True,
         )
 
-    # PBトラッカー
-    if tracker:
-        st.subheader("PB\u2192BO \u30c8\u30e9\u30c3\u30ad\u30f3\u30b0")
-        tracker_rows = []
-        for ticker, info in tracker.items():
-            tracker_rows.append({
-                "Ticker": ticker,
-                "First PB": info.get("first_pb_date", ""),
-                "PB Count": info.get("signal_count", 0),
-                "BO Dates": ", ".join(info.get("bo_history", [])) or "-",
-                "Upgraded": "\u2705" if info.get("bo_history") else "\u23f3",
-            })
-        st.dataframe(pd.DataFrame(tracker_rows), use_container_width=True, hide_index=True)
+    # Also show PB signals
+    pb_records = [r for r in records if r.get("signal") == "pre_breakout"]
+    if pb_records:
+        st.subheader("PB Signal History (30日間)")
+        df_pb = pd.DataFrame(pb_records).sort_values("date", ascending=False)
+        df_pb["sector_tag"] = df_pb["sector"].map(lambda s: _get_sector_tag(s))
+        display_pb = df_pb[["date", "ticker", "name", "sector_tag", "close"]].copy()
+        display_pb.columns = ["Date", "Ticker", "Name", "Sector", "Price"]
+        st.dataframe(
+            display_pb.style.format({"Price": "${:,.2f}"}),
+            use_container_width=True,
+            hide_index=True,
+        )
 
+    # ── Bottom: BT Sector Performance Bubble Chart ──
+    st.markdown("---")
+    st.subheader("セクター別パフォーマンス (BT)")
+
+    sector_data = []
+    for sector, profile in SECTOR_PROFILES.items():
+        sector_data.append({
+            "sector": sector,
+            "tag": profile["tag"],
+            "wr": profile["wr"],
+            "ev": profile["ev"],
+            "bigwin": profile["bigwin"],
+            "color": profile["color"],
+        })
+    df_sector = pd.DataFrame(sector_data)
+
+    fig = go.Figure()
+    for _, row in df_sector.iterrows():
+        fig.add_trace(go.Scatter(
+            x=[row["wr"]],
+            y=[row["ev"]],
+            mode="markers+text",
+            marker=dict(
+                size=max(10, row["bigwin"] * 3),
+                color=row["color"],
+                opacity=0.7,
+                line=dict(width=1, color="white"),
+            ),
+            text=[f"{row['sector']}<br>{row['tag']}"],
+            textposition="top center",
+            textfont=dict(size=10),
+            name=row["sector"],
+            hovertemplate=(
+                f"<b>{row['sector']}</b> ({row['tag']})<br>"
+                f"勝率: {row['wr']:.1f}%<br>"
+                f"EV: {row['ev']:+.2f}%<br>"
+                f"Big Win: {row['bigwin']:.1f}%<br>"
+                "<extra></extra>"
+            ),
+        ))
+
+    # Add zero line
+    fig.add_hline(y=0, line_dash="dash", line_color="#64748b", opacity=0.5)
+    fig.add_vline(x=50, line_dash="dash", line_color="#64748b", opacity=0.5)
+
+    fig.update_layout(
+        title="X=勝率 / Y=EV / Size=Big Win率",
+        template="plotly_dark",
+        height=450,
+        xaxis_title="勝率 (%)",
+        yaxis_title="EV (%)",
+        showlegend=False,
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Static BT stats tables
+    st.markdown("---")
+    st.subheader("セグメント別パフォーマンス")
+    perf_data = pd.DataFrame([
+        {"Segment": "US Mega BO ($200B+)", "N": 20, "EV": "+11.29%", "PF": 20.54, "Win%": "85.0%", "Note": "最強"},
+        {"Segment": "US Mega All ($200B+)", "N": 641, "EV": "+5.12%", "PF": 2.65, "Win%": "65.2%", "Note": "SL-20%/TP+40%"},
+        {"Segment": "US Mega BEAR 2022", "N": 46, "EV": "+2.10%", "PF": 1.58, "Win%": "43.5%", "Note": "唯一EV+"},
+        {"Segment": "JP Prime", "N": 17110, "EV": "+3.24%", "PF": 2.20, "Win%": "43.0%", "Note": "SL-5%/TP+40%"},
+        {"Segment": "JP Standard", "N": 16011, "EV": "+2.88%", "PF": 2.13, "Win%": "42.2%", "Note": "SL-5%/TP+40%"},
+    ])
+    st.dataframe(perf_data, use_container_width=True, hide_index=True)
+
+
+# ─── Page 3: Ticker Detail ──────────────────────────
 
 def render_ticker_detail(df_tech: pd.DataFrame, universe: list[dict], company_info: dict):
-    """Ticker Detail: 個別銘柄の詳細"""
     st.header("\U0001f50d Ticker Detail")
 
     tickers = sorted(df_tech["ticker"].tolist()) if not df_tech.empty else []
@@ -778,7 +937,7 @@ def render_ticker_detail(df_tech: pd.DataFrame, universe: list[dict], company_in
 
     meta_map = {s["symbol"]: s for s in universe}
 
-    # Watchlistからの遷移時はpre-select
+    # Pre-select from pipeline navigation
     pre_selected = st.session_state.pop("detail_ticker", None)
     default_idx = 0
     if pre_selected and pre_selected in tickers:
@@ -792,78 +951,66 @@ def render_ticker_detail(df_tech: pd.DataFrame, universe: list[dict], company_in
     meta = meta_map.get(selected, {})
     info = company_info.get(selected, {})
 
-    # ロゴ + 企業名ヘッダー
     logo_url = info.get("logo_url", "")
     industry = info.get("industry", "")
     summary = info.get("summary", "")
+    sector = meta.get("sector", "")
+    tag = _get_sector_tag(sector)
+    mcap_b = (meta.get("marketCap", 0) or 0) / 1e9
+    is_bo = row["signal"] == "BO"
 
+    # ── Header ──
     hdr_logo, hdr_name = st.columns([1, 9])
     with hdr_logo:
         if logo_url:
             st.image(logo_url, width=64)
     with hdr_name:
-        st.markdown(f"## {selected} — {meta.get('name', '')}")
-        st.caption(f"{industry} | {meta.get('sector', '')}")
+        tag_color = SECTOR_PROFILES.get(sector, {}).get("color", "#94a3b8")
+        st.markdown(
+            f"## {selected} — {meta.get('name', '')} "
+            f'<span style="background:#334155; padding:2px 10px; border-radius:4px; '
+            f'font-size:0.5em; color:{tag_color};">{tag}</span>',
+            unsafe_allow_html=True,
+        )
+        st.caption(f"{industry} | {sector}")
 
-    if summary:
-        with st.expander("事業内容", expanded=True):
-            st.write(summary)
-
-    # ヘッダー
-    mcap_b = (meta.get("marketCap", 0) or 0) / 1e9
+    # ── Key Metrics (prominently: price, 52W high, distance, SMA200) ──
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Price", f"${row['close']:,.2f}")
     c2.metric("52W高値", f"${row['high_52w']:,.2f}")
-    c3.metric("52W距離", f"{row['dist_pct']:+.1f}%")
-    c4.metric("RSI", f"{row['rsi']:.0f}")
+    c3.metric("距離", f"{row['dist_pct']:+.1f}%")
+    c4.metric("SMA200上方", "\u2705" if row["above_sma200"] else "\u274c")
     c5.metric("MCap", f"${mcap_b:,.0f}B")
-
-    c6, c7, c8, c9 = st.columns(4)
-    c6.metric("GC", "\u2705" if row["gc"] else "\u274c")
-    c7.metric("SMA200\u2191", "\u2705" if row["above_sma200"] else "\u274c")
-    c8.metric("Vol Ratio", f"{row['vol_ratio']:.1f}x")
-    signal_display = {
-        "BO": "\U0001f6a8 Breakout!",
-        "PB": "\U0001f451 Pre-Breakout",
-        "-": "\u2014 No Signal",
-    }
-    c9.metric("Signal", signal_display.get(row["signal"], row["signal"]))
-
-    # 移動平均線
-    sma_c1, sma_c2, sma_c3 = st.columns(3)
-    sma_c1.metric("SMA20", f"${row['sma20']:,.2f}",
-                   delta=f"{(row['close'] / row['sma20'] - 1) * 100:+.1f}%" if row['sma20'] else None)
-    sma_c2.metric("SMA50", f"${row['sma50']:,.2f}",
-                   delta=f"{(row['close'] / row['sma50'] - 1) * 100:+.1f}%" if row['sma50'] else None)
-    sma200_val = row['sma200']
-    if not np.isnan(sma200_val):
-        sma_c3.metric("SMA200", f"${sma200_val:,.2f}",
-                       delta=f"{(row['close'] / sma200_val - 1) * 100:+.1f}%")
-    else:
-        sma_c3.metric("SMA200", "N/A")
 
     # SL/TP
     sl = row["close"] * (1 + MEGA_STOP_LOSS)
     tp = row["close"] * (1 + MEGA_PROFIT_TARGET)
-    st.info(f"**Mega SL**: ${sl:,.2f} ({MEGA_STOP_LOSS:+.0%}) | **TP**: ${tp:,.2f} ({MEGA_PROFIT_TARGET:+.0%})")
+    st.info(f"**SL**: ${sl:,.2f} ({MEGA_STOP_LOSS:+.0%}) | **TP**: ${tp:,.2f} ({MEGA_PROFIT_TARGET:+.0%})")
 
-    # AI分析
+    # Red flags
+    flags = get_red_flags(row.to_dict(), sector)
+    if flags:
+        for f in flags:
+            st.warning(f":warning: {f}")
+
+    # ── AI Analysis ──
     if os.getenv("GOOGLE_API_KEY"):
-        with st.expander("AI ブレイクアウト分析 (最新ニュース込み)", expanded=True):
-            analysis = analyze_breakout_factors(
-                selected, meta.get("name", ""), industry, row["close"],
-                row["high_52w"], row["dist_pct"], row["rsi"], row["vol_ratio"],
-                row["gc"], row["sma20"], row["sma50"], row["sma200"],
-                mcap_b, row["above_sma200"], summary,
-            )
-            if analysis:
-                st.markdown(analysis)
-            else:
-                st.caption("分析を取得できませんでした")
+        if is_bo:
+            st.success("**確定BO: 過去勝率85%. 迷わず実行.**")
+        else:
+            with st.expander("AI分析: BO触媒候補", expanded=True):
+                analysis = analyze_breakout_factors(
+                    selected, meta.get("name", ""), industry, row["close"],
+                    row["high_52w"], row["dist_pct"], row["rsi"], row["vol_ratio"],
+                    row["gc"], row["sma20"], row["sma50"], row["sma200"],
+                    mcap_b, row["above_sma200"], summary, is_pb=(not is_bo),
+                )
+                if analysis:
+                    st.markdown(analysis)
+                else:
+                    st.caption("分析を取得できませんでした")
 
-    # チャート
-    import plotly.graph_objects as go
-
+    # ── Chart ──
     chart_data = fetch_ticker_chart(selected, period="1y")
     if not chart_data.empty:
         close_series = chart_data["Close"]
@@ -872,43 +1019,44 @@ def render_ticker_detail(df_tech: pd.DataFrame, universe: list[dict], company_in
 
         fig = go.Figure()
 
-        # 株価
+        # Close price
         fig.add_trace(go.Scatter(
             x=chart_data.index, y=close_series,
             name="Close", line=dict(color="#60a5fa", width=2),
         ))
 
-        # SMA20
+        # SMA200 (prominent)
+        if len(close_series) >= 200:
+            sma200_line = close_series.rolling(200).mean()
+            fig.add_trace(go.Scatter(
+                x=chart_data.index, y=sma200_line,
+                name="SMA200", line=dict(color="#f59e0b", width=2, dash="dash"),
+            ))
+
+        # SMA20/50 (subtle)
         if len(close_series) >= 20:
             sma20_line = close_series.rolling(20).mean()
             fig.add_trace(go.Scatter(
                 x=chart_data.index, y=sma20_line,
                 name="SMA20", line=dict(color="#a78bfa", width=1),
+                opacity=0.4,
             ))
 
-        # SMA50
         if len(close_series) >= 50:
             sma50_line = close_series.rolling(50).mean()
             fig.add_trace(go.Scatter(
                 x=chart_data.index, y=sma50_line,
                 name="SMA50", line=dict(color="#34d399", width=1, dash="dot"),
+                opacity=0.4,
             ))
 
-        # SMA200
-        if len(close_series) >= 200:
-            sma200_line = close_series.rolling(200).mean()
-            fig.add_trace(go.Scatter(
-                x=chart_data.index, y=sma200_line,
-                name="SMA200", line=dict(color="#f59e0b", width=1, dash="dash"),
-            ))
-
-        # 52W高値ライン
+        # 52W High line
         fig.add_hline(
             y=row["high_52w"], line_dash="dot", line_color="#ef4444",
             annotation_text=f"52W High ${row['high_52w']:,.2f}",
         )
 
-        # SL/TPライン
+        # SL/TP lines
         fig.add_hline(y=sl, line_dash="dash", line_color="#ef4444",
                       annotation_text=f"SL ${sl:,.2f}")
         fig.add_hline(y=tp, line_dash="dash", line_color="#22c55e",
@@ -924,61 +1072,172 @@ def render_ticker_detail(df_tech: pd.DataFrame, universe: list[dict], company_in
         )
         st.plotly_chart(fig, use_container_width=True)
 
+    # Business summary in expander
+    if summary:
+        with st.expander("事業内容", expanded=False):
+            st.write(summary)
 
-def render_strategy_stats():
-    """Strategy Stats: BT実績サマリー"""
-    st.header("\U0001f4dd Strategy Stats")
 
-    st.subheader("\u30bb\u30b0\u30e1\u30f3\u30c8\u5225\u30d1\u30d5\u30a9\u30fc\u30de\u30f3\u30b9")
-    perf_data = pd.DataFrame([
-        {"Segment": "US Mega BO ($200B+)", "N": 20, "EV": "+11.29%", "PF": 20.54, "Win%": "85.0%", "Note": "\u2605\u6700\u5f37"},
-        {"Segment": "US Mega All ($200B+)", "N": 641, "EV": "+5.12%", "PF": 2.65, "Win%": "65.2%", "Note": "SL-20%/TP+40%"},
-        {"Segment": "US Mega BEAR 2022", "N": 46, "EV": "+2.10%", "PF": 1.58, "Win%": "43.5%", "Note": "\u552f\u4e00EV+"},
-        {"Segment": "JP Prime", "N": 17110, "EV": "+3.24%", "PF": 2.20, "Win%": "43.0%", "Note": "SL-5%/TP+40%"},
-        {"Segment": "JP Standard", "N": 16011, "EV": "+2.88%", "PF": 2.13, "Win%": "42.2%", "Note": "SL-5%/TP+40%"},
-        {"Segment": "JP Growth", "N": 5402, "EV": "+2.09%", "PF": 1.57, "Win%": "24.9%", "Note": "SL-5%/TP+40%"},
-        {"Segment": "US Large ($50-200B)", "N": 2674, "EV": "+2.78%", "PF": 1.80, "Win%": "-", "Note": ""},
-        {"Segment": "US Small (<$10B)", "N": "-", "EV": "-1.70%", "PF": 0.75, "Win%": "41.9%", "Note": "BEAR\u8d64\u5b57"},
-    ])
-    st.dataframe(perf_data, use_container_width=True, hide_index=True)
+# ─── Page 4: Sector Map ─────────────────────────────
 
-    st.subheader("\u51fa\u53e3\u6226\u7565\u6bd4\u8f03 (Mega)")
-    exit_data = pd.DataFrame([
-        {"Strategy": "SL-20%/TP+40%", "EV": "+5.12%", "PF": 2.65, "Win%": "65.2%", "Note": "\u2605EV\u6700\u5927"},
-        {"Strategy": "Trail +10%/-8%", "EV": "+4.47%", "PF": 2.61, "Win%": "68.8%", "Note": "\u2605\u52dd\u7387\u6700\u9ad8"},
-        {"Strategy": "Half TP+15% + Trail", "EV": "+4.45%", "PF": 2.53, "Win%": "66.9%", "Note": "\u5fc3\u7406\u7684\u306b\u697d"},
-        {"Strategy": "SL-10%/TP+30%", "EV": "+4.61%", "PF": 2.50, "Win%": "60.5%", "Note": ""},
-        {"Strategy": "30\u65e5\u56fa\u5b9a+SL-20%", "EV": "+3.30%", "PF": 2.34, "Win%": "62.2%", "Note": ""},
-        {"Strategy": "SL-20%/TP+15% (\u65e7)", "EV": "+4.15%", "PF": 2.42, "Win%": "66.9%", "Note": "\u5229\u78ba\u65e9\u3059\u304e"},
-    ])
-    st.dataframe(exit_data, use_container_width=True, hide_index=True)
+def render_sector_map(df_tech: pd.DataFrame, universe: list[dict]):
+    st.header("\U0001f5fa Sector Map")
 
-    st.subheader("Mega\u30d6\u30ec\u30a4\u30af\u30a2\u30a6\u30c8\u5f8c\u306e\u30ea\u30bf\u30fc\u30f3\u63a8\u79fb")
-    return_path = pd.DataFrame({
-        "Day": [1, 2, 3, 5, 10, 15, 20, 30, 40, 50],
-        "Avg Return%": [0.30, 0.60, 0.72, 0.89, 1.61, 1.98, 2.57, 3.25, 3.86, 4.52],
-        "Win Rate%": [53.0, 56.3, 58.0, 55.3, 60.9, 60.8, 62.8, 62.0, 61.0, 63.3],
-    })
+    meta_map = {s["symbol"]: s for s in universe}
 
-    import plotly.graph_objects as go
+    # ── Bubble Chart ──
+    sector_data = []
+    for sector, profile in SECTOR_PROFILES.items():
+        sector_data.append({
+            "sector": sector,
+            "tag": profile["tag"],
+            "wr": profile["wr"],
+            "ev": profile["ev"],
+            "bigwin": profile["bigwin"],
+            "color": profile["color"],
+        })
+    df_sector = pd.DataFrame(sector_data)
+
+    # Count active PB/BO signals per sector
+    signal_counts = {}
+    if not df_tech.empty:
+        df = df_tech.copy()
+        df["sector"] = df["ticker"].map(lambda t: meta_map.get(t, {}).get("sector", ""))
+        for _, row in df[df["signal"].isin(["BO", "PB"])].iterrows():
+            s = row["sector"]
+            if s not in signal_counts:
+                signal_counts[s] = {"BO": 0, "PB": 0}
+            signal_counts[s][row["signal"]] += 1
+
     fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=return_path["Day"], y=return_path["Avg Return%"],
-        name="Avg Return%", marker_color="#60a5fa",
-    ))
-    fig.add_trace(go.Scatter(
-        x=return_path["Day"], y=return_path["Win Rate%"],
-        name="Win Rate%", yaxis="y2",
-        line=dict(color="#f59e0b", width=2),
-    ))
+
+    for _, row in df_sector.iterrows():
+        sector = row["sector"]
+        sc = signal_counts.get(sector, {"BO": 0, "PB": 0})
+        active_text = ""
+        if sc["BO"] > 0:
+            active_text += f" | BO:{sc['BO']}"
+        if sc["PB"] > 0:
+            active_text += f" | PB:{sc['PB']}"
+
+        # Larger marker if has active signals
+        base_size = max(12, row["bigwin"] * 3)
+        if sc["BO"] > 0 or sc["PB"] > 0:
+            border_width = 3
+            border_color = "#4ade80" if sc["BO"] > 0 else "#60a5fa"
+        else:
+            border_width = 1
+            border_color = "white"
+
+        fig.add_trace(go.Scatter(
+            x=[row["wr"]],
+            y=[row["ev"]],
+            mode="markers+text",
+            marker=dict(
+                size=base_size,
+                color=row["color"],
+                opacity=0.7,
+                line=dict(width=border_width, color=border_color),
+            ),
+            text=[f"{sector}<br>{row['tag']}{active_text}"],
+            textposition="top center",
+            textfont=dict(size=10),
+            name=sector,
+            hovertemplate=(
+                f"<b>{sector}</b> ({row['tag']})<br>"
+                f"勝率: {row['wr']:.1f}%<br>"
+                f"EV: {row['ev']:+.2f}%<br>"
+                f"Big Win: {row['bigwin']:.1f}%<br>"
+                f"Active BO: {sc['BO']} / PB: {sc['PB']}<br>"
+                "<extra></extra>"
+            ),
+        ))
+
+    fig.add_hline(y=0, line_dash="dash", line_color="#64748b", opacity=0.5,
+                  annotation_text="EV=0 (損益分岐)")
+    fig.add_vline(x=50, line_dash="dash", line_color="#64748b", opacity=0.5,
+                  annotation_text="勝率50%")
+
     fig.update_layout(
-        title="Mega: \u30d6\u30ec\u30a4\u30af\u30a2\u30a6\u30c8\u5f8c\u306e\u65e5\u6570\u5225\u30ea\u30bf\u30fc\u30f3",
+        title="X=勝率 / Y=EV / Size=Big Win率 / 緑枠=BO活性 / 青枠=PB活性",
         template="plotly_dark",
-        yaxis=dict(title="Avg Return%"),
-        yaxis2=dict(title="Win Rate%", overlaying="y", side="right", range=[40, 70]),
-        height=400,
+        height=500,
+        xaxis_title="勝率 (%)",
+        yaxis_title="EV (%)",
+        showlegend=False,
     )
     st.plotly_chart(fig, use_container_width=True)
+
+    # ── Sector Personality Table ──
+    st.markdown("---")
+    st.subheader("セクター性格表")
+
+    table_rows = []
+    for sector, profile in SECTOR_PROFILES.items():
+        sc = signal_counts.get(sector, {"BO": 0, "PB": 0})
+        active = ""
+        if sc["BO"] > 0:
+            active += f"BO:{sc['BO']} "
+        if sc["PB"] > 0:
+            active += f"PB:{sc['PB']}"
+
+        table_rows.append({
+            "セクター": sector,
+            "性格": profile["tag"],
+            "勝率": f"{profile['wr']:.1f}%",
+            "EV": f"{profile['ev']:+.2f}%",
+            "Big Win率": f"{profile['bigwin']:.1f}%",
+            "活性シグナル": active or "-",
+        })
+
+    st.dataframe(
+        pd.DataFrame(table_rows),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    # ── Seasonal Indicator ──
+    st.markdown("---")
+    st.subheader("月次パフォーマンス (BT)")
+
+    months = list(range(1, 13))
+    evs = [MONTHLY_STATS[m]["ev"] for m in months]
+    wrs = [MONTHLY_STATS[m]["wr"] for m in months]
+    current_month = datetime.now().month
+
+    colors = ["#4ade80" if ev > 0 else "#ef4444" for ev in evs]
+    # Highlight current month
+    border_colors = ["#fbbf24" if m == current_month else "rgba(0,0,0,0)" for m in months]
+    border_widths = [3 if m == current_month else 0 for m in months]
+
+    fig_monthly = go.Figure()
+    fig_monthly.add_trace(go.Bar(
+        x=[f"{m}月" for m in months],
+        y=evs,
+        name="EV%",
+        marker_color=colors,
+        marker_line_color=border_colors,
+        marker_line_width=border_widths,
+    ))
+    fig_monthly.add_trace(go.Scatter(
+        x=[f"{m}月" for m in months],
+        y=wrs,
+        name="勝率%",
+        yaxis="y2",
+        line=dict(color="#60a5fa", width=2),
+        mode="lines+markers",
+    ))
+
+    fig_monthly.update_layout(
+        title=f"月次EV & 勝率 (現在: {current_month}月)",
+        template="plotly_dark",
+        height=350,
+        yaxis=dict(title="EV (%)"),
+        yaxis2=dict(title="勝率 (%)", overlaying="y", side="right", range=[30, 70]),
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02),
+    )
+    st.plotly_chart(fig_monthly, use_container_width=True)
 
 
 # ─── Main ─────────────────────────────────────────────
@@ -991,34 +1250,37 @@ def main():
         universe = load_mega_universe()
         tickers = [s["symbol"] for s in universe]
 
-    # 企業情報（ロゴ・事業内容）はOverview/Watchlist/Detailで使う
-    needs_company_info = page in (
-        "\U0001f4ca Overview", "\U0001f3af Watchlist", "\U0001f50d Ticker Detail",
+    needs_tech = page in (
+        "\U0001f3af Today's Action",
+        "\U0001f50d Ticker Detail",
+        "\U0001f5fa Sector Map",
     )
+    needs_company_info = page in (
+        "\U0001f3af Today's Action",
+        "\U0001f50d Ticker Detail",
+    )
+
+    df_tech = pd.DataFrame()
     company_info = {}
+
+    if needs_tech:
+        with st.spinner(f"{len(tickers)}銘柄のテクニカルデータを取得中..."):
+            df_tech = fetch_technicals(tickers)
+
     if needs_company_info:
         company_info = fetch_company_info(tickers)
 
-    if page == "\U0001f4ca Overview":
-        with st.spinner(f"{len(tickers)}銘柄のテクニカルデータを取得中..."):
-            df_tech = fetch_technicals(tickers)
-        render_overview(df_tech, universe, company_info)
+    if page == "\U0001f3af Today's Action":
+        render_todays_action(df_tech, universe, company_info)
 
-    elif page == "\U0001f3af Watchlist":
-        with st.spinner("テクニカルデータを取得中..."):
-            df_tech = fetch_technicals(tickers)
-        render_watchlist(df_tech, universe, company_info)
-
-    elif page == "\U0001f4c8 Signal History":
-        render_signal_history()
+    elif page == "\U0001f4c8 Performance":
+        render_performance()
 
     elif page == "\U0001f50d Ticker Detail":
-        with st.spinner("テクニカルデータを取得中..."):
-            df_tech = fetch_technicals(tickers)
         render_ticker_detail(df_tech, universe, company_info)
 
-    elif page == "\U0001f4dd Strategy Stats":
-        render_strategy_stats()
+    elif page == "\U0001f5fa Sector Map":
+        render_sector_map(df_tech, universe)
 
 
 if __name__ == "__main__":

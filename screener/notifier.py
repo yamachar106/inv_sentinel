@@ -77,16 +77,24 @@ def _resolve_webhook_url(strategy: str = "", market: str = "") -> str | None:
     return os.getenv(NOTIFY_FALLBACK_ENV)
 
 
-def _send_slack(webhook_url: str, message: str) -> bool:
-    """Slack Webhook にメッセージを送信する"""
+def _send_slack(webhook_url: str, message: str, max_retries: int = 3) -> bool:
+    """Slack Webhook にメッセージを送信する（リトライ付き）"""
+    import time as _time
     payload = json.dumps({"text": message}).encode("utf-8")
     req = Request(webhook_url, data=payload, headers={"Content-Type": "application/json"})
-    try:
-        with urlopen(req) as resp:
-            return resp.status == 200
-    except Exception as e:
-        print(f"[WARN] Slack通知エラー: {e}")
-        return False
+    for attempt in range(max_retries):
+        try:
+            with urlopen(req, timeout=15) as resp:
+                if resp.status == 200:
+                    return True
+        except Exception as e:
+            wait = 5 * (2 ** attempt)  # 5s, 10s, 20s
+            print(f"[WARN] Slack通知エラー (試行{attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                print(f"  → {wait}秒後にリトライ...")
+                _time.sleep(wait)
+    print("[ERROR] Slack通知: 全リトライ失敗")
+    return False
 
 
 def notify_slack(
