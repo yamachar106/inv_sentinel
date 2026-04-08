@@ -838,34 +838,40 @@ TP(利確): ${tp:,.2f} (+40%)
 ### リスク要因
 この銘柄固有のリスクと、現在のテクニカル状況から見た注意点を2-3行。"""
 
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                tools=[types.Tool(google_search=types.GoogleSearch())],
-            ),
-        )
+    # リトライ付きAPI呼び出し（503対策）
+    last_err = None
+    for attempt in range(3):
         try:
-            result = response.text or ""
-        except Exception:
-            # response.textプロパティが例外を投げる場合、partsから抽出
-            result = ""
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    tools=[types.Tool(google_search=types.GoogleSearch())],
+                ),
+            )
             try:
-                candidates = response.candidates or []
-                if candidates:
-                    parts = candidates[0].content.parts or []
-                    result = "\n".join(p.text for p in parts if hasattr(p, "text") and p.text)
+                result = response.text or ""
             except Exception:
-                pass
-        result = result.strip()
-        if not result:
-            return "(分析結果が空でした。再読み込みしてください)"
-        cache[cache_key] = result
-        _save_ai_cache(cache)
-        return result
-    except Exception as e:
-        return f"(分析エラー: {e})"
+                result = ""
+                try:
+                    candidates = response.candidates or []
+                    if candidates:
+                        parts = candidates[0].content.parts or []
+                        result = "\n".join(p.text for p in parts if hasattr(p, "text") and p.text)
+                except Exception:
+                    pass
+            result = result.strip()
+            if result:
+                cache[cache_key] = result
+                _save_ai_cache(cache)
+                return result
+        except Exception as e:
+            last_err = e
+            if "503" in str(e) and attempt < 2:
+                time.sleep(3 * (attempt + 1))
+                continue
+            break
+    return f"(Gemini一時障害中。しばらく待ってリロードしてください)"
 
 
 def analyze_breakout_factors(ticker: str, name: str, industry: str,
