@@ -20,10 +20,21 @@ import yfinance as yf
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
-from dotenv import load_dotenv
 import os
 
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+# Streamlit Cloud: secretsを環境変数に反映
+try:
+    for key, val in st.secrets.items():
+        if isinstance(val, str):
+            os.environ.setdefault(key, val)
+except Exception:
+    pass
 
 from screener.config import (
     MEGA_THRESHOLD_US, MEGA_STOP_LOSS, MEGA_PROFIT_TARGET,
