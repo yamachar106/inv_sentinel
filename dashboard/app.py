@@ -455,6 +455,248 @@ def get_last_bo_from_signals() -> dict | None:
     return None
 
 
+# ─── BT条件別統計 + ファンダメンタルズ ─────────────────
+
+@st.cache_data(ttl=86400)
+def _load_bt_stats() -> dict:
+    """US BT条件別統計を事前計算（日次キャッシュ）"""
+    bt_path = ROOT / "data" / "backtest" / "analysis_events_us_all_500_5y.json"
+    if not bt_path.exists():
+        return {}
+    with open(bt_path, encoding="utf-8") as f:
+        events = json.load(f)
+
+    SL, TP = -0.20, 0.40
+
+    def sim(dr):
+        for r in dr:
+            if r <= SL: return SL
+            if r >= TP: return TP
+        return dr[-1] if dr else 0.0
+
+    def calc(rets):
+        if not rets:
+            return {"n": 0, "ev": 0, "wr": 0, "pf": 0}
+        wins = [r for r in rets if r > 0]
+        losses = [r for r in rets if r <= 0]
+        tw = sum(wins) if wins else 0
+        tl = abs(sum(losses)) if losses else 0.001
+        return {
+            "n": len(rets),
+            "ev": round(np.mean(rets) * 100, 1),
+            "wr": round(len(wins) / len(rets) * 100, 0),
+            "pf": round(tw / tl, 1),
+        }
+
+    bo_events = [e for e in events if e.get("signal") in ("breakout", "breakout_overheated")
+                 and e.get("daily_returns_60d")]
+
+    # 全BO
+    all_rets = [sim(e["daily_returns_60d"]) for e in bo_events]
+
+    # RSI帯別
+    rsi_hot = [sim(e["daily_returns_60d"]) for e in bo_events if (e.get("rsi") or 0) >= 70]
+    rsi_warm = [sim(e["daily_returns_60d"]) for e in bo_events if 50 <= (e.get("rsi") or 0) < 70]
+    rsi_cool = [sim(e["daily_returns_60d"]) for e in bo_events if (e.get("rsi") or 0) < 50]
+
+    # 急騰BO (初日+8%以上)
+    spike = [sim(e["daily_returns_60d"]) for e in bo_events
+             if e["daily_returns_60d"] and e["daily_returns_60d"][0] >= 0.08]
+    normal = [sim(e["daily_returns_60d"]) for e in bo_events
+              if e["daily_returns_60d"] and e["daily_returns_60d"][0] < 0.08]
+
+    # GC有無
+    gc_yes = [sim(e["daily_returns_60d"]) for e in bo_events if e.get("gc_at_entry")]
+    gc_no = [sim(e["daily_returns_60d"]) for e in bo_events if not e.get("gc_at_entry")]
+
+    return {
+        "all_bo": calc(all_rets),
+        "rsi_70plus": calc(rsi_hot),
+        "rsi_50_70": calc(rsi_warm),
+        "rsi_under50": calc(rsi_cool),
+        "spike_bo": calc(spike),
+        "normal_bo": calc(normal),
+        "gc_yes": calc(gc_yes),
+        "gc_no": calc(gc_no),
+    }
+
+
+@st.cache_data(ttl=300)
+def _fetch_fundamentals(ticker: str) -> dict:
+    """yfinanceからファンダメンタルズ取得"""
+    import yfinance as yf
+    try:
+        info = yf.Ticker(ticker).info
+        return {
+            "forward_pe": info.get("forwardPE"),
+            "trailing_pe": info.get("trailingPE"),
+            "profit_margin": info.get("profitMargins"),
+            "revenue_growth": info.get("revenueGrowth"),
+            "earnings_growth": info.get("earningsGrowth"),
+            "target_mean": info.get("targetMeanPrice"),
+            "target_low": info.get("targetLowPrice"),
+            "target_high": info.get("targetHighPrice"),
+            "recommendation": info.get("recommendationKey"),
+            "short_pct": info.get("shortPercentOfFloat"),
+        }
+    except Exception:
+        return {}
+
+
+def _render_full_analysis(
+    ticker: str, row: pd.Series, meta: dict, company_info: dict,
+):
+    """BO/PB銘柄のフル分析をインライン表示"""
+    info = company_info.get(ticker, {})
+    industry = info.get("industry", "")
+    summary = info.get("summary", "")
+    sector = meta.get("sector", "")
+    mcap_b = (meta.get("marketCap", 0) or 0) / 1e9
+    is_bo = row["signal"] == "BO"
+
+    # ─── ステータスバッジ ───
+    gc_ok = row.get("gc", False)
+    sma200_ok = row.get("above_sma200", False)
+    rsi = row.get("rsi", 0) or 0
+    vol_ratio = row.get("vol_ratio", 0) or 0
+    dist = row.get("dist_pct", 0)
+
+    def _badge(label, value, color):
+        return (
+            f'<span style="display:inline-block;margin:2px 3px;padding:3px 10px;'
+            f'border-radius:5px;background:{color}22;border:1px solid {color};'
+            f'color:{color};font-size:0.8em;font-weight:600;">'
+            f'{label}: {value}</span>'
+        )
+
+    rsi_color = "#ef4444" if rsi >= 70 else "#4ade80" if rsi >= 50 else "#fbbf24"
+    rsi_label = "過熱" if rsi >= 70 else "強気" if rsi >= 50 else "中立" if rsi >= 30 else "弱気"
+    vol_color = "#ef4444" if vol_ratio >= 3 else "#4ade80" if vol_ratio >= 1.5 else "#94a3b8"
+
+    badges = "".join([
+        _badge("GC", "済" if gc_ok else "未", "#4ade80" if gc_ok else "#ef4444"),
+        _badge("SMA200", "上方" if sma200_ok else "下方", "#4ade80" if sma200_ok else "#ef4444"),
+        _badge("52W", f"{dist:+.1f}%", "#4ade80" if dist >= 0 else "#60a5fa"),
+        _badge("RSI", f"{rsi:.0f} {rsi_label}", rsi_color),
+        _badge("Vol", f"{vol_ratio:.1f}x", vol_color),
+    ])
+    st.markdown(f'<div style="display:flex;flex-wrap:wrap;">{badges}</div>', unsafe_allow_html=True)
+
+    # ─── メトリクス + SL/TP ───
+    sl = row["close"] * (1 + MEGA_STOP_LOSS)
+    tp = row["close"] * (1 + MEGA_PROFIT_TARGET)
+    sma200_gap = (row["close"] / row["sma200"] - 1) * 100 if row.get("sma200") and row["sma200"] > 0 else 0
+
+    mc1, mc2, mc3, mc4 = st.columns(4)
+    mc1.metric("Price", f"${row['close']:,.2f}")
+    mc2.metric("SL (-20%)", f"${sl:,.2f}")
+    mc3.metric("TP (+40%)", f"${tp:,.2f}")
+    mc4.metric("SMA200乖離", f"{sma200_gap:+.0f}%")
+
+    # ─── ファンダメンタルズ ───
+    funda = _fetch_fundamentals(ticker)
+    if funda:
+        fc1, fc2, fc3, fc4, fc5 = st.columns(5)
+        pe = funda.get("forward_pe")
+        fc1.metric("Forward P/E", f"{pe:.1f}" if pe else "N/A")
+        margin = funda.get("profit_margin")
+        fc2.metric("利益率", f"{margin:.1%}" if margin is not None else "N/A")
+        rev_g = funda.get("revenue_growth")
+        fc3.metric("売上成長", f"{rev_g:+.1%}" if rev_g is not None else "N/A")
+        target = funda.get("target_mean")
+        if target:
+            vs_target = (row["close"] / target - 1) * 100
+            color = "inverse" if vs_target > 10 else "normal" if vs_target < -5 else "off"
+            fc4.metric("目標株価", f"${target:,.0f}", f"{vs_target:+.0f}%", delta_color=color)
+        else:
+            fc4.metric("目標株価", "N/A")
+        rec = funda.get("recommendation", "")
+        fc5.metric("推奨", rec.upper() if rec else "N/A")
+
+    # ─── BT条件別統計 ───
+    bt = _load_bt_stats()
+    if bt:
+        st.markdown("**BT条件別統計** (SL-20%/TP+40%)")
+        # この銘柄に該当する条件をハイライト
+        rsi_key = "rsi_70plus" if rsi >= 70 else "rsi_50_70" if rsi >= 50 else "rsi_under50"
+        bt_rows = []
+        conditions = [
+            ("全BO", "all_bo", True),
+            ("RSI≥70 BO", "rsi_70plus", rsi_key == "rsi_70plus"),
+            ("RSI 50-70 BO", "rsi_50_70", rsi_key == "rsi_50_70"),
+            ("RSI<50 BO", "rsi_under50", rsi_key == "rsi_under50"),
+            ("急騰BO (初日+8%)", "spike_bo", False),
+            ("GC済み", "gc_yes", gc_ok),
+            ("GC未", "gc_no", not gc_ok),
+        ]
+        for label, key, is_current in conditions:
+            s = bt.get(key, {})
+            if s.get("n", 0) > 0:
+                bt_rows.append({
+                    "条件": f"{'→ ' if is_current else ''}{label}",
+                    "n": s["n"],
+                    "EV": f"{s['ev']:+.1f}%",
+                    "勝率": f"{s['wr']:.0f}%",
+                    "PF": s["pf"],
+                })
+        if bt_rows:
+            st.dataframe(pd.DataFrame(bt_rows), hide_index=True, use_container_width=True)
+
+    # ─── AI分析 ───
+    if os.getenv("GOOGLE_API_KEY"):
+        analysis = analyze_breakout_factors(
+            ticker, meta.get("name", ""), industry, row["close"],
+            row["high_52w"], row["dist_pct"], rsi, vol_ratio,
+            gc_ok, row.get("sma20", 0), row.get("sma50", 0), row.get("sma200", 0),
+            mcap_b, sma200_ok, summary, is_pb=(not is_bo),
+        )
+        if analysis:
+            st.markdown(analysis)
+
+    # ─── チャート ───
+    chart_data = fetch_ticker_chart(ticker, period="1y")
+    if not chart_data.empty:
+        close_series = chart_data["Close"]
+        if hasattr(close_series, "columns"):
+            close_series = close_series.iloc[:, 0]
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=chart_data.index, y=close_series,
+            name="Close", line=dict(color="#60a5fa", width=2),
+        ))
+        if len(close_series) >= 200:
+            fig.add_trace(go.Scatter(
+                x=chart_data.index, y=close_series.rolling(200).mean(),
+                name="SMA200", line=dict(color="#f59e0b", width=2, dash="dash"),
+            ))
+        if len(close_series) >= 50:
+            fig.add_trace(go.Scatter(
+                x=chart_data.index, y=close_series.rolling(50).mean(),
+                name="SMA50", line=dict(color="#34d399", width=1, dash="dot"), opacity=0.5,
+            ))
+        fig.add_hline(y=row["high_52w"], line_dash="dot", line_color="#ef4444",
+                      annotation_text=f"52W ${row['high_52w']:,.2f}")
+        fig.add_hline(y=sl, line_dash="dash", line_color="#ef4444",
+                      annotation_text=f"SL ${sl:,.2f}")
+        fig.add_hline(y=tp, line_dash="dash", line_color="#22c55e",
+                      annotation_text=f"TP ${tp:,.2f}")
+        fig.update_layout(
+            height=400, template="plotly_dark",
+            margin=dict(t=10, b=10),
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+            xaxis_title="", yaxis_title="$",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    # Red flags
+    flags = get_red_flags(row.to_dict(), sector)
+    if flags:
+        for f in flags:
+            st.warning(f":warning: {f}")
+
+
 # ─── AI分析 (Gemini Flash) ────────────────────────────
 
 AI_CACHE = ROOT / "data" / "cache" / "mega_ai_analysis.json"
@@ -743,10 +985,8 @@ def render_todays_action(df_tech: pd.DataFrame, universe: list[dict], company_in
                 f'</div>',
                 unsafe_allow_html=True,
             )
-            # Button to navigate to detail
-            if st.button(f"詳細を見る: {ticker}", key=f"bo_detail_{ticker}"):
-                _navigate_to_detail(ticker)
-                st.rerun()
+            with st.expander(f"フル分析: {ticker} {name}", expanded=False):
+                _render_full_analysis(ticker, row, meta_map.get(ticker, {}), company_info)
 
     # ── Middle Section: PB→BO Pipeline ──
     st.markdown("---")
@@ -762,7 +1002,6 @@ def render_todays_action(df_tech: pd.DataFrame, universe: list[dict], company_in
             sector = row["sector"]
             tag = _get_sector_tag(sector)
             dist = row["dist_pct"]
-            info = company_info.get(ticker, {})
 
             # Progress bar (0% = far, 100% = at 52W high)
             progress = max(0.0, min(1.0, (dist + 5) / 5))
@@ -770,27 +1009,22 @@ def render_todays_action(df_tech: pd.DataFrame, universe: list[dict], company_in
             # Red flags
             flags = get_red_flags(row.to_dict(), sector)
 
-            # Layout
-            main_col, btn_col = st.columns([9, 1])
-            with main_col:
-                # Ticker line
-                tag_html = f'<span style="background:#334155; padding:2px 8px; border-radius:4px; font-size:0.85em; color:{SECTOR_PROFILES.get(sector, {}).get("color", "#94a3b8")};">{tag}</span>'
-                st.markdown(
-                    f'**{ticker}** {name} {tag_html} '
-                    f'&nbsp; ${row["close"]:,.2f} \u2192 52W高値 ${row["high_52w"]:,.2f}',
-                    unsafe_allow_html=True,
-                )
-                st.progress(progress, text=f"あと **{abs(dist):.1f}%**")
+            # Ticker line
+            tag_html = f'<span style="background:#334155; padding:2px 8px; border-radius:4px; font-size:0.85em; color:{SECTOR_PROFILES.get(sector, {}).get("color", "#94a3b8")};">{tag}</span>'
+            st.markdown(
+                f'**{ticker}** {name} {tag_html} '
+                f'&nbsp; ${row["close"]:,.2f} \u2192 52W高値 ${row["high_52w"]:,.2f}',
+                unsafe_allow_html=True,
+            )
+            st.progress(progress, text=f"あと **{abs(dist):.1f}%**")
 
-                # Red flags (only shown when present)
-                if flags:
-                    flag_text = " | ".join(flags)
-                    st.caption(f":warning: {flag_text}")
+            # Red flags (only shown when present)
+            if flags:
+                flag_text = " | ".join(flags)
+                st.caption(f":warning: {flag_text}")
 
-            with btn_col:
-                if st.button("\U0001f50d", key=f"pb_nav_{ticker}", help="Ticker Detail"):
-                    _navigate_to_detail(ticker)
-                    st.rerun()
+            with st.expander(f"フル分析: {ticker} {name}", expanded=False):
+                _render_full_analysis(ticker, row, meta_map.get(ticker, {}), company_info)
 
             st.markdown("<div style='margin-bottom:4px;'></div>", unsafe_allow_html=True)
 
@@ -978,12 +1212,27 @@ def render_performance():
 def render_ticker_detail(df_tech: pd.DataFrame, universe: list[dict], company_info: dict):
     st.header("\U0001f50d Ticker Detail")
 
-    tickers = sorted(df_tech["ticker"].tolist()) if not df_tech.empty else []
-    if not tickers:
+    if df_tech.empty:
         st.warning("データなし")
         return
 
+    # Signal priority sort: BO first, then PB by distance (closest first), then others
+    signal_order = {"BO": 0, "PB": 1}
+    df_sorted = df_tech.copy()
+    df_sorted["_sort_signal"] = df_sorted["signal"].map(lambda s: signal_order.get(s, 9))
+    df_sorted["_sort_dist"] = df_sorted["dist_pct"].abs()
+    df_sorted = df_sorted.sort_values(["_sort_signal", "_sort_dist"], ascending=[True, True])
+    tickers = df_sorted["ticker"].tolist()
+
     meta_map = {s["symbol"]: s for s in universe}
+
+    # Format display labels: "TICKER (signal)"
+    def _label(t):
+        row = df_sorted[df_sorted["ticker"] == t].iloc[0]
+        sig = row["signal"]
+        name = meta_map.get(t, {}).get("name", "")
+        tag = "確定BO" if sig == "BO" else f"PB {row['dist_pct']:+.1f}%" if sig == "PB" else sig
+        return f"{t} {name} [{tag}]"
 
     # Pre-select from pipeline navigation
     pre_selected = st.session_state.pop("detail_ticker", None)
@@ -991,7 +1240,12 @@ def render_ticker_detail(df_tech: pd.DataFrame, universe: list[dict], company_in
     if pre_selected and pre_selected in tickers:
         default_idx = tickers.index(pre_selected)
 
-    selected = st.selectbox("銘柄選択", tickers, index=default_idx)
+    selected = st.selectbox(
+        "銘柄選択 (シグナル優先順)",
+        tickers,
+        index=default_idx,
+        format_func=_label,
+    )
     if not selected:
         return
 
