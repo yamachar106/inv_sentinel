@@ -483,14 +483,11 @@ def analyze_breakout_factors(ticker: str, name: str, industry: str,
                              sma20: float, sma50: float, sma200: float,
                              mcap_b: float, above_sma200: bool,
                              summary: str = "", is_pb: bool = True) -> str:
-    """Gemini Flash + Google検索グラウンディングでPB候補のブレイクアウト要因を分析。
-    BOの場合は固定メッセージ、PBの場合のみAI分析。"""
-    if not is_pb:
-        return "**確定BO: 過去勝率85%. 迷わず実行.**"
-
+    """Gemini Flash + Google検索グラウンディングでBO/PB候補を分析。"""
+    cache_key = f"{ticker}_{'pb' if is_pb else 'bo'}"
     cache = _load_ai_cache()
-    if ticker in cache:
-        return cache[ticker]
+    if cache_key in cache:
+        return cache[cache_key]
 
     client = _get_gemini_client()
     if not client:
@@ -498,7 +495,10 @@ def analyze_breakout_factors(ticker: str, name: str, industry: str,
 
     from google.genai import types
 
-    prompt = f"""あなたはプロの株式アナリストです。以下のMega ($200B+) 銘柄は52W高値まであと{abs(dist_pct):.1f}%です。
+    sma200_gap = (close / sma200 - 1) * 100 if sma200 > 0 else 0
+
+    if is_pb:
+        prompt = f"""あなたはプロの株式アナリストです。以下のMega ($200B+) 銘柄は52W高値まであと{abs(dist_pct):.1f}%です。
 ブレイクアウトのカタリストとなりうる要因を最新ニュースから分析してください。
 
 ■ 企業情報
@@ -515,6 +515,28 @@ SMA200上方: {"はい" if above_sma200 else "いいえ"}
 ■ 出力フォーマット（日本語、合計200字以内）
 **BO触媒候補**: ブレイクアウトのきっかけになりうる材料（決算・ニュース・業界動向）を2-3行
 **リスク**: 今後の懸念材料（1行）"""
+    else:
+        prompt = f"""あなたはプロの株式アナリストです。以下のMega ($200B+) 銘柄が52W高値を更新（確定BO）しました。
+最新ニュース・業界動向を踏まえ、「今エントリーすべきか」を判断してください。
+
+■ 企業情報
+銘柄: {ticker} ({name})
+業種: {industry}
+事業概要: {summary[:150] if summary else "N/A"}
+時価総額: ${mcap_b:,.0f}B
+
+■ テクニカルデータ
+現在値: ${close:,.2f} (52W高値更新)
+RSI: {rsi:.1f}
+出来高倍率: {vol_ratio:.1f}x
+SMA20: ${sma20:,.2f} / SMA50: ${sma50:,.2f} / SMA200: ${sma200:,.2f}
+SMA200乖離: {sma200_gap:+.0f}%
+GC (SMA20>50): {"はい" if gc else "いいえ"}
+
+■ 出力フォーマット（日本語、合計300字以内）
+**上昇の背景**: なぜ今52W高値を更新したか（材料・ニュース・業界動向）2-3行
+**エントリー判断**: 今買うべきか。過熱リスク・追撃リスクを考慮して1-2行
+**リスク**: RSI{rsi:.0f}、SMA200乖離{sma200_gap:+.0f}%を踏まえた懸念（1行）"""
 
     try:
         response = client.models.generate_content(
@@ -525,7 +547,7 @@ SMA200上方: {"はい" if above_sma200 else "いいえ"}
             ),
         )
         result = response.text.strip()
-        cache[ticker] = result
+        cache[cache_key] = result
         _save_ai_cache(cache)
         return result
     except Exception as e:
@@ -1104,14 +1126,25 @@ def render_ticker_detail(df_tech: pd.DataFrame, universe: list[dict], company_in
     # ── AI Analysis ──
     if os.getenv("GOOGLE_API_KEY"):
         if is_bo:
-            st.success("**確定BO: 過去勝率85%. 迷わず実行.**")
+            st.success("**確定BO: BT勝率85% EV+11.3%. 翌日寄り成行買い.**")
+            with st.expander("AI分析: エントリー判断", expanded=True):
+                analysis = analyze_breakout_factors(
+                    selected, meta.get("name", ""), industry, row["close"],
+                    row["high_52w"], row["dist_pct"], row["rsi"], row["vol_ratio"],
+                    row["gc"], row["sma20"], row["sma50"], row["sma200"],
+                    mcap_b, row["above_sma200"], summary, is_pb=False,
+                )
+                if analysis:
+                    st.markdown(analysis)
+                else:
+                    st.caption("分析を取得できませんでした")
         else:
             with st.expander("AI分析: BO触媒候補", expanded=True):
                 analysis = analyze_breakout_factors(
                     selected, meta.get("name", ""), industry, row["close"],
                     row["high_52w"], row["dist_pct"], row["rsi"], row["vol_ratio"],
                     row["gc"], row["sma20"], row["sma50"], row["sma200"],
-                    mcap_b, row["above_sma200"], summary, is_pb=(not is_bo),
+                    mcap_b, row["above_sma200"], summary, is_pb=True,
                 )
                 if analysis:
                     st.markdown(analysis)
