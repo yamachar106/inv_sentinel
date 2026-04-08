@@ -544,16 +544,22 @@ def render_jp_scoreboard():
 
     if filter_mode == FILTER_OPTIONS[0]:
         display_df = df[df["地力ランク"].isin(["S", "A"])].copy()
+        display_df.sort_values("地力", ascending=False, inplace=True)
+        sort_label = "地力スコア順"
     elif filter_mode == FILTER_OPTIONS[1]:
         display_df = df[df["総合ランク"].isin(["S", "A"])].copy()
+        display_df.sort_values("総合", ascending=False, inplace=True)
+        sort_label = "総合スコア順"
     else:
         display_df = df.copy()
+        display_df.sort_values("総合", ascending=False, inplace=True)
+        sort_label = "総合スコア順"
 
     if display_df.empty:
         st.info("条件に合う銘柄がありません")
         return
 
-    st.caption(f"{len(display_df)}銘柄表示中")
+    st.caption(f"{len(display_df)}銘柄表示中 ({sort_label})")
 
     # ─── カード表示 ───
     for _, row in display_df.iterrows():
