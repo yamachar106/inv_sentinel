@@ -541,9 +541,7 @@ def fetch_ticker_chart(ticker: str, period: str = "6mo") -> pd.DataFrame:
 def _navigate_to_detail(ticker: str):
     """PipelineからTicker Detailへ遷移"""
     st.session_state["detail_ticker"] = ticker
-    target = "\U0001f50d Ticker Detail"
-    st.session_state["page"] = PAGES.index(target)
-    st.session_state["page_radio"] = target
+    st.session_state["page"] = PAGES.index("\U0001f50d Ticker Detail")
 
 
 def _get_sector_tag(sector: str) -> str:
@@ -564,11 +562,11 @@ def render_sidebar():
         "ページ",
         PAGES,
         index=default_idx,
-        key="page_radio",
         label_visibility="collapsed",
     )
-    if PAGES.index(page) != st.session_state.get("page", 0):
-        st.session_state["page"] = PAGES.index(page)
+    selected_idx = PAGES.index(page)
+    if selected_idx != default_idx:
+        st.session_state["page"] = selected_idx
 
     st.sidebar.divider()
 
