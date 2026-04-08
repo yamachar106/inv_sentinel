@@ -28,14 +28,12 @@ except ImportError:
     pass
 
 # Streamlit Cloud: secretsを環境変数に反映
-_secrets_debug = []
 try:
     for key, val in st.secrets.items():
-        _secrets_debug.append(f"{key}={type(val).__name__}")
         if isinstance(val, str):
             os.environ.setdefault(key, val)
-except Exception as _e:
-    _secrets_debug.append(f"ERROR: {_e}")
+except Exception:
+    pass
 
 from screener.config import (
     MEGA_THRESHOLD_US, MEGA_STOP_LOSS, MEGA_PROFIT_TARGET,
@@ -189,7 +187,9 @@ def _translate_company_info_batch(items: list[dict]) -> list[dict]:
             response = client.models.generate_content(
                 model="gemini-2.5-flash", contents=prompt,
             )
-            text = response.text.strip()
+            text = (response.text or "").strip()
+            if not text:
+                raise ValueError("empty response")
             if text.startswith("```"):
                 text = text.split("\n", 1)[1] if "\n" in text else text[7:]
                 if text.endswith("```"):
@@ -223,10 +223,11 @@ def _fill_missing_summaries(items: list[dict]) -> None:
                     tools=[types.Tool(google_search=types.GoogleSearch())],
                 ),
             )
-            text = response.text.strip()
-            item["summary"] = text
-            if not item.get("industry"):
-                item["industry"] = text.split("\u3002")[0] if "\u3002" in text else ""
+            text = (response.text or "").strip()
+            if text:
+                item["summary"] = text
+                if not item.get("industry"):
+                    item["industry"] = text.split("\u3002")[0] if "\u3002" in text else ""
         except Exception:
             pass
 
@@ -845,7 +846,14 @@ TP(利確): ${tp:,.2f} (+40%)
                 tools=[types.Tool(google_search=types.GoogleSearch())],
             ),
         )
-        result = response.text.strip()
+        result = response.text
+        if not result:
+            # Google Searchグラウンディングでtextがない場合、partsから抽出
+            parts = response.candidates[0].content.parts if response.candidates else []
+            result = "\n".join(p.text for p in parts if hasattr(p, "text") and p.text)
+        result = (result or "").strip()
+        if not result:
+            return "(分析結果が空でした。再読み込みしてください)"
         cache[cache_key] = result
         _save_ai_cache(cache)
         return result
@@ -902,9 +910,6 @@ def _get_sector_tag(sector: str) -> str:
 def render_sidebar():
     st.sidebar.title("\U0001f451 MEGA-BreakOut")
     st.sidebar.caption("US $200B+ BO × JP ¥1兆+ S/A 並走戦略")
-    # DEBUG: secrets確認（問題解決後に削除）
-    has_key = _get_google_api_key() is not None
-    st.sidebar.caption(f"🔑 API: {'OK' if has_key else 'NG'} | secrets: {_secrets_debug}")
     st.sidebar.divider()
 
     default_idx = st.session_state.get("page", 0)
