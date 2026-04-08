@@ -54,6 +54,27 @@ def load_strength_data() -> dict:
         return json.load(f)
 
 
+@st.cache_data(ttl=86400)
+def fetch_jp_names(tickers: list[str]) -> dict[str, str]:
+    """JP銘柄の企業名を一括取得（日次キャッシュ）"""
+    import yfinance as yf
+    names = {}
+    if not tickers:
+        return names
+    try:
+        ts = yf.Tickers(" ".join(tickers))
+        for t in tickers:
+            try:
+                info = ts.tickers[t].info
+                name = info.get("shortName") or info.get("longName") or ""
+                names[t] = name
+            except Exception:
+                names[t] = ""
+    except Exception:
+        pass
+    return names
+
+
 @st.cache_data(ttl=300)
 def fetch_jp_prices(tickers: list[str]) -> dict[str, dict]:
     """JP銘柄の最新価格データ取得"""
@@ -183,12 +204,14 @@ def _format_mcap_jpy(mcap: float) -> str:
 
 
 def _build_scoreboard_data(
-    strength_data: dict, prices: dict
+    strength_data: dict, prices: dict, names: dict | None = None,
 ) -> pd.DataFrame:
     """スコアボード用のDataFrameを構築"""
     tickers_info = strength_data.get("tickers", {})
     if not tickers_info:
         return pd.DataFrame()
+    if names is None:
+        names = {}
 
     all_momentums = [
         p["mom_6m"] for p in prices.values() if "mom_6m" in p
@@ -210,6 +233,7 @@ def _build_scoreboard_data(
         rows.append({
             "コード": code,
             "ticker": ticker,
+            "名前": names.get(ticker, ""),
             "地力": round(strength_score, 1),
             "地力ランク": info.get("rank", "?"),
             "タイミング": timing["score"],
@@ -250,6 +274,32 @@ def _build_scoreboard_data(
     return df
 
 
+def _render_mini_chart(close_series: pd.Series, code: str, days: int = 90):
+    """スコアボード用ミニ株価チャート（直近90日）"""
+    recent = close_series.tail(days)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=recent.index, y=recent.values,
+        mode="lines", line=dict(color="#3b82f6", width=1.5),
+        hovertemplate="¥%{y:,.0f}<extra></extra>",
+    ))
+    # SMA50
+    if len(close_series) >= 50:
+        sma50 = close_series.rolling(50).mean().tail(days)
+        fig.add_trace(go.Scatter(
+            x=sma50.index, y=sma50.values,
+            mode="lines", line=dict(color="#94a3b8", width=1, dash="dot"),
+            hoverinfo="skip",
+        ))
+    fig.update_layout(
+        height=100, margin=dict(t=0, b=0, l=0, r=0),
+        showlegend=False,
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False),
+    )
+    st.plotly_chart(fig, use_container_width=True, key=f"mini_{code}")
+
+
 # ─── Page: JP Scoreboard ──────────────────────────────
 
 def render_jp_scoreboard():
@@ -267,11 +317,12 @@ def render_jp_scoreboard():
 
     st.caption(f"地力スコア更新日: {generated} | SL-20%/TP+40% | 対象: ¥1兆+ {len(all_tickers)}銘柄")
 
-    # 価格データ取得
+    # 価格データ + 社名取得
     with st.spinner(f"{len(all_tickers)}銘柄の価格データ取得中..."):
         prices = fetch_jp_prices(all_tickers)
+        names = fetch_jp_names(all_tickers)
 
-    df = _build_scoreboard_data(strength_data, prices)
+    df = _build_scoreboard_data(strength_data, prices, names)
     if df.empty:
         st.warning("データ構築に失敗しました")
         return
@@ -310,21 +361,21 @@ def render_jp_scoreboard():
         rank = row["総合ランク"]
         color = RANK_COLORS.get(rank, "#6b7280")
         sma200_ok = row["SMA200上"]
-
-        # SMA200下は薄く表示
+        name = row["名前"]
         opacity = "1.0" if sma200_ok else "0.5"
 
         with st.container():
-            cols = st.columns([1.2, 1, 1, 1, 1.5, 1.5])
+            cols = st.columns([1.5, 0.8, 1.8, 1, 1.2, 1])
 
-            # Col 1: コード + ランク
+            # Col 1: コード + 社名 + ランク
             with cols[0]:
                 st.markdown(
-                    f"<span style='font-size:1.4em;font-weight:bold;opacity:{opacity}'>"
+                    f"<span style='font-size:1.3em;font-weight:bold;opacity:{opacity}'>"
                     f"<span style='color:{color}'>[{rank}]</span> {row['コード']}"
                     f"</span>",
                     unsafe_allow_html=True,
                 )
+                st.caption(f"{name}")
                 st.caption(f"地力{row['地力ランク']} | {_format_mcap_jpy(row['時価総額'])}")
 
             # Col 2: スコア
@@ -332,49 +383,39 @@ def render_jp_scoreboard():
                 st.metric("総合", f"{row['総合']:.0f}", help=f"地力{row['地力']:.0f} × 0.4 + タイミング{row['タイミング']:.0f} × 0.6")
                 st.progress(min(1.0, row["総合"] / 100))
 
-            # Col 3: 価格
+            # Col 3: ミニチャート
             with cols[2]:
+                close_series = prices.get(row["ticker"], {}).get("close_series")
+                if close_series is not None and len(close_series) > 20:
+                    _render_mini_chart(close_series, row["コード"])
+                else:
+                    st.caption("チャートデータなし")
+
+            # Col 4: テクニカル + 価格
+            with cols[3]:
                 if row["現在値"]:
-                    st.metric("現在値", f"¥{row['現在値']:,.0f}")
+                    st.markdown(f"**¥{row['現在値']:,.0f}**")
                     dist = row["52W距離"]
                     dist_color = "green" if dist >= -2 else "orange" if dist >= -5 else "red"
-                    st.markdown(f"52W: :{dist_color}[{dist:+.1f}%]")
-                else:
-                    st.metric("現在値", "N/A")
-
-            # Col 4: テクニカル状態
-            with cols[3]:
+                    st.markdown(f"52W :{dist_color}[{dist:+.1f}%]")
                 gc_icon = "🟢" if row["GC"] else "🔴"
                 sma_icon = "🟢" if sma200_ok else "🔴"
-                rsi = row["RSI"]
-                rsi_icon = "🔥" if rsi >= 70 else "🟢" if rsi >= 50 else "⚪"
-                st.markdown(f"{gc_icon} GC | {sma_icon} SMA200")
-                st.markdown(f"{rsi_icon} RSI {rsi:.0f} | Vol ×{row['出来高比']:.1f}")
+                st.markdown(f"{gc_icon}GC {sma_icon}SMA200 RSI{row['RSI']:.0f}")
 
-            # Col 5: BT実績
+            # Col 5: BT実績 + SL/TP
             with cols[4]:
                 ev = row["BT_EV"]
                 ev_color = "green" if ev > 0 else "red"
-                st.markdown(
-                    f"BT: :{ev_color}[EV{ev:+.1f}%] 勝率{row['BT_WR']:.0f}% "
-                    f"PF{row['BT_PF']:.1f} (n={row['BT_n']:.0f})"
-                )
-                bear = row["bear_ev"]
-                bear_color = "green" if bear > 0 else "red"
-                st.markdown(f"BEAR: :{bear_color}[EV{bear:+.1f}%]")
-
-            # Col 6: SL/TP
-            with cols[5]:
+                st.markdown(f"BT :{ev_color}[EV{ev:+.1f}%] 勝率{row['BT_WR']:.0f}%")
                 if row["現在値"]:
-                    st.markdown(
-                        f"🔴 SL ¥{row['SL']:,.0f} (-20%)\n\n"
-                        f"🟢 TP ¥{row['TP']:,.0f} (+40%)"
-                    )
-                    if st.button("詳細", key=f"jp_detail_{row['コード']}", use_container_width=True):
-                        st.session_state["jp_detail_ticker"] = row["ticker"]
-                        # PAGES の JP Detail インデックス（app.py と同期必要）
-                        st.session_state["page"] = JP_DETAIL_PAGE_INDEX
-                        st.rerun()
+                    st.caption(f"SL ¥{row['SL']:,.0f} / TP ¥{row['TP']:,.0f}")
+
+            # Col 6: 詳細ボタン
+            with cols[5]:
+                if st.button("詳細 →", key=f"jp_detail_{row['コード']}", use_container_width=True):
+                    st.session_state["jp_detail_ticker"] = row["ticker"]
+                    st.session_state["page"] = JP_DETAIL_PAGE_INDEX
+                    st.rerun()
 
             st.divider()
 
@@ -394,6 +435,10 @@ def render_jp_ranking():
     generated = strength_data.get("generated", "不明")
 
     st.caption(f"更新日: {generated} | 月次更新 | 10年BT検証ベース")
+
+    all_tickers = list(tickers_info.keys())
+    with st.spinner("社名取得中..."):
+        names = fetch_jp_names(all_tickers)
 
     # ランク分布
     ranks = [info.get("rank", "C") for info in tickers_info.values()]
@@ -417,13 +462,16 @@ def render_jp_ranking():
     )
 
     codes = [t.replace(".T", "") for t, _ in sorted_tickers]
+    code_names = [
+        f"{t.replace('.T', '')} {names.get(t, '')}" for t, _ in sorted_tickers
+    ]
     scores = [info.get("strength_score", 0) for _, info in sorted_tickers]
     ranks_list = [info.get("rank", "C") for _, info in sorted_tickers]
     colors = [RANK_COLORS.get(r, "#6b7280") for r in ranks_list]
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        x=codes,
+        x=code_names,
         y=scores,
         marker_color=colors,
         text=[f"{s:.0f}" for s in scores],
@@ -464,7 +512,7 @@ def render_jp_ranking():
     fig_heat = go.Figure(data=go.Heatmap(
         z=heatmap_data,
         x=comp_labels,
-        y=codes,
+        y=code_names,
         colorscale="RdYlGn",
         zmin=0,
         zmax=100,
@@ -473,8 +521,8 @@ def render_jp_ranking():
         hovertemplate="%{y} %{x}: %{z:.1f}<extra></extra>",
     ))
     fig_heat.update_layout(
-        height=max(400, len(codes) * 22),
-        margin=dict(t=20, b=20, l=80),
+        height=max(400, len(codes) * 24),
+        margin=dict(t=20, b=20, l=160),
         yaxis_autorange="reversed",
     )
     st.plotly_chart(fig_heat, use_container_width=True)
@@ -489,6 +537,7 @@ def render_jp_ranking():
         table_rows.append({
             "ランク": rank,
             "コード": code,
+            "銘柄名": names.get(ticker, ""),
             "地力": round(info.get("strength_score", 0), 1),
             "EV%": info.get("ev", 0),
             "勝率%": info.get("wr", 0),
@@ -511,6 +560,72 @@ def render_jp_ranking():
         },
     )
 
+    # ─── S/A銘柄チャート一覧 ───
+    sa_tickers_list = [
+        t for t, info in sorted_tickers if info.get("rank") in ("S", "A")
+    ]
+    if sa_tickers_list:
+        st.divider()
+        st.subheader("S/A銘柄 株価チャート")
+        with st.spinner("価格データ取得中..."):
+            prices = fetch_jp_prices([t for t, _ in sa_tickers_list])
+
+        cols_per_row = 3
+        for i in range(0, len(sa_tickers_list), cols_per_row):
+            batch = sa_tickers_list[i:i + cols_per_row]
+            row_cols = st.columns(cols_per_row)
+            for j, (ticker, info) in enumerate(batch):
+                with row_cols[j]:
+                    code = ticker.replace(".T", "")
+                    name = names.get(ticker, "")
+                    rank = info.get("rank", "?")
+                    rank_color = RANK_COLORS.get(rank, "#6b7280")
+                    st.markdown(
+                        f"<span style='color:{rank_color};font-weight:bold'>[{rank}]</span> "
+                        f"**{code}** {name}",
+                        unsafe_allow_html=True,
+                    )
+                    p = prices.get(ticker, {})
+                    close_series = p.get("close_series")
+                    if close_series is not None and len(close_series) > 20:
+                        fig = go.Figure()
+                        fig.add_trace(go.Scatter(
+                            x=close_series.index, y=close_series.values,
+                            mode="lines", line=dict(color="#3b82f6", width=1.5),
+                            hovertemplate="¥%{y:,.0f}<extra></extra>",
+                        ))
+                        if len(close_series) >= 50:
+                            sma50 = close_series.rolling(50).mean()
+                            fig.add_trace(go.Scatter(
+                                x=sma50.index, y=sma50.values,
+                                mode="lines",
+                                line=dict(color="#94a3b8", width=1, dash="dot"),
+                                hoverinfo="skip",
+                            ))
+                        if len(close_series) >= 200:
+                            sma200 = close_series.rolling(200).mean()
+                            fig.add_trace(go.Scatter(
+                                x=sma200.index, y=sma200.values,
+                                mode="lines",
+                                line=dict(color="#f97316", width=1.5, dash="dash"),
+                                hoverinfo="skip",
+                            ))
+                        fig.update_layout(
+                            height=200, margin=dict(t=5, b=5, l=5, r=5),
+                            showlegend=False,
+                            xaxis=dict(visible=False),
+                            yaxis=dict(visible=True, side="right"),
+                        )
+                        st.plotly_chart(fig, use_container_width=True, key=f"rank_chart_{code}")
+                        if p.get("close"):
+                            st.caption(
+                                f"¥{p['close']:,.0f} | "
+                                f"52W {p.get('dist_pct', 0):+.1f}% | "
+                                f"RSI {p.get('rsi', 0):.0f}"
+                            )
+                    else:
+                        st.caption("データなし")
+
 
 # ─── Page: JP Detail ──────────────────────────────────
 
@@ -527,22 +642,32 @@ def render_jp_detail():
     all_tickers = sorted(tickers_info.keys())
     codes = [t.replace(".T", "") for t in all_tickers]
 
+    # 社名取得
+    with st.spinner("社名取得中..."):
+        names = fetch_jp_names(all_tickers)
+    code_name_labels = [
+        f"{t.replace('.T', '')}  {names.get(t, '')}" for t in all_tickers
+    ]
+
     # プリセレクション
     pre_selected = st.session_state.pop("jp_detail_ticker", None)
     default_idx = 0
     if pre_selected and pre_selected in all_tickers:
         default_idx = all_tickers.index(pre_selected)
 
-    selected_code = st.selectbox(
-        "銘柄コード",
-        codes,
+    selected_label = st.selectbox(
+        "銘柄",
+        code_name_labels,
         index=default_idx,
     )
+    selected_code = selected_label.split()[0].strip()
     selected_ticker = f"{selected_code}.T"
     info = tickers_info.get(selected_ticker, {})
     if not info:
         st.warning(f"{selected_ticker} のデータが見つかりません")
         return
+
+    company_name = names.get(selected_ticker, "")
 
     # 価格取得
     with st.spinner("価格データ取得中..."):
@@ -560,7 +685,7 @@ def render_jp_detail():
     strength_rank = info.get("rank", "?")
 
     st.markdown(
-        f"## <span style='color:{rank_color}'>[{total_rank}]</span> {selected_code} "
+        f"## <span style='color:{rank_color}'>[{total_rank}]</span> {selected_code} {company_name} "
         f"<span style='font-size:0.6em;color:#666'>"
         f"地力{strength_rank} | {_format_mcap_jpy(info.get('mcap', 0))}</span>",
         unsafe_allow_html=True,
