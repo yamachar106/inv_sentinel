@@ -533,16 +533,18 @@ def render_jp_scoreboard():
     st.divider()
 
     # ─── フィルタ ───
-    filter_mode = st.radio(
+    FILTER_OPTIONS = ["地力 S/A（安定）", "総合 S/A（タイミング込み）", "全銘柄"]
+    filter_mode = st.selectbox(
         "表示フィルタ",
-        ["地力 S/A（安定）", "総合 S/A（タイミング込み）", "全銘柄"],
-        horizontal=True,
+        FILTER_OPTIONS,
+        index=0,
+        key="jp_scoreboard_filter",
         help="地力=月次固定 / 総合=地力40%+タイミング60%（リアルタイム変動）",
     )
 
-    if filter_mode == "地力 S/A（安定）":
+    if filter_mode == FILTER_OPTIONS[0]:
         display_df = df[df["地力ランク"].isin(["S", "A"])].copy()
-    elif filter_mode == "総合 S/A（タイミング込み）":
+    elif filter_mode == FILTER_OPTIONS[1]:
         display_df = df[df["総合ランク"].isin(["S", "A"])].copy()
     else:
         display_df = df.copy()
