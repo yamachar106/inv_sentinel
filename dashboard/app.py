@@ -541,7 +541,9 @@ def fetch_ticker_chart(ticker: str, period: str = "6mo") -> pd.DataFrame:
 def _navigate_to_detail(ticker: str):
     """PipelineからTicker Detailへ遷移"""
     st.session_state["detail_ticker"] = ticker
-    st.session_state["page"] = PAGES.index("\U0001f50d Ticker Detail")
+    target = "\U0001f50d Ticker Detail"
+    st.session_state["page"] = PAGES.index(target)
+    st.session_state["page_radio"] = target
 
 
 def _get_sector_tag(sector: str) -> str:
