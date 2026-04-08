@@ -28,12 +28,14 @@ except ImportError:
     pass
 
 # Streamlit Cloud: secretsを環境変数に反映
+_secrets_debug = []
 try:
     for key, val in st.secrets.items():
+        _secrets_debug.append(f"{key}={type(val).__name__}")
         if isinstance(val, str):
             os.environ.setdefault(key, val)
-except Exception:
-    pass
+except Exception as _e:
+    _secrets_debug.append(f"ERROR: {_e}")
 
 from screener.config import (
     MEGA_THRESHOLD_US, MEGA_STOP_LOSS, MEGA_PROFIT_TARGET,
@@ -120,10 +122,10 @@ def _get_google_api_key() -> str | None:
     if key:
         return key
     try:
-        key = st.secrets.get("GOOGLE_API_KEY")
+        key = st.secrets["GOOGLE_API_KEY"]
         if key:
             return key
-    except Exception:
+    except (KeyError, FileNotFoundError):
         pass
     return None
 
@@ -900,6 +902,9 @@ def _get_sector_tag(sector: str) -> str:
 def render_sidebar():
     st.sidebar.title("\U0001f451 MEGA-BreakOut")
     st.sidebar.caption("US $200B+ BO × JP ¥1兆+ S/A 並走戦略")
+    # DEBUG: secrets確認（問題解決後に削除）
+    has_key = _get_google_api_key() is not None
+    st.sidebar.caption(f"🔑 API: {'OK' if has_key else 'NG'} | secrets: {_secrets_debug}")
     st.sidebar.divider()
 
     default_idx = st.session_state.get("page", 0)
