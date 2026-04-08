@@ -846,12 +846,19 @@ TP(利確): ${tp:,.2f} (+40%)
                 tools=[types.Tool(google_search=types.GoogleSearch())],
             ),
         )
-        result = response.text
-        if not result:
-            # Google Searchグラウンディングでtextがない場合、partsから抽出
-            parts = response.candidates[0].content.parts if response.candidates else []
-            result = "\n".join(p.text for p in parts if hasattr(p, "text") and p.text)
-        result = (result or "").strip()
+        try:
+            result = response.text or ""
+        except Exception:
+            # response.textプロパティが例外を投げる場合、partsから抽出
+            result = ""
+            try:
+                candidates = response.candidates or []
+                if candidates:
+                    parts = candidates[0].content.parts or []
+                    result = "\n".join(p.text for p in parts if hasattr(p, "text") and p.text)
+            except Exception:
+                pass
+        result = result.strip()
         if not result:
             return "(分析結果が空でした。再読み込みしてください)"
         cache[cache_key] = result
