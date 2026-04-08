@@ -54,9 +54,9 @@ def test_profit_target_kuroten():
 
 
 def test_profit_target_breakout():
-    """ブレイクアウト: 株価+20%以上で利確シグナル。"""
+    """ブレイクアウト: 株価+40%以上で利確シグナル（JP全区分統一）。"""
     pos = _make_position(strategy="breakout", buy_price=1000.0)
-    signals = _check_price_rules(pos, current_price=1200.0)
+    signals = _check_price_rules(pos, current_price=1400.0)
 
     profit_signals = [s for s in signals if s.rule == "profit_target"]
     assert len(profit_signals) == 1
