@@ -117,6 +117,7 @@ SLACK_WEBHOOK_URL=xxxx         # Slack Incoming Webhook URL（フォールバッ
 SLACK_WEBHOOK_KUROTEN_JP=xxxx  # 黒字転換JP専用チャンネル（任意）
 SLACK_WEBHOOK_BREAKOUT_JP=xxxx # ブレイクアウトJP専用チャンネル（任意）
 SLACK_WEBHOOK_BREAKOUT_US=xxxx # ブレイクアウトUS専用チャンネル（任意）
+SLACK_WEBHOOK_MEGA_US=xxxx    # Mega ($200B+) 専用チャンネル（任意）
 ```
 
 ### インストール
@@ -156,11 +157,12 @@ python breakout_monitor.py --market US --universe us_mid --limit 50  # テスト
 python breakout_monitor.py --no-notify                      # Slack通知スキップ
 
 # 統合デイリーランナー
-python daily_run.py                                # 全戦略実行（JP+US）
+python daily_run.py                                # 全戦略実行（JP全区分+US）
 python daily_run.py --strategy breakout            # ブレイクアウトのみ
 python daily_run.py --market US                    # US市場のみ
 python daily_run.py --dry-run                      # 通知なしの実行プレビュー
 python daily_run.py --universe us_mid --limit 100  # USユニバース指定
+python daily_run.py --jp-universe jp_growth        # JP Growthのみ（旧デフォルト）
 
 # ブレイクアウト バックテスト
 python backtest_breakout.py --codes AAPL,MSFT,NVDA         # 指定銘柄

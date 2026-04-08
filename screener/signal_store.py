@@ -10,6 +10,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 SIGNALS_DIR = Path(__file__).resolve().parent.parent / "data" / "signals"
+MEGA_PB_TRACKER = SIGNALS_DIR / "mega_pb_tracker.json"
 
 
 def _path_for_date(d: str) -> Path:
@@ -141,3 +142,102 @@ def format_diff_summary(diff: dict[str, dict[str, list[str]]]) -> str:
             parts.append(f"消失: {len(info['disappeared'])}")
         lines.append(f"[{key}] {' | '.join(parts)}")
     return "\n".join(lines)
+
+
+# =========================================================================
+# Mega PB→BO 昇格トラッキング
+# =========================================================================
+
+def _load_mega_tracker() -> dict:
+    """Mega PBトラッカーを読み込む。
+    構造: {ticker: {first_pb_date, last_notified, signal_count, bo_history: [dates]}}
+    """
+    SIGNALS_DIR.mkdir(parents=True, exist_ok=True)
+    if MEGA_PB_TRACKER.exists():
+        try:
+            return json.loads(MEGA_PB_TRACKER.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, ValueError):
+            pass
+    return {}
+
+
+def _save_mega_tracker(data: dict) -> None:
+    """Mega PBトラッカーを保存する"""
+    SIGNALS_DIR.mkdir(parents=True, exist_ok=True)
+    MEGA_PB_TRACKER.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def track_mega_pb(ticker: str, today: str) -> dict:
+    """Mega PBシグナルを記録し、抑制判定結果を返す。
+
+    Returns:
+        {"suppress": bool, "first_pb_date": str, "signal_count": int}
+    """
+    tracker = _load_mega_tracker()
+    entry = tracker.get(ticker, {
+        "first_pb_date": today,
+        "last_notified": "",
+        "signal_count": 0,
+        "bo_history": [],
+    })
+
+    entry["signal_count"] = entry.get("signal_count", 0) + 1
+    last = entry.get("last_notified", "")
+
+    # 抑制判定: suppress_days以内に通知済みなら抑制
+    from screener.config import MEGA_PB_SUPPRESS_DAYS
+    suppress = False
+    if last:
+        days_since = (date.fromisoformat(today) - date.fromisoformat(last)).days
+        if days_since < MEGA_PB_SUPPRESS_DAYS:
+            suppress = True
+
+    if not suppress:
+        entry["last_notified"] = today
+
+    tracker[ticker] = entry
+    _save_mega_tracker(tracker)
+
+    return {
+        "suppress": suppress,
+        "first_pb_date": entry["first_pb_date"],
+        "signal_count": entry["signal_count"],
+    }
+
+
+def check_mega_upgrade(ticker: str, today: str) -> dict | None:
+    """PB→BO昇格を検出する。昇格なら詳細を返す。
+
+    Returns:
+        {"first_pb_date": str, "days_since_pb": int, "pb_count": int} or None
+    """
+    tracker = _load_mega_tracker()
+    entry = tracker.get(ticker)
+
+    if not entry or not entry.get("first_pb_date"):
+        return None
+
+    first_pb = entry["first_pb_date"]
+    days_since = (date.fromisoformat(today) - date.fromisoformat(first_pb)).days
+
+    # BO履歴に追記
+    bo_history = entry.get("bo_history", [])
+    bo_history.append(today)
+    entry["bo_history"] = bo_history
+    tracker[ticker] = entry
+    _save_mega_tracker(tracker)
+
+    return {
+        "first_pb_date": first_pb,
+        "days_since_pb": days_since,
+        "pb_count": entry.get("signal_count", 0),
+    }
+
+
+def get_mega_bo_history(ticker: str) -> list[str]:
+    """過去のBO日付リストを返す"""
+    tracker = _load_mega_tracker()
+    entry = tracker.get(ticker, {})
+    return entry.get("bo_history", [])

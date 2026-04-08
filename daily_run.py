@@ -37,7 +37,7 @@ from screener.config import RS_ENABLED, RS_MIN_PERCENTILE_JP, RS_MIN_PERCENTILE_
 from screener.market_regime import detect_regime, format_regime_header
 from screener.rs_ranking import filter_by_rs
 from screener.notifier import (
-    notify_breakout, notify_gc_entry, notify_portfolio_summary,
+    notify_breakout, notify_gc_entry, notify_mega, notify_portfolio_summary,
     notify_sell_signals, notify_slack, _clean_us_name,
     _resolve_webhook_url, _send_slack,
 )
@@ -47,6 +47,7 @@ from screener.sell_monitor import check_all_positions, check_deficit_positions
 from screener.reporter import load_latest_watchlist
 from screener.signal_store import (
     save_signals, load_previous_signals, diff_signals, format_diff_summary,
+    track_mega_pb, check_mega_upgrade, get_mega_bo_history,
 )
 from screener.tdnet import get_earnings_codes, get_market_change_codes
 from screener.universe import load_universe, fetch_us_stocks, fetch_jp_stocks
@@ -269,7 +270,7 @@ def _df_to_enriched(df) -> list[dict]:
     enriched_cols = [
         "code", "signal", "close", "high_52w", "distance_pct",
         "volume_ratio", "rsi", "above_sma_50", "above_sma_200", "gc_status",
-        "ea_tag", "rs_score", "sector", "name", "market_cap",
+        "ea_tag", "rs_score", "sector", "name", "market_cap", "market_segment",
     ]
     records = []
     for _, row in df.iterrows():
@@ -288,7 +289,7 @@ def _df_to_enriched(df) -> list[dict]:
 
 
 def run_breakout_jp(
-    universe: str = "jp_growth",
+    universe: str = "jp_all",
     limit: int = 0,
     dry_run: bool = False,
 ) -> tuple[list[str], str]:
@@ -326,7 +327,8 @@ def run_breakout_jp(
 
     if not df.empty:
         # シグナル銘柄の時価総額チェック（yfinanceで取得、シグナル分のみ）
-        df = _filter_jp_market_cap(df, BREAKOUT_MAX_MARKET_CAP_JP_LOOSE)
+        # 時価総額フィルタ撤廃（BT検証: 大型株ほど好成績、フィルタは有害）
+        # df = _filter_jp_market_cap(df, BREAKOUT_MAX_MARKET_CAP_JP_LOOSE)
         signal_codes = df["code"].tolist() if not df.empty else []
 
     if not df.empty:
@@ -418,8 +420,100 @@ def _enrich_with_jp_meta(df) -> None:
                 axis=1,
             )
         df["sector"] = df["code"].map(lambda c: meta.get(c, {}).get("sector_33", ""))
+        df["market_segment"] = df["code"].map(lambda c: meta.get(c, {}).get("market_segment", ""))
     except Exception as e:
         print(f"  [WARN] JPメタデータ取得失敗: {e}")
+
+
+def _process_mega_signals(
+    df,
+    today: str,
+    dry_run: bool = False,
+    regime_header: str | None = None,
+) -> list[str]:
+    """Mega ($200B+) シグナルを抽出し、専用通知を送信する。
+
+    通常USブレイクアウト通知とは別に、Mega専用チャンネルへ送信。
+    PB→BO昇格検知、PB重複抑制、銘柄別過去実績を付加。
+
+    Returns:
+        Megaシグナルのティッカーリスト
+    """
+    from screener.config import MEGA_THRESHOLD_US
+
+    if df is None or df.empty:
+        return []
+
+    # Mega判定（時価総額 $200B+）
+    if "market_cap" not in df.columns:
+        return []
+
+    mega_mask = df["market_cap"].apply(lambda x: (x or 0) >= MEGA_THRESHOLD_US)
+    df_mega = df[mega_mask]
+
+    if df_mega.empty:
+        return []
+
+    mega_codes = df_mega["code"].tolist()
+    print(f"  \U0001f451 Mega ($200B+) シグナル: {len(df_mega)}件")
+
+    mega_signals = []
+
+    for _, row in df_mega.iterrows():
+        code = row["code"]
+        signal = row["signal"]
+
+        # 共通データ
+        base = {
+            "code": code,
+            "close": float(row["close"]),
+            "signal": signal,
+            "volume_ratio": float(row.get("volume_ratio", 0) or 0),
+            "rsi": float(row.get("rsi", 0) or 0),
+            "rs_score": float(row.get("rs_score", 0) or 0),
+            "gc_status": bool(row.get("gc_status", False)),
+            "ea_tag": row.get("ea_tag", ""),
+            "name": row.get("name", ""),
+            "sector": row.get("sector", ""),
+            "market_cap": float(row.get("market_cap", 0) or 0),
+            "distance_pct": float(row.get("distance_pct", 0) or 0),
+            "above_sma_50": bool(row.get("above_sma_50", False)),
+            "above_sma_200": bool(row.get("above_sma_200", False)),
+        }
+
+        if signal in ("breakout", "breakout_overheated"):
+            # BO: PB→BO昇格チェック
+            upgrade_info = check_mega_upgrade(code, today)
+            bo_history = get_mega_bo_history(code)
+
+            if upgrade_info and upgrade_info["days_since_pb"] > 0:
+                base["tier"] = "UPGRADE"
+                base["upgrade_info"] = upgrade_info
+                print(f"    \U0001f525 {code}: PB\u2192BO\u6607\u683c ({upgrade_info['days_since_pb']}\u65e5)")
+            else:
+                base["tier"] = "BO"
+                print(f"    \U0001f6a8 {code}: Mega BO")
+
+            base["bo_history"] = bo_history
+            mega_signals.append(base)
+
+        elif signal == "pre_breakout":
+            # PB: 重複抑制チェック
+            pb_info = track_mega_pb(code, today)
+            if pb_info["suppress"]:
+                print(f"    \U0001f451 {code}: Mega PB (\u6291\u5236\u4e2d, {pb_info['signal_count']}\u56de\u76ee)")
+                continue
+
+            base["tier"] = "PB"
+            base["pb_info"] = pb_info
+            mega_signals.append(base)
+            print(f"    \U0001f451 {code}: Mega PB (初出/再通知)")
+
+    if mega_signals and not dry_run:
+        notify_mega(mega_signals, today, regime_header=regime_header)
+        print(f"  Mega通知送信: BO/UPGRADE {sum(1 for s in mega_signals if s['tier'] in ('BO','UPGRADE'))} | PB {sum(1 for s in mega_signals if s['tier'] == 'PB')}")
+
+    return mega_codes
 
 
 def run_breakout_us(
@@ -443,6 +537,9 @@ def run_breakout_us(
 
     df = check_breakout_batch(codes, market="US", regime=regime_trend)
     signal_codes = df["code"].tolist() if not df.empty else []
+
+    # Mega PBを先に保存（通常フローでpre_breakout除外する前に）
+    df_all_for_mega = df.copy() if not df.empty else df
 
     if not df.empty:
         # US: pre_breakoutを除外（BT勝率21%でノイジー）
@@ -485,6 +582,32 @@ def run_breakout_us(
                     }
                 add_pending_batch(pending_signals)
                 print(f"    GC待ちペンディング登録: {len(pending_signals)}件")
+
+    # ---- Mega ($200B+) 専用通知 ----
+    # 通常USチャンネルとは別。PBも含めて処理する
+    if not df_all_for_mega.empty:
+        _enrich_with_universe_meta(df_all_for_mega)
+        # BO分のenrich情報(EA/RS)をPB含む全DFにマージ
+        if not df.empty:
+            enrich_map = {
+                row["code"]: {"ea_tag": row.get("ea_tag", ""), "rs_score": row.get("rs_score", 0) or 0}
+                for _, row in df.iterrows()
+            }
+            if "ea_tag" not in df_all_for_mega.columns:
+                df_all_for_mega["ea_tag"] = ""
+            if "rs_score" not in df_all_for_mega.columns:
+                df_all_for_mega["rs_score"] = 0
+            for code, vals in enrich_map.items():
+                mask = df_all_for_mega["code"] == code
+                df_all_for_mega.loc[mask, "ea_tag"] = vals["ea_tag"]
+                df_all_for_mega.loc[mask, "rs_score"] = vals["rs_score"]
+
+        _process_mega_signals(
+            df_all_for_mega,
+            date.today().isoformat(),
+            dry_run=dry_run,
+            regime_header=regime_header,
+        )
 
     return signal_codes, "breakout:US", df
 
@@ -735,8 +858,8 @@ def main():
                         help="特定市場のみ実行")
     parser.add_argument("--universe", type=str, default="us_all",
                         help="USユニバース (デフォルト: us_all)")
-    parser.add_argument("--jp-universe", type=str, default="jp_growth",
-                        help="JPユニバース (デフォルト: jp_growth, jp_all, jp_standard, jp_prime)")
+    parser.add_argument("--jp-universe", type=str, default="jp_all",
+                        help="JPユニバース (デフォルト: jp_all, jp_growth, jp_standard, jp_prime)")
     parser.add_argument("--limit", type=int, default=0,
                         help="USチェック銘柄数の上限（テスト用）")
     parser.add_argument("--dry-run", action="store_true",

@@ -18,6 +18,8 @@ from screener.config import (
     BREAKOUT_STOP_LOSS, BREAKOUT_PROFIT_TARGET,
     BREAKOUT_STOP_LOSS_US, BREAKOUT_PROFIT_TARGET_US,
     BREAKOUT_US_PRE_MIN_QUALITY,
+    MEGA_THRESHOLD_US, MEGA_STOP_LOSS, MEGA_PROFIT_TARGET,
+    MEGA_NOTIFY_ALSO_US_CHANNEL,
 )
 
 
@@ -222,6 +224,32 @@ def _calc_short_priority(row) -> int:
     return score
 
 
+def _mcap_size_tag(mcap_val: float, market: str = "JP") -> str:
+    """時価総額サイズタグを返す（BT検証: 大型ほど好成績）"""
+    if not mcap_val or mcap_val <= 0:
+        return ""
+    if market == "US":
+        b = mcap_val / 1e9
+        if b >= 200:
+            return "\U0001f451Mega"   # 👑 $200B+
+        elif b >= 50:
+            return "\U0001f535Large"  # 🔵 $50-200B
+        elif b >= 10:
+            return "Mid"             # $10-50B
+        else:
+            return "Small"
+    else:
+        oku = mcap_val / 1e8
+        if oku >= 5000:
+            return "\U0001f451超大型"   # 👑 5000億+
+        elif oku >= 1000:
+            return "\U0001f535大型"     # 🔵 1000-5000億
+        elif oku >= 200:
+            return "中型"              # 200-1000億
+        else:
+            return "小型"
+
+
 def _build_breakout_message(
     df: pd.DataFrame,
     date: str,
@@ -387,8 +415,11 @@ def _build_breakout_message(
             else:
                 stock_line = f"[注目度{grade}] {stars} *{code}*{name_part}"
 
-            # 2行目: 価格・52W距離・セクター・時価総額
+            # 2行目: 価格・52W距離・時価総額サイズ・セクター・時価総額
+            mcap_tag = _mcap_size_tag(mcap_val, market="US")
             meta_parts = [price_str, dist_label]
+            if mcap_tag:
+                meta_parts.append(mcap_tag)
             if sector:
                 meta_parts.append(sector)
             if mcap_str:
@@ -449,8 +480,10 @@ def _build_breakout_message(
                     f" | \u2b07\ufe0f利確 ${tp_price:,.2f}（-15%下落で決済）"
                 )
             else:
-                sl_pct = BREAKOUT_STOP_LOSS_US
-                tp_pct = BREAKOUT_PROFIT_TARGET_US
+                # Mega ($200B+) は専用SL/TP
+                is_mega = (mcap_val or 0) >= MEGA_THRESHOLD_US
+                sl_pct = MEGA_STOP_LOSS if is_mega else BREAKOUT_STOP_LOSS_US
+                tp_pct = MEGA_PROFIT_TARGET if is_mega else BREAKOUT_PROFIT_TARGET_US
                 sl_price = close * (1 + sl_pct)
                 tp_price = close * (1 + tp_pct)
                 entry_line = f"  \U0001f6a8損切 ${sl_price:,.2f} ({sl_pct:+.0%}) | \U0001f3af利確 ${tp_price:,.2f} ({tp_pct:+.0%})"
@@ -488,14 +521,20 @@ def _build_breakout_message(
             else:
                 stock_line = f"[注目度{grade}] {stars} *{code}*{name_part}{kuroten_badge}"
 
-            # 2行目: 価格・52W距離・セクター・時価総額
+            # 2行目: 価格・52W距離・時価総額サイズ・市場区分・セクター・時価総額
             if dist >= 0:
                 dist_label = "\U0001f525新高値突破"
             elif dist >= -2:
                 dist_label = f"高値まであと{abs(dist):.1f}%"
             else:
                 dist_label = f"高値まで{abs(dist):.1f}%"
+            market_seg = row.get("market_segment", "")
+            mcap_tag = _mcap_size_tag(mcap_val, market="JP")
             meta_parts = [price_str, dist_label]
+            if mcap_tag:
+                meta_parts.append(mcap_tag)
+            if market_seg:
+                meta_parts.append(f"[{market_seg}]")
             if sector:
                 meta_parts.append(sector)
             if mcap_str:
@@ -647,8 +686,10 @@ def _build_gc_entry_message(
             price_str = f"${close:,.2f}" if close else ""
             stock_line = f"[{tag}] *{code}*{name_part} | {price_str}"
             timing_line = f"  シグナル: {signal_date} → GC確認: {date} ({wait_days}日)"
-            sl_pct = BREAKOUT_STOP_LOSS_US
-            tp_pct = BREAKOUT_PROFIT_TARGET_US
+            e_mcap = e.get("market_cap", 0) or 0
+            is_mega = e_mcap >= MEGA_THRESHOLD_US
+            sl_pct = MEGA_STOP_LOSS if is_mega else BREAKOUT_STOP_LOSS_US
+            tp_pct = MEGA_PROFIT_TARGET if is_mega else BREAKOUT_PROFIT_TARGET_US
             sl_price = close * (1 + sl_pct) if close else 0
             tp_price = close * (1 + tp_pct) if close else 0
             entry_line = f"  \U0001f6a8損切 ${sl_price:,.2f} ({sl_pct:+.0%}) | \U0001f3af利確 ${tp_price:,.2f} ({tp_pct:+.0%})" if close else ""
@@ -762,6 +803,240 @@ def _build_sell_signal_message(signals: list, date_str: str) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+def notify_mega(
+    signals: list[dict],
+    date_str: str,
+    regime_header: str | None = None,
+) -> bool:
+    """Mega ($200B+) 専用通知を送信する。
+
+    signals は daily_run.py で組み立てた Mega シグナルのリスト。
+    各 dict には以下のキーが必要:
+        tier: "BO" | "PB" | "UPGRADE"
+        code, close, signal, volume_ratio, rsi, rs_score, gc_status,
+        ea_tag, name, sector, market_cap, distance_pct,
+        above_sma_50, above_sma_200
+    BO/UPGRADE: upgrade_info (optional), bo_history (optional)
+    PB: pb_info (optional)
+    """
+    if not signals:
+        return False
+
+    # Mega専用チャンネル
+    mega_url = _resolve_webhook_url("mega", "US")
+    # 通常USチャンネル（サマリーのみ）
+    us_url = _resolve_webhook_url("breakout", "US") if MEGA_NOTIFY_ALSO_US_CHANNEL else None
+
+    if not mega_url and not us_url:
+        # どちらもなければフォールバック
+        mega_url = _resolve_webhook_url()
+
+    if not mega_url and not us_url:
+        print("[WARN] SLACK_WEBHOOK_URL が未設定のためMega通知をスキップ")
+        return False
+
+    # ティア分離
+    bo_signals = [s for s in signals if s["tier"] in ("BO", "UPGRADE")]
+    pb_signals = [s for s in signals if s["tier"] == "PB"]
+
+    sent = False
+
+    # BO/UPGRADE → Megaチャンネルにフル通知
+    if bo_signals:
+        msg = _build_mega_bo_message(bo_signals, date_str, regime_header)
+        target = mega_url or us_url
+        if target:
+            sent = _send_slack(target, msg) or sent
+        # USチャンネルにもサマリー送信
+        if us_url and mega_url and us_url != mega_url:
+            summary = _build_mega_us_summary(bo_signals, date_str, tier="BO")
+            _send_slack(us_url, summary)
+
+    # PB → Megaチャンネルに通知
+    if pb_signals:
+        msg = _build_mega_pb_message(pb_signals, date_str)
+        target = mega_url or us_url
+        if target:
+            sent = _send_slack(target, msg) or sent
+
+    return sent
+
+
+def _build_mega_bo_message(
+    signals: list[dict],
+    date_str: str,
+    regime_header: str | None = None,
+) -> str:
+    """Mega BO/UPGRADE のフル通知メッセージ"""
+    lines = []
+
+    for s in signals:
+        code = s["code"]
+        close = s["close"]
+        name = _clean_us_name(s.get("name", ""))
+        mcap_val = s.get("market_cap", 0) or 0
+        mcap_str = _format_mcap_usd(mcap_val)
+        sector = s.get("sector", "")
+        vol = s.get("volume_ratio", 0) or 0
+        rsi = s.get("rsi", 0) or 0
+        rs_score = s.get("rs_score", 0) or 0
+        gc = s.get("gc_status", False)
+        ea_tag = s.get("ea_tag", "")
+        dist = s.get("distance_pct", 0)
+        upgrade_info = s.get("upgrade_info")
+        bo_history = s.get("bo_history", [])
+
+        if s["tier"] == "UPGRADE":
+            # PB→BO昇格
+            lines.append("\U0001f525\U0001f525\U0001f525 *PB\u2192BO\u6607\u683c\uff01 MEGA BREAKOUT* \U0001f525\U0001f525\U0001f525")
+            if upgrade_info:
+                pb_date = upgrade_info.get("first_pb_date", "")
+                days = upgrade_info.get("days_since_pb", 0)
+                lines.append(f"_{pb_date}\u306bPB\u691c\u51fa \u2192 \u672c\u65e5BO\u306b\u6607\u683c ({days}\u65e5)_")
+        else:
+            lines.append("\U0001f6a8\U0001f6a8\U0001f6a8 *MEGA BREAKOUT* \U0001f6a8\U0001f6a8\U0001f6a8")
+
+        if regime_header:
+            lines.append(regime_header)
+
+        name_part = f" {name}" if name else ""
+        lines.append(f"*{code}*{name_part} ${close:,.2f}")
+        lines.append(f"\U0001f451Mega | {mcap_str} | {sector}")
+
+        lines.append("\u2501" * 30)
+
+        # テクニカル
+        tech = []
+        if dist >= 0:
+            tech.append("\U0001f525\u65b0\u9ad8\u5024\u7a81\u7834")
+        else:
+            tech.append(f"\u9ad8\u5024\u307e\u3067{abs(dist):.1f}%")
+        tech.append(f"\u51fa\u6765\u9ad8 {vol:.1f}\u500d")
+        if rsi >= 75:
+            tech.append(f"RSI {rsi:.0f} (\u904e\u71b1)")
+        elif rsi >= 60:
+            tech.append(f"RSI {rsi:.0f} (\u3084\u3084\u9ad8\u3044)")
+        else:
+            tech.append(f"RSI {rsi:.0f} (\u9069\u6e29)")
+        if rs_score:
+            if rs_score >= 90:
+                tech.append(f"RS {rs_score:.0f} (\u6700\u5f37)")
+            elif rs_score >= 80:
+                tech.append(f"RS {rs_score:.0f} (\u5f37\u3044)")
+            else:
+                tech.append(f"RS {rs_score:.0f}")
+        if ea_tag:
+            tech.append(ea_tag.replace("EA", "\u5229\u76ca\u52a0\u901f(EA)"))
+        if gc:
+            tech.append("GC\u2713(\u8cb7\u3044\u30b5\u30a4\u30f3)")
+        else:
+            tech.append("\u26a0\ufe0fGC\u306a\u3057")
+        lines.append("  " + " | ".join(tech))
+
+        # BT実績
+        lines.append("")
+        lines.append("*\U0001f4ca \u6b74\u4ee3\u5b9f\u7e3e (BT 641\u4ef6)*")
+        lines.append("  Mega BO: \u52dd\u738785% | EV+11.3% | PF 20.5 | \u5e744-5\u56de\u306e\u5e0c\u5c11\u30b7\u30b0\u30ca\u30eb")
+
+        # 銘柄過去実績
+        n_past_bo = len(bo_history)
+        if n_past_bo > 0:
+            lines.append(f"  {code}\u904e\u53bb\u5b9f\u7e3e: BO {n_past_bo}\u56de")
+
+        # 推奨アクション
+        lines.append("")
+        sl_price = close * (1 + MEGA_STOP_LOSS)
+        tp_price = close * (1 + MEGA_PROFIT_TARGET)
+        lines.append(f"*\u63a8\u5968*: SL ${sl_price:,.2f} ({MEGA_STOP_LOSS:+.0%}) | TP ${tp_price:,.2f} ({MEGA_PROFIT_TARGET:+.0%})")
+        lines.append(f"  \u203b BEAR\u76f8\u5834\u3067\u3082\u552f\u4e00EV\u30d7\u30e9\u30b9\u3092\u7dad\u6301\u3057\u305f\u30bb\u30b0\u30e1\u30f3\u30c8")
+
+        # リンク
+        lines.append(
+            f"  <https://finance.yahoo.com/quote/{code}|Yahoo>"
+            f" | <https://finviz.com/quote.ashx?t={code}|Finviz>"
+            f" | <https://www.tradingview.com/chart/?symbol={code}|TV>"
+        )
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def _build_mega_pb_message(
+    signals: list[dict],
+    date_str: str,
+) -> str:
+    """Mega PB（プレブレイクアウト）通知"""
+    lines = [
+        f"*\U0001f451 MEGA Pre-Breakout* ({date_str})",
+        f"\u76e3\u8996\u4e2d: *{len(signals)}\u4ef6* \u2014 BO\u306b\u6607\u683c\u3059\u308c\u3070\u6b74\u4ee3\u52dd\u738785%\n",
+    ]
+
+    for s in signals:
+        code = s["code"]
+        close = s["close"]
+        name = _clean_us_name(s.get("name", ""))
+        mcap_val = s.get("market_cap", 0) or 0
+        mcap_str = _format_mcap_usd(mcap_val)
+        sector = s.get("sector", "")
+        dist = s.get("distance_pct", 0)
+        vol = s.get("volume_ratio", 0) or 0
+        gc = s.get("gc_status", False)
+        rs_score = s.get("rs_score", 0) or 0
+        pb_info = s.get("pb_info", {})
+
+        name_part = f" {name}" if name else ""
+        dist_label = f"\u9ad8\u5024\u307e\u3067\u3042\u3068{abs(dist):.1f}%" if dist < 0 else "\U0001f525\u65b0\u9ad8\u5024\u7a81\u7834"
+
+        lines.append(f"\U0001f451 *{code}*{name_part} ${close:,.2f}")
+
+        meta = [dist_label, mcap_str]
+        if sector:
+            meta.append(sector)
+        lines.append(f"  {' | '.join(meta)}")
+
+        tech = [f"\u51fa\u6765\u9ad8 {vol:.1f}\u500d"]
+        if rs_score:
+            tech.append(f"RS {rs_score:.0f}")
+        if gc:
+            tech.append("GC\u2713")
+        else:
+            tech.append("GC\u5f85\u3061")
+        lines.append(f"  {' | '.join(tech)}")
+
+        # PB通知回数
+        if pb_info.get("signal_count", 0) > 1:
+            lines.append(f"  _({pb_info['signal_count']}\u56de\u76ee\u306ePB\u30b7\u30b0\u30ca\u30eb / \u521d\u51fa: {pb_info.get('first_pb_date', '')})_")
+
+        # SL/TP (Mega専用パラメータ)
+        sl_price = close * (1 + MEGA_STOP_LOSS)
+        tp_price = close * (1 + MEGA_PROFIT_TARGET)
+        lines.append(f"  SL ${sl_price:,.2f} ({MEGA_STOP_LOSS:+.0%}) | TP ${tp_price:,.2f} ({MEGA_PROFIT_TARGET:+.0%})")
+
+        lines.append(
+            f"  <https://finance.yahoo.com/quote/{code}|Yahoo>"
+            f" | <https://www.tradingview.com/chart/?symbol={code}|TV>"
+        )
+        lines.append("")
+
+    lines.append("_BO\u306b\u6607\u683c\u3059\u308c\u3070\u5225\u9014\u7dca\u6025\u901a\u77e5\u3057\u307e\u3059_")
+    return "\n".join(lines)
+
+
+def _build_mega_us_summary(
+    signals: list[dict],
+    date_str: str,
+    tier: str = "BO",
+) -> str:
+    """USチャンネル向けMega要約（フルメッセージはMegaチャンネル）"""
+    tickers = [s["code"] for s in signals]
+    if tier == "BO":
+        return (
+            f"\U0001f6a8 *Mega BO\u691c\u51fa* ({date_str}): {', '.join(tickers)}\n"
+            f"\u6b74\u4ee3\u52dd\u738785% | EV+11.3% | \u8a73\u7d30\u306fMega\u30c1\u30e3\u30f3\u30cd\u30eb\u3092\u78ba\u8a8d"
+        )
+    return f"\U0001f451 Mega PB: {', '.join(tickers)} \u2014 \u8a73\u7d30\u306fMega\u30c1\u30e3\u30f3\u30cd\u30eb"
 
 
 def notify_portfolio_summary(
