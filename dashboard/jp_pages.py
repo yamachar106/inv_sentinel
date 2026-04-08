@@ -77,20 +77,69 @@ def fetch_jp_names(tickers: list[str]) -> dict[str, str]:
     return names
 
 
+JP_TECHNICALS_CACHE = ROOT / "data" / "cache" / "mega_jp_technicals.json"
+
+
+def _load_jp_price_cache() -> dict[str, dict]:
+    """キャッシュからJP価格データを読み込み、close_seriesをpd.Seriesに復元"""
+    if not JP_TECHNICALS_CACHE.exists():
+        return {}
+    try:
+        data = json.loads(JP_TECHNICALS_CACHE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, ValueError):
+        return {}
+
+    result = {}
+    for row in data.get("rows", []):
+        ticker = row.get("ticker", "")
+        chart = row.get("chart", {})
+        if not chart:
+            continue
+        # chart: {"2025-04-10": 12345.0, ...} → pd.Series
+        dates = pd.to_datetime(list(chart.keys()))
+        values = list(chart.values())
+        close_series = pd.Series(values, index=dates, name="Close").sort_index()
+
+        result[ticker] = {
+            "close": row.get("close", 0),
+            "high_52w": row.get("high_52w", 0),
+            "dist_pct": row.get("dist_pct", 0),
+            "sma20": row.get("sma20", 0),
+            "sma50": row.get("sma50", 0),
+            "sma200": row.get("sma200"),
+            "gc": row.get("gc", False),
+            "above_sma200": row.get("above_sma200", False),
+            "rsi": row.get("rsi", 0),
+            "vol_ratio": row.get("vol_ratio", 0),
+            "mom_6m": row.get("mom_6m", 0),
+            "close_series": close_series,
+        }
+    return result
+
+
 @st.cache_data(ttl=300)
 def fetch_jp_prices(tickers: list[str]) -> dict[str, dict]:
-    """JP銘柄の最新価格データ取得"""
+    """JP銘柄の価格データ取得（キャッシュ優先 → yfinanceフォールバック）"""
+    # まずキャッシュから読む
+    cached = _load_jp_price_cache()
+    if cached and all(t in cached for t in tickers):
+        return {t: cached[t] for t in tickers if t in cached}
+
+    # キャッシュにないものをyfinanceから取得
     import yfinance as yf
-    result = {}
-    if not tickers:
+    result = {t: cached[t] for t in tickers if t in cached}
+    missing = [t for t in tickers if t not in result]
+
+    if not missing:
         return result
+
     try:
-        data = yf.download(tickers, period="1y", progress=False, threads=True)
+        data = yf.download(missing, period="1y", progress=False, threads=True)
         if data.empty:
             return result
-        for ticker in tickers:
+        for ticker in missing:
             try:
-                if len(tickers) == 1:
+                if len(missing) == 1:
                     close = data["Close"]
                     volume = data["Volume"]
                 else:

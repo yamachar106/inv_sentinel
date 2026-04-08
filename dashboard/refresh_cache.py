@@ -254,6 +254,94 @@ def refresh_company_info(tickers: list[str]) -> dict:
     return result
 
 
+JP_TECHNICALS_CACHE = CACHE_DIR / "mega_jp_technicals.json"
+
+
+def refresh_jp_technicals() -> list[dict]:
+    """JP MEGA銘柄のテクニカル+チャートデータを一括キャッシュ"""
+    strength_path = ROOT / "data" / "mega_jp_strength.json"
+    if not strength_path.exists():
+        print("[JP] 地力スコアデータなし、スキップ")
+        return []
+
+    strength = json.loads(strength_path.read_text(encoding="utf-8"))
+    tickers = list(strength.get("tickers", {}).keys())
+    if not tickers:
+        return []
+
+    print(f"[JP] テクニカルデータ取得中 ({len(tickers)}銘柄)...")
+    data = yf.download(tickers, period="1y", progress=True, threads=True)
+    if data.empty:
+        print("  → データなし")
+        return []
+
+    rows = []
+    for ticker in tickers:
+        try:
+            if len(tickers) == 1:
+                close = data["Close"]
+                volume = data["Volume"]
+            else:
+                close = data["Close"][ticker]
+                volume = data["Volume"][ticker]
+
+            close = close.dropna()
+            if len(close) < 50:
+                continue
+
+            current = float(close.iloc[-1])
+            high_52w = float(close.max())
+            dist_pct = (current - high_52w) / high_52w * 100
+
+            sma20 = float(close.rolling(20).mean().iloc[-1])
+            sma50 = float(close.rolling(50).mean().iloc[-1])
+            sma200 = float(close.rolling(200).mean().iloc[-1]) if len(close) >= 200 else None
+
+            delta = close.diff()
+            gain = delta.clip(lower=0).rolling(14).mean()
+            loss = (-delta.clip(upper=0)).rolling(14).mean()
+            rs = gain.iloc[-1] / loss.iloc[-1] if loss.iloc[-1] != 0 else 100
+            rsi = float(100 - (100 / (1 + rs)))
+
+            gc = sma20 > sma50
+
+            vol_avg = float(volume.rolling(50).mean().iloc[-1]) if len(volume) >= 50 else 1
+            vol_today = float(volume.iloc[-1])
+            vol_ratio = vol_today / vol_avg if vol_avg > 0 else 0
+
+            above_sma200 = current > sma200 if sma200 else False
+            mom_6m = float(close.iloc[-1] / close.iloc[-126] - 1) if len(close) >= 126 else 0
+
+            # チャート用の時系列データ（日付:終値）
+            chart_data = {
+                d.strftime("%Y-%m-%d"): round(float(v), 1)
+                for d, v in zip(close.index, close.values)
+            }
+
+            rows.append({
+                "ticker": ticker,
+                "close": current,
+                "high_52w": round(high_52w, 1),
+                "dist_pct": round(dist_pct, 2),
+                "sma20": round(sma20, 1),
+                "sma50": round(sma50, 1),
+                "sma200": round(sma200, 1) if sma200 else None,
+                "rsi": round(rsi, 1),
+                "gc": gc,
+                "above_sma200": above_sma200,
+                "vol_ratio": round(vol_ratio, 2),
+                "mom_6m": round(mom_6m, 4),
+                "chart": chart_data,
+            })
+        except Exception:
+            continue
+
+    cache_data = {"_date": datetime.now().date().isoformat(), "rows": rows}
+    JP_TECHNICALS_CACHE.write_text(json.dumps(cache_data, ensure_ascii=False), encoding="utf-8")
+    print(f"  → {len(rows)}銘柄のJPテクニカルデータをキャッシュ済み")
+    return rows
+
+
 def main():
     print("=== MEGA Dashboard キャッシュ更新 ===")
     start = time.time()
@@ -263,6 +351,7 @@ def main():
 
     refresh_technicals(tickers)
     refresh_company_info(tickers)
+    refresh_jp_technicals()
 
     elapsed = time.time() - start
     print(f"\n完了 ({elapsed:.0f}秒)")

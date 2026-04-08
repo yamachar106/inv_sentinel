@@ -13,8 +13,8 @@ build/
 venv/
 .venv/
 
-# Data (generated) - cache and logs are ephemeral
-data/cache/
+# Data (generated) - logs are ephemeral
+data/cache/*.tmp
 data/logs/
 
 # Watchlist and backtest results are committed as project outputs
