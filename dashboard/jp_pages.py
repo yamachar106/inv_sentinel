@@ -537,7 +537,7 @@ def render_jp_scoreboard():
     filter_mode = st.selectbox(
         "表示フィルタ",
         FILTER_OPTIONS,
-        index=0,
+        index=1,
         key="jp_scoreboard_filter",
         help="地力=月次固定 / 総合=地力40%+タイミング60%（リアルタイム変動）",
     )

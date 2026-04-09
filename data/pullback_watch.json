@@ -1,22 +1,3 @@
 {
-  "watches": {
-    "4004": {
-      "code": "4004",
-      "market": "JP",
-      "target_price": 10216.0,
-      "reason": "SL-20%水準まで押し目待ち",
-      "added_date": "2026-04-09",
-      "added_price": 12940.0,
-      "status": "watching"
-    },
-    "INTC": {
-      "code": "INTC",
-      "market": "US",
-      "target_price": 45.0,
-      "reason": "Q1決算後の押し目待ち",
-      "added_date": "2026-04-09",
-      "added_price": 58.95,
-      "status": "watching"
-    }
-  }
+  "watches": {}
 }
