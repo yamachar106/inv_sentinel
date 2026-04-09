@@ -40,6 +40,7 @@ from screener.config import (
 )
 from screener.performance import compute_stats as _compute_perf_stats
 from screener.portfolio import load_portfolio
+from screener.pullback_watch import list_watches as _list_pullback_watches
 
 # ページ設定
 st.set_page_config(
@@ -1284,6 +1285,28 @@ def render_performance():
         st.dataframe(df_pos, use_container_width=True, hide_index=True)
     else:
         st.info("保有ポジションなし — `python -m screener.portfolio add` で追加")
+
+    st.markdown("---")
+
+    # ═══ Section 2.5: Pullback Watch ═══
+    pb_watches = _list_pullback_watches()
+    st.subheader(f"Pullback Watch ({len(pb_watches)})")
+    if pb_watches:
+        pw_rows = []
+        for w in pb_watches:
+            currency = "¥" if w.get("market") == "JP" else "$"
+            pw_rows.append({
+                "Code": w.get("code", ""),
+                "Market": w.get("market", ""),
+                "Target": f"{currency}{w.get('target_price', 0):,.0f}",
+                "Added": w.get("added_date", ""),
+                "Added Price": f"{currency}{w.get('added_price', 0):,.0f}",
+                "Status": w.get("status", ""),
+                "Reason": w.get("reason", ""),
+            })
+        st.dataframe(pd.DataFrame(pw_rows), use_container_width=True, hide_index=True)
+    else:
+        st.info("押し目ウォッチなし — `python -m screener.pullback_watch add CODE --target PRICE` で追加")
 
     st.markdown("---")
 

@@ -335,12 +335,32 @@ def main():
     elapsed = time.time() - start_time
     print(f"\n完了 ({elapsed:.0f}秒)")
 
+    # ---- 押し目ウォッチチェック ----
+    pullback_summary = ""
+    try:
+        from screener.pullback_watch import check_pullbacks, format_pullback_summary
+        pb_results = check_pullbacks()
+        if pb_results:
+            pullback_summary = format_pullback_summary(pb_results)
+            triggered = [r for r in pb_results if r["triggered"]]
+            if triggered:
+                print(f"\n[!] 押し目到達: {len(triggered)}件")
+            for r in pb_results:
+                status = "TRIGGERED" if r["triggered"] else f"あと{r.get('distance_pct', '?')}%"
+                print(f"  {r['code']}: {status}")
+    except Exception as e:
+        print(f"  [WARN] 押し目チェック失敗: {e}")
+
     if not args.dry_run:
         digest = build_digest(
             mega_signals, today,
             regime_header=regime_header,
             mega_jp_signals=mega_jp_signals,
         )
+        # 押し目サマリーをダイジェストに追加
+        if pullback_summary:
+            digest += "\n\n" + pullback_summary
+
         webhook = _resolve_webhook_url("mega", "US")
         if webhook:
             _send_slack(webhook, digest)
