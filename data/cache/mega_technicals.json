@@ -1,5 +1,5 @@
 {
-  "_date": "2026-04-09",
+  "_date": "2026-04-10",
   "rows": [
     {
       "ticker": "NVDA",
@@ -26,7 +26,7 @@
       "rsi": 65.7,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.57,
+      "vol_ratio": 0.6,
       "signal": "-"
     },
     {
@@ -54,13 +54,13 @@
       "rsi": 56.8,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.65,
+      "vol_ratio": 0.66,
       "signal": "-"
     },
     {
       "ticker": "MSFT",
       "close": 373.07000732421875,
-      "high_52w": 539.8252563476562,
+      "high_52w": 539.8251953125,
       "dist_pct": -30.89,
       "sma20": 378.67,
       "sma50": 395.82,
@@ -68,7 +68,7 @@
       "rsi": 36.1,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.74,
+      "vol_ratio": 0.79,
       "signal": "-"
     },
     {
@@ -82,7 +82,7 @@
       "rsi": 69.5,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 1.23,
+      "vol_ratio": 1.24,
       "signal": "-"
     },
     {
@@ -110,7 +110,7 @@
       "rsi": 65.7,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.73,
+      "vol_ratio": 0.77,
       "signal": "-"
     },
     {
@@ -138,7 +138,7 @@
       "rsi": 36.4,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.97,
+      "vol_ratio": 0.99,
       "signal": "-"
     },
     {
@@ -180,7 +180,7 @@
       "rsi": 72.4,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.6,
+      "vol_ratio": 0.62,
       "signal": "-"
     },
     {
@@ -194,7 +194,7 @@
       "rsi": 46.1,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.78,
+      "vol_ratio": 1.07,
       "signal": "-"
     },
     {
@@ -208,7 +208,7 @@
       "rsi": 70.3,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.52,
+      "vol_ratio": 0.55,
       "signal": "PB"
     },
     {
@@ -222,7 +222,7 @@
       "rsi": 58.5,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.52,
+      "vol_ratio": 0.74,
       "signal": "PB"
     },
     {
@@ -264,27 +264,27 @@
       "rsi": 83.2,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.67,
+      "vol_ratio": 0.73,
       "signal": "PB"
     },
     {
       "ticker": "MA",
       "close": 503.57000732421875,
-      "high_52w": 597.273193359375,
-      "dist_pct": -15.69,
-      "sma20": 498.13,
-      "sma50": 515.39,
-      "sma200": 551.19,
-      "rsi": 57.6,
+      "high_52w": 596.24853515625,
+      "dist_pct": -15.54,
+      "sma20": 497.32,
+      "sma50": 514.52,
+      "sma200": 550.25,
+      "rsi": 58.2,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.65,
+      "vol_ratio": 0.87,
       "signal": "-"
     },
     {
       "ticker": "ORCL",
       "close": 137.86000061035156,
-      "high_52w": 326.8970642089844,
+      "high_52w": 326.8970947265625,
       "dist_pct": -57.83,
       "sma20": 148.03,
       "sma50": 151.33,
@@ -306,7 +306,7 @@
       "rsi": 79.3,
       "gc": true,
       "above_sma200": false,
-      "vol_ratio": 0.74,
+      "vol_ratio": 0.76,
       "signal": "-"
     },
     {
@@ -320,7 +320,7 @@
       "rsi": 45.1,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.98,
+      "vol_ratio": 1.01,
       "signal": "-"
     },
     {
@@ -334,7 +334,7 @@
       "rsi": 36.9,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.73,
+      "vol_ratio": 0.87,
       "signal": "-"
     },
     {
@@ -348,7 +348,7 @@
       "rsi": 59.0,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.34,
+      "vol_ratio": 0.62,
       "signal": "-"
     },
     {
@@ -362,7 +362,7 @@
       "rsi": 32.5,
       "gc": true,
       "above_sma200": false,
-      "vol_ratio": 1.69,
+      "vol_ratio": 1.71,
       "signal": "-"
     },
     {
@@ -390,7 +390,7 @@
       "rsi": 80.8,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.73,
+      "vol_ratio": 0.76,
       "signal": "-"
     },
     {
@@ -404,7 +404,7 @@
       "rsi": 70.2,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.94,
+      "vol_ratio": 0.95,
       "signal": "-"
     },
     {
@@ -418,7 +418,7 @@
       "rsi": 56.1,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.4,
+      "vol_ratio": 0.62,
       "signal": "-"
     },
     {
@@ -446,7 +446,7 @@
       "rsi": 57.1,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.59,
+      "vol_ratio": 0.72,
       "signal": "-"
     },
     {
@@ -460,7 +460,7 @@
       "rsi": 64.1,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.65,
+      "vol_ratio": 0.7,
       "signal": "PB"
     },
     {
@@ -474,7 +474,7 @@
       "rsi": 75.5,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.56,
+      "vol_ratio": 0.76,
       "signal": "PB"
     },
     {
@@ -488,7 +488,7 @@
       "rsi": 64.3,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.34,
+      "vol_ratio": 0.37,
       "signal": "-"
     },
     {
@@ -530,7 +530,7 @@
       "rsi": 53.8,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.91,
+      "vol_ratio": 0.93,
       "signal": "-"
     },
     {
@@ -566,13 +566,13 @@
       "close": 91.08999633789062,
       "high_52w": 94.1500015258789,
       "dist_pct": -3.25,
-      "sma20": 91.83,
-      "sma50": 84.62,
-      "sma200": 74.78,
+      "sma20": 91.72,
+      "sma50": 84.58,
+      "sma200": 74.77,
       "rsi": 49.5,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.87,
+      "vol_ratio": 0.85,
       "signal": "PB"
     },
     {
@@ -648,7 +648,7 @@
     {
       "ticker": "UNH",
       "close": 306.9100036621094,
-      "high_52w": 583.029541015625,
+      "high_52w": 583.0296020507812,
       "dist_pct": -47.36,
       "sma20": 279.88,
       "sma50": 281.79,
@@ -706,13 +706,13 @@
       "close": 65.0,
       "high_52w": 65.0,
       "dist_pct": 0.0,
-      "sma20": 63.31,
-      "sma50": 63.69,
-      "sma200": 61.32,
-      "rsi": 96.8,
+      "sma20": 63.37,
+      "sma50": 63.7,
+      "sma200": 61.34,
+      "rsi": 99.0,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0,
+      "vol_ratio": 0.0,
       "signal": "-"
     },
     {
@@ -726,7 +726,7 @@
       "rsi": 59.3,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.68,
+      "vol_ratio": 0.69,
       "signal": "PB"
     },
     {
@@ -744,6 +744,20 @@
       "signal": "-"
     },
     {
+      "ticker": "RY",
+      "close": 170.7899932861328,
+      "high_52w": 175.4600067138672,
+      "dist_pct": -2.66,
+      "sma20": 162.78,
+      "sma50": 166.49,
+      "sma200": 152.39,
+      "rsi": 73.7,
+      "gc": false,
+      "above_sma200": true,
+      "vol_ratio": 1.45,
+      "signal": "PB"
+    },
+    {
       "ticker": "TMUS",
       "close": 197.5399932861328,
       "high_52w": 262.2296142578125,
@@ -754,7 +768,7 @@
       "rsi": 34.5,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.86,
+      "vol_ratio": 0.93,
       "signal": "-"
     },
     {
@@ -768,7 +782,7 @@
       "rsi": 50.0,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.54,
+      "vol_ratio": 0.74,
       "signal": "-"
     },
     {
@@ -810,7 +824,7 @@
       "rsi": 34.0,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.74,
+      "vol_ratio": 0.9,
       "signal": "-"
     },
     {
@@ -838,7 +852,7 @@
       "rsi": 75.9,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.5,
+      "vol_ratio": 0.52,
       "signal": "-"
     },
     {
@@ -866,7 +880,7 @@
       "rsi": 53.3,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 1.11,
+      "vol_ratio": 1.18,
       "signal": "PB"
     }
   ]
