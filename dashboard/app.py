@@ -75,13 +75,13 @@ MONTHLY_STATS = {
 }
 
 PAGES = [
+    "\U0001f3af JP Action",
+    "\U0001f4ca JP Ranking",
+    "\U0001f50d JP Detail",
     "\U0001f3af US Action",
     "\U0001f4c8 US Performance",
     "\U0001f50d US Detail",
     "\U0001f5fa US Sector",
-    "\U0001f3ef JP Scoreboard",
-    "\U0001f4ca JP Ranking",
-    "\U0001f50d JP Detail",
 ]
 
 
@@ -926,16 +926,10 @@ def _get_sector_tag(sector: str) -> str:
 
 def render_sidebar():
     st.sidebar.title("\U0001f451 MEGA-BreakOut")
-    st.sidebar.caption("US $200B+ BO × JP ¥1兆+ S/A 並走戦略")
+    st.sidebar.caption("JP MEGA S最上位フルベット")
     st.sidebar.divider()
 
     default_idx = st.session_state.get("page", 0)
-
-    # US / JP グループ表示
-    st.sidebar.markdown("**🇺🇸 US MEGA**")
-    us_pages = [p for p in PAGES if "US" in p]
-    st.sidebar.markdown("**🇯🇵 JP MEGA**")
-    jp_pages = [p for p in PAGES if "JP" in p]
 
     page = st.sidebar.radio(
         "ページ",
@@ -968,10 +962,10 @@ def render_sidebar():
         )
         st.sidebar.divider()
         st.sidebar.markdown(
-            "**JP BT実績 (S/A)**\n"
-            "- EV+7.13% 勝率69.2%\n"
-            "- PF 3.70\n"
-            "- SL-20%/TP+40%"
+            "**S最上位フルベット (BT 5年)**\n"
+            "- CAGR+33% Sharpe 1.24\n"
+            "- MaxDD-35%\n"
+            "- 200万 → 834万"
         )
     else:
         m_stats = MONTHLY_STATS.get(month, {})
@@ -1889,10 +1883,10 @@ def main():
     # ─── JP ページ ───
     if "JP" in page:
         from dashboard.jp_pages import (
-            render_jp_scoreboard, render_jp_ranking, render_jp_detail,
+            render_jp_action, render_jp_ranking, render_jp_detail,
         )
-        if page == "\U0001f3ef JP Scoreboard":
-            render_jp_scoreboard()
+        if page == "\U0001f3af JP Action":
+            render_jp_action()
         elif page == "\U0001f4ca JP Ranking":
             render_jp_ranking()
         elif page == "\U0001f50d JP Detail":

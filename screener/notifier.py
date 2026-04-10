@@ -1063,10 +1063,12 @@ def notify_mega_jp(
     date_str: str,
     regime_header: str | None = None,
     limit_order_section: list[str] | None = None,
+    prev_top_s_code: str | None = None,
 ) -> bool:
     """JP MEGA ¥1兆+ S/Aスコアリング通知を送信する。
 
     signals は mega_jp.scan_mega_jp() の返却値。
+    prev_top_s_code: 前日のS最上位銘柄コード（ローテーション判定用）
     """
     if not signals:
         return False
@@ -1078,7 +1080,8 @@ def notify_mega_jp(
         print("[WARN] SLACK_WEBHOOK_URL が未設定のためJP Mega通知をスキップ")
         return False
 
-    msg = _build_mega_jp_message(signals, date_str, regime_header, limit_order_section)
+    msg = _build_mega_jp_message(signals, date_str, regime_header,
+                                  limit_order_section, prev_top_s_code)
     return _send_slack(mega_url, msg)
 
 
@@ -1087,6 +1090,7 @@ def _build_mega_jp_message(
     date_str: str,
     regime_header: str | None = None,
     limit_order_section: list[str] | None = None,
+    prev_top_s_code: str | None = None,
 ) -> str:
     """JP MEGA S/Aスコアリング通知メッセージを構築"""
     lines = [f"*🏯 JP MEGA ¥1兆+ S/Aスコアリング* ({date_str})"]
@@ -1099,14 +1103,44 @@ def _build_mega_jp_message(
     n_bo = sum(1 for s in signals if s.get("bo_signal") == "breakout")
     lines.append(f"対象: S{n_s} A{n_a} | BO:{n_bo} 監視:{len(signals)-n_bo}\n")
 
+    # ローテーションアクション（S最上位フルベット戦略）
+    s_signals = [s for s in signals if s["total_rank"] == "S"]
+    top_s = s_signals[0] if s_signals else None
+    top_s_code = top_s["code"] if top_s else None
+    top_s_name = top_s.get("name", "") if top_s else ""
+
+    lines.append("━" * 25)
+    lines.append("🎯 *翌朝アクション (S最上位フルベット)*")
+    lines.append("━" * 25)
+    if top_s is None:
+        lines.append("  ➡️ *EXIT to CASH* — S銘柄なし、全売却")
+    elif prev_top_s_code is None:
+        # 前日データなし（初回 or データ欠損）
+        name_str = f" {top_s_name}" if top_s_name else ""
+        lines.append(
+            f"  🟢 *BUY {top_s_code}*{name_str} ¥{top_s['close']:,.0f}"
+            f" (総合{top_s['total_score']:.0f})"
+        )
+    elif top_s_code == prev_top_s_code:
+        name_str = f" {top_s_name}" if top_s_name else ""
+        lines.append(
+            f"  ✅ *HOLD {top_s_code}*{name_str} — 変更なし"
+        )
+    else:
+        name_str = f" {top_s_name}" if top_s_name else ""
+        lines.append(
+            f"  🔄 *SWITCH → {top_s_code}*{name_str} ¥{top_s['close']:,.0f}"
+            f" (総合{top_s['total_score']:.0f})"
+        )
+        lines.append(f"  　売り: {prev_top_s_code} → 買い: {top_s_code}")
+    lines.append("")
+
     # BO銘柄を先頭に
     bo_signals = [s for s in signals if s.get("bo_signal") == "breakout"]
     watch_signals = [s for s in signals if s.get("bo_signal") != "breakout"]
 
     if bo_signals:
-        lines.append("━" * 25)
-        lines.append("🚨 *確定BO — 翌日寄り成行買い*")
-        lines.append("━" * 25)
+        lines.append("🚨 *確定BO*")
         for s in bo_signals:
             lines.extend(_format_mega_jp_signal(s))
         lines.append("")
@@ -1124,9 +1158,8 @@ def _build_mega_jp_message(
         lines.extend(limit_order_section)
 
     # BT実績
-    lines.append("*📈 歴代実績 (BT 10年)*")
-    lines.append("  S/A: 勝率69% | EV+7.1% | PF 3.70 | 年205回")
-    lines.append("  _BEAR年(2022)でもS/A EV+3.52%（黒字）_")
+    lines.append("*📈 S最上位フルベット (BT 5年)*")
+    lines.append("  CAGR+33% | MaxDD-35% | Sharpe1.24 | 200万→834万")
 
     return "\n".join(lines)
 

@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 STRENGTH_PATH = ROOT / "data" / "mega_jp_strength.json"
 
-JP_DETAIL_PAGE_INDEX = 6  # app.py PAGES list の JP Detail の位置
+JP_DETAIL_PAGE_INDEX = 2  # app.py PAGES list の JP Detail の位置
 
 RANK_COLORS = {
     "S": "#f59e0b",  # gold
@@ -486,11 +486,111 @@ def _render_mini_chart(close_series: pd.Series, code: str, days: int = 90):
     st.plotly_chart(fig, use_container_width=True, key=f"mini_{code}")
 
 
-# ─── Page: JP Scoreboard ──────────────────────────────
+# ─── Page: JP Action ──────────────────────────────
 
-def render_jp_scoreboard():
-    """JP MEGA S/Aスコアボード"""
-    st.header("🏯 JP MEGA S/Aスコアボード")
+def _get_prev_top_s() -> tuple[str | None, str]:
+    """signal_storeから前日のS最上位銘柄を取得"""
+    try:
+        from screener.signal_store import load_previous_enriched_signals
+        today = datetime.now().date().isoformat()
+        prev = load_previous_enriched_signals(today)
+        mega_jp = prev.get("mega:JP", [])
+        for s in mega_jp:
+            if s.get("total_rank") == "S":
+                return s.get("code"), s.get("name", "")
+    except Exception:
+        pass
+    return None, ""
+
+
+def _render_action_hero(df: pd.DataFrame, prices: dict, names: dict):
+    """翌朝アクション ヒーローセクション"""
+    # 当日のS最上位
+    s_df = df[df["総合ランク"] == "S"]
+    top_s = s_df.iloc[0] if not s_df.empty else None
+    top_code = top_s["コード"] if top_s is not None else None
+    top_name = top_s["名前"] if top_s is not None else ""
+
+    # 前日のS最上位
+    prev_code, prev_name = _get_prev_top_s()
+
+    # アクション判定
+    if top_code is None:
+        action = "EXIT"
+        action_icon = "➡️"
+        action_color = "#ef4444"
+        action_text = "EXIT to CASH — S銘柄なし、全売却"
+    elif prev_code is None:
+        action = "BUY"
+        action_icon = "🟢"
+        action_color = "#22c55e"
+        action_text = f"BUY {top_code} {top_name}"
+    elif top_code == prev_code:
+        action = "HOLD"
+        action_icon = "✅"
+        action_color = "#3b82f6"
+        action_text = f"HOLD {top_code} {top_name} — 変更なし"
+    else:
+        action = "SWITCH"
+        action_icon = "🔄"
+        action_color = "#f59e0b"
+        action_text = f"SWITCH → {top_code} {top_name}"
+
+    # ヒーローカード
+    st.markdown(
+        f"""<div style="
+            background: linear-gradient(135deg, {action_color}15, {action_color}05);
+            border: 2px solid {action_color};
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 16px;
+        ">
+        <div style="font-size: 0.9em; color: #888; margin-bottom: 4px;">翌朝アクション</div>
+        <div style="font-size: 1.8em; font-weight: bold; color: {action_color};">
+            {action_icon} {action_text}
+        </div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+
+    if top_s is not None:
+        # SWITCH の場合: 売り→買い表示
+        if action == "SWITCH":
+            prev_name_str = f" {prev_name}" if prev_name else ""
+            st.markdown(
+                f"売り: **{prev_code}**{prev_name_str} → 買い: **{top_code}** {top_name}"
+            )
+
+        # S最上位の詳細表示
+        cols = st.columns([2, 1.5, 1.5, 1.5])
+        with cols[0]:
+            close_series = prices.get(top_s["ticker"], {}).get("close_series")
+            if close_series is not None and len(close_series) > 20:
+                _render_mini_chart(close_series, top_code, days=90)
+        with cols[1]:
+            st.metric("現在値", f"¥{top_s['現在値']:,.0f}")
+            st.metric("総合スコア", f"{top_s['総合']:.0f} (S)")
+        with cols[2]:
+            dist = top_s["52W距離"]
+            dist_color = "green" if dist >= -2 else "orange" if dist >= -5 else "red"
+            gc_icon = "🟢" if top_s["GC"] else "🔴"
+            sma_icon = "🟢" if top_s["SMA200上"] else "🔴"
+            st.markdown(f"52W :{dist_color}[{dist:+.1f}%]")
+            st.markdown(f"{gc_icon} GC | {sma_icon} SMA200")
+            st.markdown(f"RSI {top_s['RSI']:.0f} | Vol ×{top_s['出来高比']:.1f}")
+        with cols[3]:
+            ev = top_s["BT_EV"]
+            ev_color = "green" if ev > 0 else "red"
+            st.markdown(f"BT :{ev_color}[EV{ev:+.1f}%]")
+            st.markdown(f"勝率 {top_s['BT_WR']:.0f}%")
+            st.caption(f"SL ¥{top_s['SL']:,.0f} / TP ¥{top_s['TP']:,.0f}")
+
+    st.divider()
+
+
+def render_jp_action():
+    """JP MEGA S最上位フルベット — アクション + スコアボード"""
+    st.header("🎯 JP MEGA S最上位フルベット")
 
     strength_data = load_strength_data()
     if not strength_data:
@@ -513,40 +613,38 @@ def render_jp_scoreboard():
         st.warning("データ構築に失敗しました")
         return
 
+    # ─── ヒーローセクション: 翌朝アクション ───
+    _render_action_hero(df, prices, names)
+
     # ─── サマリー指標 ───
     n_s_total = len(df[df["総合ランク"] == "S"])
     n_a_total = len(df[df["総合ランク"] == "A"])
-    n_s_str = len(df[df["地力ランク"] == "S"])
-    n_a_str = len(df[df["地力ランク"] == "A"])
     n_sma200_ok = len(df[df["SMA200上"]])
     n_gc = len(df[df["GC"]])
 
-    c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("総合 S/A", f"{n_s_total+n_a_total}銘柄", help="総合=地力40%+タイミング60%（リアルタイム変動）")
-    c2.metric("地力 S/A", f"{n_s_str+n_a_str}銘柄", help="地力=10年BTベース（月次固定）")
-    c3.metric("SMA200上", f"{n_sma200_ok}/{len(df)}", help="200日移動平均の上")
-    c4.metric("GC状態", f"{n_gc}/{len(df)}", help="SMA20 > SMA50")
-    month = datetime.now().month
-    month_ev = JP_MONTHLY_STATS.get(month, 0)
-    c5.metric(f"{month}月 過去EV", f"+{month_ev:.1f}%")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("総合S", f"{n_s_total}銘柄", help="翌朝の購入候補")
+    c2.metric("総合A", f"{n_a_total}銘柄", help="次点候補")
+    c3.metric("SMA200上", f"{n_sma200_ok}/{len(df)}")
+    c4.metric("GC", f"{n_gc}/{len(df)}")
 
     st.divider()
 
     # ─── フィルタ ───
-    FILTER_OPTIONS = ["地力 S/A（安定）", "総合 S/A（タイミング込み）", "全銘柄"]
+    FILTER_OPTIONS = ["総合 S/A（タイミング込み）", "地力 S/A（安定）", "全銘柄"]
     filter_mode = st.selectbox(
         "表示フィルタ",
         FILTER_OPTIONS,
-        index=1,
+        index=0,
         key="jp_scoreboard_filter",
-        help="地力=月次固定 / 総合=地力40%+タイミング60%（リアルタイム変動）",
+        help="総合=地力40%+タイミング60%（リアルタイム変動）",
     )
 
-    if filter_mode == FILTER_OPTIONS[0]:
+    if filter_mode == FILTER_OPTIONS[1]:
         display_df = df[df["地力ランク"].isin(["S", "A"])].copy()
         display_df.sort_values("地力", ascending=False, inplace=True)
         sort_label = "地力スコア順"
-    elif filter_mode == FILTER_OPTIONS[1]:
+    elif filter_mode == FILTER_OPTIONS[0]:
         display_df = df[df["総合ランク"].isin(["S", "A"])].copy()
         display_df.sort_values("総合", ascending=False, inplace=True)
         sort_label = "総合スコア順"
