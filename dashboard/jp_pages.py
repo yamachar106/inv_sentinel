@@ -566,7 +566,7 @@ def _render_action_hero(df: pd.DataFrame, prices: dict, names: dict):
         with cols[0]:
             close_series = prices.get(top_s["ticker"], {}).get("close_series")
             if close_series is not None and len(close_series) > 20:
-                _render_mini_chart(close_series, top_code, days=90)
+                _render_mini_chart(close_series, f"hero_{top_code}", days=90)
         with cols[1]:
             st.metric("現在値", f"¥{top_s['現在値']:,.0f}")
             st.metric("総合スコア", f"{top_s['総合']:.0f} (S)")
