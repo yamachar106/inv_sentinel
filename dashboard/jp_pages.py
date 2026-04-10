@@ -515,6 +515,7 @@ def _render_action_hero(df: pd.DataFrame, prices: dict, names: dict):
     prev_code, prev_name = _get_prev_top_s()
 
     # アクション判定
+    top_label = top_name if top_name else top_code
     if top_code is None:
         action = "EXIT"
         action_icon = "➡️"
@@ -524,17 +525,17 @@ def _render_action_hero(df: pd.DataFrame, prices: dict, names: dict):
         action = "BUY"
         action_icon = "🟢"
         action_color = "#22c55e"
-        action_text = f"BUY {top_code} {top_name}"
+        action_text = f"BUY {top_label} ({top_code})"
     elif top_code == prev_code:
         action = "HOLD"
         action_icon = "✅"
         action_color = "#3b82f6"
-        action_text = f"HOLD {top_code} {top_name} — 変更なし"
+        action_text = f"HOLD {top_label} — 変更なし"
     else:
         action = "SWITCH"
         action_icon = "🔄"
         action_color = "#f59e0b"
-        action_text = f"SWITCH → {top_code} {top_name}"
+        action_text = f"SWITCH → {top_label} ({top_code})"
 
     # ヒーローカード
     st.markdown(
@@ -556,9 +557,9 @@ def _render_action_hero(df: pd.DataFrame, prices: dict, names: dict):
     if top_s is not None:
         # SWITCH の場合: 売り→買い表示
         if action == "SWITCH":
-            prev_name_str = f" {prev_name}" if prev_name else ""
+            prev_label = prev_name if prev_name else prev_code
             st.markdown(
-                f"売り: **{prev_code}**{prev_name_str} → 買い: **{top_code}** {top_name}"
+                f"売り: **{prev_label}** ({prev_code}) → 買い: **{top_label}** ({top_code})"
             )
 
         # S最上位の詳細表示
@@ -670,21 +671,21 @@ def render_jp_action():
         with st.container():
             cols = st.columns([1.5, 0.8, 1.8, 1, 1.2, 1])
 
-            # Col 1: コード + 社名 + ランク
+            # Col 1: 社名 + コード + ランク
             with cols[0]:
                 strength_rank = row['地力ランク']
                 sr_color = RANK_COLORS.get(strength_rank, "#6b7280")
+                display_name = name if name else row['コード']
                 st.markdown(
                     f"<span style='font-size:1.3em;font-weight:bold;opacity:{opacity}'>"
-                    f"<span style='color:{color}'>[{rank}]</span> {row['コード']}"
+                    f"<span style='color:{color}'>[{rank}]</span> {display_name}"
                     f"</span>",
                     unsafe_allow_html=True,
                 )
-                st.caption(f"{name}")
+                st.caption(f"{row['コード']} | {_format_mcap_jpy(row['時価総額'])}")
                 st.markdown(
                     f"<small>総合<span style='color:{color};font-weight:bold'>{rank}</span> "
-                    f"(地力<span style='color:{sr_color}'>{strength_rank}</span>+タイミング) "
-                    f"| {_format_mcap_jpy(row['時価総額'])}</small>",
+                    f"(地力<span style='color:{sr_color}'>{strength_rank}</span>+タイミング)</small>",
                     unsafe_allow_html=True,
                 )
 
