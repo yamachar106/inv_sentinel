@@ -488,7 +488,7 @@ def _render_mini_chart(close_series: pd.Series, code: str, days: int = 90):
 
 # ─── Page: JP Action ──────────────────────────────
 
-def _get_prev_top_s() -> tuple[str | None, str]:
+def _get_prev_top_s() -> tuple:
     """signal_storeから前日のS最上位銘柄を取得"""
     try:
         from screener.signal_store import load_previous_enriched_signals
