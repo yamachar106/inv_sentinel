@@ -56,24 +56,48 @@ def load_strength_data() -> dict:
         return json.load(f)
 
 
+COMPANY_CODES_CSV = ROOT / "data" / "cache" / "company_codes.csv"
+
+
 @st.cache_data(ttl=86400)
 def fetch_jp_names(tickers: list[str]) -> dict[str, str]:
-    """JP銘柄の企業名を一括取得（日次キャッシュ）"""
-    import yfinance as yf
+    """JP銘柄の日本語企業名を取得（company_codes.csv → yfinanceフォールバック）"""
     names = {}
     if not tickers:
         return names
-    try:
-        ts = yf.Tickers(" ".join(tickers))
-        for t in tickers:
-            try:
-                info = ts.tickers[t].info
-                name = info.get("shortName") or info.get("longName") or ""
-                names[t] = name
-            except Exception:
-                names[t] = ""
-    except Exception:
-        pass
+
+    # company_codes.csv から日本語名を取得
+    code_name_map = {}
+    if COMPANY_CODES_CSV.exists():
+        try:
+            df_codes = pd.read_csv(COMPANY_CODES_CSV, encoding="utf-8", dtype={"code": str})
+            code_name_map = dict(zip(df_codes["code"].astype(str), df_codes["name"]))
+        except Exception:
+            pass
+
+    missing = []
+    for t in tickers:
+        code = t.replace(".T", "")
+        ja_name = code_name_map.get(code, "")
+        if ja_name:
+            names[t] = ja_name
+        else:
+            missing.append(t)
+
+    # CSVにない銘柄はyfinanceフォールバック
+    if missing:
+        try:
+            import yfinance as yf
+            ts = yf.Tickers(" ".join(missing))
+            for t in missing:
+                try:
+                    info = ts.tickers[t].info
+                    names[t] = info.get("shortName") or info.get("longName") or ""
+                except Exception:
+                    names[t] = ""
+        except Exception:
+            pass
+
     return names
 
 

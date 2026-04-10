@@ -100,23 +100,47 @@ def check_monthly_refresh() -> bool:
 
 
 def _resolve_ticker_names(tickers: list[str]) -> dict[str, str]:
-    """ティッカーリストから銘柄名を取得する。"""
-    import yfinance as yf
+    """ティッカーリストから日本語銘柄名を取得する。"""
+    from pathlib import Path
+    import pandas as pd
 
     names = {}
     if not tickers:
         return names
-    try:
-        ts = yf.Tickers(" ".join(tickers))
-        for t in tickers:
-            try:
-                info = ts.tickers[t].info
-                name = info.get("shortName") or info.get("longName") or ""
-                names[t] = name
-            except Exception:
-                names[t] = ""
-    except Exception:
-        pass
+
+    # company_codes.csv から日本語名を取得
+    csv_path = Path(__file__).resolve().parent.parent / "data" / "cache" / "company_codes.csv"
+    code_name_map = {}
+    if csv_path.exists():
+        try:
+            df = pd.read_csv(csv_path, encoding="utf-8", dtype={"code": str})
+            code_name_map = dict(zip(df["code"].astype(str), df["name"]))
+        except Exception:
+            pass
+
+    missing = []
+    for t in tickers:
+        code = t.replace(".T", "")
+        ja_name = code_name_map.get(code, "")
+        if ja_name:
+            names[t] = ja_name
+        else:
+            missing.append(t)
+
+    # CSVにない銘柄はyfinanceフォールバック
+    if missing:
+        try:
+            import yfinance as yf
+            ts = yf.Tickers(" ".join(missing))
+            for t in missing:
+                try:
+                    info = ts.tickers[t].info
+                    names[t] = info.get("shortName") or info.get("longName") or ""
+                except Exception:
+                    names[t] = ""
+        except Exception:
+            pass
+
     return names
 
 
