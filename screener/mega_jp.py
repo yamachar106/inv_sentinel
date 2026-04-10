@@ -757,6 +757,12 @@ def scan_mega_jp(
     # S/Aのみ抽出
     sa_signals = [s for s in signals if s["total_rank"] in ("S", "A")]
 
+    # 銘柄名を取得
+    sa_tickers = [s["ticker"] for s in sa_signals]
+    names = _resolve_ticker_names(sa_tickers)
+    for s in sa_signals:
+        s["name"] = names.get(s["ticker"], "")
+
     n_s = sum(1 for s in sa_signals if s["total_rank"] == "S")
     n_a = sum(1 for s in sa_signals if s["total_rank"] == "A")
     n_bo = sum(1 for s in sa_signals if s["bo_signal"] == "breakout")

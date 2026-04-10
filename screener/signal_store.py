@@ -74,6 +74,72 @@ def load_signals(target_date: str) -> dict[str, list[str]]:
         return {}
 
 
+def load_enriched_signals(target_date: str) -> dict[str, list[dict]]:
+    """指定日のenrichedシグナルを読み込む。"""
+    path = _path_for_date(target_date)
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data.get("enriched", {})
+    except (json.JSONDecodeError, ValueError):
+        return {}
+
+
+def load_previous_enriched_signals(target_date: str) -> dict[str, list[dict]]:
+    """前日のenrichedシグナルを読み込む（最大7日遡行）。"""
+    d = date.fromisoformat(target_date)
+    for i in range(1, 8):
+        prev = (d - timedelta(days=i)).isoformat()
+        enriched = load_enriched_signals(prev)
+        if enriched:
+            return enriched
+    return {}
+
+
+def diff_mega_jp_signals(
+    current: list[dict],
+    previous: list[dict],
+) -> dict:
+    """JP MEGA S/Aシグナルの差分を計算する。
+
+    Returns:
+        {"new_s": [...], "dropped_s": [...], "high_52w_changed": [...]}
+    """
+    curr_map = {s["code"]: s for s in current}
+    prev_map = {s["code"]: s for s in previous}
+
+    curr_s_codes = {c for c, s in curr_map.items() if s.get("total_rank") == "S"}
+    prev_s_codes = {c for c, s in prev_map.items() if s.get("total_rank") == "S"}
+
+    new_s = []
+    for code in sorted(curr_s_codes - prev_s_codes):
+        sig = curr_map[code].copy()
+        sig["prev_rank"] = prev_map[code]["total_rank"] if code in prev_map else "NEW"
+        new_s.append(sig)
+
+    dropped_s = []
+    for code in sorted(prev_s_codes - curr_s_codes):
+        sig = prev_map[code].copy()
+        sig["new_rank"] = curr_map[code]["total_rank"] if code in curr_map else "GONE"
+        dropped_s.append(sig)
+
+    high_52w_changed = []
+    for code in sorted(curr_s_codes & prev_s_codes):
+        curr_high = curr_map[code].get("high_52w", 0)
+        prev_high = prev_map[code].get("high_52w", 0)
+        if prev_high > 0 and abs(curr_high - prev_high) > 0.5:
+            entry = curr_map[code].copy()
+            entry["prev_high_52w"] = prev_high
+            high_52w_changed.append(entry)
+
+    return {
+        "new_s": new_s,
+        "dropped_s": dropped_s,
+        "high_52w_changed": high_52w_changed,
+    }
+
+
 def load_previous_signals(target_date: str) -> dict[str, list[str]]:
     """
     指定日の前日のシグナルを読み込む。

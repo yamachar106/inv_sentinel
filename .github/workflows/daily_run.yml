@@ -2,11 +2,21 @@ name: MEGA BreakOut Daily
 
 on:
   schedule:
-    # US市場終了後: 06:00 JST = 21:00 UTC（月〜金）
+    # JP市場終了後: 16:00 JST = 07:00 UTC（月〜金）— JP MEGAのみ
+    - cron: "0 7 * * 1-5"
+    # US市場終了後: 06:00 JST = 21:00 UTC（月〜金）— US + JP全戦略
     - cron: "0 21 * * 1-5"
 
   workflow_dispatch:
     inputs:
+      strategy:
+        description: "Strategy to run (blank = all)"
+        required: false
+        type: choice
+        options:
+          - ""
+          - jp-mega
+        default: ""
       universe:
         description: "US universe preset"
         required: false
@@ -38,6 +48,7 @@ permissions:
 env:
   SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   SLACK_WEBHOOK_MEGA_US: ${{ secrets.SLACK_WEBHOOK_MEGA_US }}
+  SLACK_WEBHOOK_MEGA_JP: ${{ secrets.SLACK_WEBHOOK_MEGA_JP }}
   GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
   PYTHONIOENCODING: utf-8
 
@@ -78,8 +89,21 @@ jobs:
 
           if [ "${{ github.event_name }}" = "schedule" ]; then
             echo "trigger=schedule" >> $GITHUB_OUTPUT
+            # JP夕方スケジュール (07:00 UTC) → JP MEGAのみ実行
+            HOUR=$(date -u +%H)
+            if [ "$HOUR" -ge 6 ] && [ "$HOUR" -le 8 ]; then
+              ARGS="--strategy jp-mega --skip-healthcheck"
+              echo "args=$ARGS" >> $GITHUB_OUTPUT
+              echo "Run args: $ARGS (JP evening schedule)"
+              exit 0
+            fi
           else
             echo "trigger=manual" >> $GITHUB_OUTPUT
+
+            STRATEGY="${{ github.event.inputs.strategy }}"
+            if [ -n "$STRATEGY" ]; then
+              ARGS="$ARGS --strategy $STRATEGY"
+            fi
 
             UNIVERSE="${{ github.event.inputs.universe }}"
             LIMIT="${{ github.event.inputs.limit }}"

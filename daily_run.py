@@ -208,6 +208,84 @@ def build_digest(
     return "\n".join(lines)
 
 
+def _build_jp_mega_limit_order_section(
+    mega_jp_signals: list[dict],
+    today: str,
+) -> list[str] | None:
+    """曜日に応じたJP MEGA逆指値セクションを構築する。
+
+    - 月曜: S銘柄の逆指値セットリスト全体
+    - 火〜金: 前日比での差分のみ
+    - 隔週金曜: リマインダー追加
+    """
+    from screener.notifier import (
+        build_limit_order_section,
+        build_limit_order_diff_section,
+        build_limit_order_reminder,
+    )
+    from screener.signal_store import (
+        load_previous_enriched_signals,
+        diff_mega_jp_signals,
+    )
+
+    d = date.fromisoformat(today)
+    weekday = d.weekday()  # 0=Mon, 4=Fri
+
+    s_signals = [s for s in mega_jp_signals if s.get("total_rank") == "S"]
+    sections: list[str] = []
+
+    if weekday == 0:
+        # 月曜: フルリスト
+        sections = build_limit_order_section(s_signals, today)
+    else:
+        # 火〜金: 差分のみ
+        prev_enriched = load_previous_enriched_signals(today)
+        prev_jp = prev_enriched.get("mega:JP", [])
+        if prev_jp:
+            diff = diff_mega_jp_signals(mega_jp_signals, prev_jp)
+            sections = build_limit_order_diff_section(diff)
+
+    # 隔週金曜リマインダー（ISO週番号が偶数の金曜）
+    if weekday == 4:
+        iso_week = d.isocalendar()[1]
+        if iso_week % 2 == 0:
+            sections.extend(build_limit_order_reminder())
+
+    return sections if sections else None
+
+
+def _run_jp_mega_only(args, today, regime_trend, regime_header, regime_dict):
+    """JP MEGA S/Aスコアリングのみ実行（JP市場終了後の早期通知用）"""
+    print("\n[JP-MEGA] JP MEGA ¥1兆+ S/Aスコアリング (単独実行)")
+    start_time = time.time()
+
+    try:
+        if check_monthly_refresh():
+            print("  地力スコア月次更新完了")
+    except Exception as e:
+        print(f"  [WARN] 地力スコア更新失敗: {e}")
+
+    mega_jp_signals = []
+    try:
+        mega_jp_signals = scan_mega_jp(regime=regime_trend, dry_run=args.dry_run)
+        if mega_jp_signals and not args.dry_run:
+            limit_section = _build_jp_mega_limit_order_section(mega_jp_signals, today)
+            notify_mega_jp(mega_jp_signals, today, regime_header=regime_header,
+                           limit_order_section=limit_section)
+            print(f"  JP Mega通知送信: {len(mega_jp_signals)}件")
+    except Exception as e:
+        print(f"  [ERROR] JP MEGA スキャン失敗: {e}")
+
+    # シグナル保存
+    if mega_jp_signals:
+        all_signals = {"mega:JP": [s["code"] for s in mega_jp_signals]}
+        all_enriched = {"mega:JP": mega_jp_signals}
+        save_signals(all_signals, today, enriched=all_enriched, regime=regime_dict)
+
+    elapsed = time.time() - start_time
+    print(f"\nJP MEGA完了 ({elapsed:.0f}秒)")
+
+
 def main():
     parser = argparse.ArgumentParser(description="MEGA BreakOut デイリーランナー")
     parser.add_argument("--universe", type=str, default="us_all",
@@ -218,8 +296,8 @@ def main():
                         help="Slack通知をスキップ")
     parser.add_argument("--skip-healthcheck", action="store_true",
                         help="ヘルスチェックをスキップ")
-    # 後方互換: 旧引数は受け取るが無視
-    parser.add_argument("--strategy", type=str, default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--strategy", type=str, default=None,
+                        help="実行戦略 (jp-mega: JP MEGAのみ)")
     parser.add_argument("--market", type=str, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--jp-universe", type=str, default=None, help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -259,6 +337,12 @@ def main():
     else:
         print("  [WARN] 相場環境判定失敗")
 
+    regime_trend = regime_dict.get("trend", "") if regime_dict else ""
+
+    # ---- JP MEGAのみモード ----
+    if args.strategy == "jp-mega":
+        return _run_jp_mega_only(args, today, regime_trend, regime_header, regime_dict)
+
     # ---- US全銘柄スキャン → Mega抽出 ----
     print("\n[3] US ブレイクアウトスキャン")
     from screener.universe import load_universe
@@ -271,7 +355,6 @@ def main():
         codes = codes[:args.limit]
     print(f"  ユニバース ({args.universe}): {len(codes)}銘柄")
 
-    regime_trend = regime_dict.get("trend", "") if regime_dict else ""
     df = check_breakout_batch(codes, market="US", regime=regime_trend)
 
     if df.empty:
@@ -300,7 +383,9 @@ def main():
     try:
         mega_jp_signals = scan_mega_jp(regime=regime_trend, dry_run=args.dry_run)
         if mega_jp_signals and not args.dry_run:
-            notify_mega_jp(mega_jp_signals, today, regime_header=regime_header)
+            limit_section = _build_jp_mega_limit_order_section(mega_jp_signals, today)
+            notify_mega_jp(mega_jp_signals, today, regime_header=regime_header,
+                           limit_order_section=limit_section)
             print(f"  JP Mega通知送信: {len(mega_jp_signals)}件")
     except Exception as e:
         print(f"  [ERROR] JP MEGA スキャン失敗: {e}")

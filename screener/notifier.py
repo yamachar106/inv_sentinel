@@ -21,6 +21,7 @@ from screener.config import (
     MEGA_THRESHOLD_US, MEGA_STOP_LOSS, MEGA_PROFIT_TARGET,
     MEGA_NOTIFY_ALSO_US_CHANNEL,
     MEGA_JP_STOP_LOSS, MEGA_JP_PROFIT_TARGET,
+    MEGA_JP_LIMIT_ORDER_EXPIRY_DAYS,
 )
 
 
@@ -1061,6 +1062,7 @@ def notify_mega_jp(
     signals: list[dict],
     date_str: str,
     regime_header: str | None = None,
+    limit_order_section: list[str] | None = None,
 ) -> bool:
     """JP MEGA ¥1兆+ S/Aスコアリング通知を送信する。
 
@@ -1076,7 +1078,7 @@ def notify_mega_jp(
         print("[WARN] SLACK_WEBHOOK_URL が未設定のためJP Mega通知をスキップ")
         return False
 
-    msg = _build_mega_jp_message(signals, date_str, regime_header)
+    msg = _build_mega_jp_message(signals, date_str, regime_header, limit_order_section)
     return _send_slack(mega_url, msg)
 
 
@@ -1084,6 +1086,7 @@ def _build_mega_jp_message(
     signals: list[dict],
     date_str: str,
     regime_header: str | None = None,
+    limit_order_section: list[str] | None = None,
 ) -> str:
     """JP MEGA S/Aスコアリング通知メッセージを構築"""
     lines = [f"*🏯 JP MEGA ¥1兆+ S/Aスコアリング* ({date_str})"]
@@ -1094,13 +1097,11 @@ def _build_mega_jp_message(
     n_s = sum(1 for s in signals if s["total_rank"] == "S")
     n_a = sum(1 for s in signals if s["total_rank"] == "A")
     n_bo = sum(1 for s in signals if s.get("bo_signal") == "breakout")
-    n_pb = sum(1 for s in signals if s.get("bo_signal") == "pre_breakout")
-    lines.append(f"対象: S{n_s} A{n_a} | BO:{n_bo} PB:{n_pb} 監視:{len(signals)-n_bo-n_pb}\n")
+    lines.append(f"対象: S{n_s} A{n_a} | BO:{n_bo} 監視:{len(signals)-n_bo}\n")
 
     # BO銘柄を先頭に
     bo_signals = [s for s in signals if s.get("bo_signal") == "breakout"]
-    pb_signals = [s for s in signals if s.get("bo_signal") == "pre_breakout"]
-    watch_signals = [s for s in signals if s.get("bo_signal") not in ("breakout", "pre_breakout")]
+    watch_signals = [s for s in signals if s.get("bo_signal") != "breakout"]
 
     if bo_signals:
         lines.append("━" * 25)
@@ -1110,12 +1111,6 @@ def _build_mega_jp_message(
             lines.extend(_format_mega_jp_signal(s))
         lines.append("")
 
-    if pb_signals:
-        lines.append("👑 *Pre-Breakout — 監視継続*")
-        for s in pb_signals:
-            lines.extend(_format_mega_jp_signal(s, compact=True))
-        lines.append("")
-
     if watch_signals:
         lines.append("📊 *S/A監視銘柄*")
         for s in watch_signals[:10]:  # 上位10銘柄まで
@@ -1123,6 +1118,10 @@ def _build_mega_jp_message(
         if len(watch_signals) > 10:
             lines.append(f"  ...他{len(watch_signals)-10}銘柄")
         lines.append("")
+
+    # 逆指値セクション
+    if limit_order_section:
+        lines.extend(limit_order_section)
 
     # BT実績
     lines.append("*📈 歴代実績 (BT 10年)*")
@@ -1154,15 +1153,16 @@ def _format_mega_jp_signal(signal: dict, compact: bool = False) -> list[str]:
 
     if compact:
         gc_mark = "GC✓" if gc else ""
-        bo_tag = ""
-        if signal.get("bo_signal") == "pre_breakout":
-            bo_tag = " [PB]"
+        name = signal.get("name", "")
+        name_str = f" {name}" if name else ""
         lines.append(
-            f"  {rank_emoji} *{code}* ¥{close:,.0f} | 総合{total:.0f}({total_rank}) "
-            f"地力{strength:.0f}({strength_rank}) | 高値{dist:+.1f}% {gc_mark} {mcap_str}{bo_tag}"
+            f"  {rank_emoji} *{code}*{name_str} ¥{close:,.0f} | 総合{total:.0f}({total_rank}) "
+            f"地力{strength:.0f}({strength_rank}) | 高値{dist:+.1f}% {gc_mark} {mcap_str}"
         )
     else:
-        lines.append(f"{rank_emoji} *{code}* ¥{close:,.0f} {mcap_str}")
+        name = signal.get("name", "")
+        name_str = f" {name}" if name else ""
+        lines.append(f"{rank_emoji} *{code}*{name_str} ¥{close:,.0f} {mcap_str}")
         lines.append(
             f"  総合 *{total:.0f}* ({total_rank}) | "
             f"地力 {strength:.0f}({strength_rank}) | "
@@ -1209,6 +1209,119 @@ def _format_mega_jp_signal(signal: dict, compact: bool = False) -> list[str]:
         lines.append("")
 
     return lines
+
+
+def _calc_business_days_later(from_date: str, days: int) -> str:
+    """from_dateからdays営業日後の日付を返す（土日除外の簡易版）"""
+    from datetime import date as dt_date, timedelta as td
+    d = dt_date.fromisoformat(from_date)
+    added = 0
+    while added < days:
+        d += td(days=1)
+        if d.weekday() < 5:
+            added += 1
+    return d.isoformat()
+
+
+def build_limit_order_section(
+    s_signals: list[dict],
+    date_str: str,
+) -> list[str]:
+    """S銘柄の逆指値セット推奨セクション（週次月曜用）"""
+    if not s_signals:
+        return []
+
+    expiry = _calc_business_days_later(date_str, MEGA_JP_LIMIT_ORDER_EXPIRY_DAYS)
+
+    lines = [
+        "",
+        "━" * 25,
+        "📋 *逆指値セット推奨* (買いストップ注文)",
+        f"  有効期限目安: {expiry}（{MEGA_JP_LIMIT_ORDER_EXPIRY_DAYS}営業日）",
+        "━" * 25,
+    ]
+
+    for s in s_signals:
+        code = s["code"]
+        name = s.get("name", "")
+        high_52w = s.get("high_52w", 0)
+        if high_52w <= 0:
+            continue
+        sl_price = high_52w * (1 + MEGA_JP_STOP_LOSS)
+        tp_price = high_52w * (1 + MEGA_JP_PROFIT_TARGET)
+        name_str = f" {name}" if name else ""
+        lines.append(
+            f"  `{code}`{name_str} | 逆指値 *¥{high_52w:,.0f}* | "
+            f"SL ¥{sl_price:,.0f} ({MEGA_JP_STOP_LOSS:+.0%}) | "
+            f"TP ¥{tp_price:,.0f} ({MEGA_JP_PROFIT_TARGET:+.0%})"
+        )
+
+    lines.append("")
+    lines.append("_SBI証券: 逆指値(買い) → 指定価格以上 → 成行 → 期間15営業日_")
+    return lines
+
+
+def build_limit_order_diff_section(diff: dict) -> list[str]:
+    """逆指値の日次差分セクション"""
+    new_s = diff.get("new_s", [])
+    dropped_s = diff.get("dropped_s", [])
+    high_changed = diff.get("high_52w_changed", [])
+
+    if not new_s and not dropped_s and not high_changed:
+        return []
+
+    lines = ["", "📝 *逆指値 日次変更*"]
+
+    if new_s:
+        lines.append("  *🆕 新規セット推奨*")
+        for s in new_s:
+            code = s["code"]
+            name = s.get("name", "")
+            high = s.get("high_52w", 0)
+            prev = s.get("prev_rank", "?")
+            sl = high * (1 + MEGA_JP_STOP_LOSS)
+            tp = high * (1 + MEGA_JP_PROFIT_TARGET)
+            name_str = f" {name}" if name else ""
+            lines.append(
+                f"  `{code}`{name_str} ({prev}→S) | 逆指値 *¥{high:,.0f}* | "
+                f"SL ¥{sl:,.0f} | TP ¥{tp:,.0f}"
+            )
+
+    if dropped_s:
+        lines.append("  *❌ 取消推奨*")
+        for s in dropped_s:
+            code = s["code"]
+            name = s.get("name", "")
+            new_rank = s.get("new_rank", "?")
+            name_str = f" {name}" if name else ""
+            lines.append(f"  `{code}`{name_str} (S→{new_rank}) — 逆指値を取消")
+
+    if high_changed:
+        lines.append("  *🔄 逆指値価格更新*")
+        for s in high_changed:
+            code = s["code"]
+            name = s.get("name", "")
+            old_h = s.get("prev_high_52w", 0)
+            new_h = s.get("high_52w", 0)
+            sl = new_h * (1 + MEGA_JP_STOP_LOSS)
+            tp = new_h * (1 + MEGA_JP_PROFIT_TARGET)
+            name_str = f" {name}" if name else ""
+            lines.append(
+                f"  `{code}`{name_str} ¥{old_h:,.0f}→*¥{new_h:,.0f}* | "
+                f"SL ¥{sl:,.0f} | TP ¥{tp:,.0f}"
+            )
+
+    return lines
+
+
+def build_limit_order_reminder() -> list[str]:
+    """逆指値期限切れリマインダー（隔週金曜）"""
+    return [
+        "",
+        "⏰ *逆指値注文リマインダー*",
+        "  2週間が経過。期限切れ間近の逆指値注文を更新してください。",
+        "  _SBI証券 → 注文照会 → 逆指値(買い) → 有効期限を確認・延長_",
+    ]
 
 
 def notify_portfolio_summary(

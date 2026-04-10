@@ -122,7 +122,8 @@ def backtest_single(
     過去データ全体を走査し、シグナル発火日ごとにN日後のリターンを計測。
 
     Args:
-        entry_mode: "immediate" / "golden_cross" / "volume_surge" / "gc_or_volume"
+        entry_mode: "immediate" / "next_open" / "limit_52w" /
+                    "golden_cross" / "volume_surge" / "gc_or_volume"
         period: データ取得期間 ("2y", "5y" etc.)
 
     Returns:
@@ -138,15 +139,47 @@ def backtest_single(
     # SMA50が計算可能な位置から走査
     for i in range(60, len(df)):
         row = df.iloc[i]
-        hit = _evaluate_signal(row, ticker, market)
-        if hit is None:
-            continue
+
+        if entry_mode == "limit_52w":
+            # 逆指値モード: 日中高値が前日52W高値を超えた日を検出
+            prev_high_52w = float(df.iloc[i]["high_52w"].item() if hasattr(df.iloc[i]["high_52w"], "item") else df.iloc[i]["high_52w"]) if i > 0 else None
+            # high_52wは当日を含むrolling maxなので、前日までの52W高値はshift(1)
+            prev_52w_series = df["high_52w"].shift(1)
+            if pd.isna(prev_52w_series.iloc[i]):
+                continue
+            prev_52w = float(prev_52w_series.iloc[i])
+            today_high = float(df.iloc[i]["high"])
+            if today_high < prev_52w:
+                continue
+            # 日中に52W高値に到達 → シグナル判定（SMA200等の条件チェック）
+            hit = _evaluate_signal(row, ticker, market)
+            if hit is None:
+                continue
+        else:
+            hit = _evaluate_signal(row, ticker, market)
+            if hit is None:
+                continue
 
         signal_date = df.index[i]
 
         # エントリータイミング決定
         if entry_mode == "immediate":
             entry_idx = i
+            entry_price = float(df.iloc[entry_idx]["close"])
+        elif entry_mode == "next_open":
+            if i + 1 >= len(df):
+                continue
+            entry_idx = i + 1
+            entry_price = float(df.iloc[entry_idx]["open"])
+        elif entry_mode == "limit_52w":
+            entry_idx = i
+            prev_52w = float(df["high_52w"].shift(1).iloc[i])
+            today_open = float(df.iloc[i]["open"])
+            # ギャップアップで寄った場合は始値で約定（スリッページ）
+            if today_open >= prev_52w:
+                entry_price = today_open
+            else:
+                entry_price = prev_52w
         else:
             entry_idx = _find_breakout_entry(df, i, entry_mode)
             if entry_idx is None:
@@ -154,8 +187,7 @@ def backtest_single(
                     print(f"    {signal_date.date()} [{hit['signal']}] "
                           f"エントリー条件未達 ({entry_mode})")
                 continue
-
-        entry_price = float(df.iloc[entry_idx]["close"])
+            entry_price = float(df.iloc[entry_idx]["close"])
         entry_wait = (df.index[entry_idx] - signal_date).days
 
         # N日後のリターンを計測（エントリー日起点）
@@ -409,6 +441,119 @@ def save_results_csv(events: list[dict], args) -> str | None:
     return str(path)
 
 
+def _run_compare_entry(codes: list[str], suffix: str, args) -> None:
+    """3方式のエントリータイミングを比較するバックテスト"""
+    modes = [
+        ("immediate", "当日終値"),
+        ("next_open", "翌日始値"),
+        ("limit_52w", "逆指値(52W高値)"),
+    ]
+
+    print(f"エントリー方式 3パターン比較 ({args.market})")
+    print(f"対象: {len(codes)}銘柄, 期間: {args.period}")
+    print("=" * 60)
+
+    # OHLCVデータを一括取得して使い回す
+    tickers = [f"{c}{suffix}" for c in codes]
+    print(f"  OHLCV一括取得中... ({len(tickers)}銘柄)")
+    ohlcv_cache = fetch_ohlcv_batch(tickers, period=args.period)
+
+    results_by_mode = {}
+
+    for mode, label in modes:
+        print(f"\n--- {label} ({mode}) ---")
+        all_events = []
+        for i, code in enumerate(codes):
+            ticker = f"{code}{suffix}"
+            events = backtest_single(ticker, market=args.market, entry_mode=mode,
+                                     period=args.period)
+            all_events.extend(events)
+        results_by_mode[mode] = all_events
+        print(f"  シグナル数: {len(all_events)}")
+
+    # --- 比較サマリー ---
+    print(f"\n{'='*70}")
+    print("エントリー方式比較")
+    print(f"{'='*70}")
+
+    header = f"{'方式':<20} {'シグナル':>6} {'勝率(20d)':>9} {'平均(20d)':>9} {'勝率(SIM)':>9} {'EV(SIM)':>8} {'平均約定':>10}"
+    print(header)
+    print("-" * 70)
+
+    for mode, label in modes:
+        evts = results_by_mode[mode]
+        if not evts:
+            print(f"{label:<20} {'N/A':>6}")
+            continue
+
+        edf = pd.DataFrame(evts)
+        n = len(edf)
+
+        # 20日リターン
+        r20 = edf["return_20d"].dropna()
+        wr_20 = f"{(r20 > 0).sum() / len(r20):.0%}" if len(r20) > 0 else "N/A"
+        avg_20 = f"{r20.mean():+.2%}" if len(r20) > 0 else "N/A"
+
+        # トレードSIM (SL/TP)
+        valid_trades = edf.dropna(subset=["trade_result"])
+        if not valid_trades.empty:
+            n_profit = (valid_trades["trade_result"] == "profit_target").sum()
+            n_stop = (valid_trades["trade_result"] == "stop_loss").sum()
+            decided = n_profit + n_stop
+            wr_sim = f"{n_profit / decided:.0%}" if decided > 0 else "N/A"
+            ev_sim = f"{valid_trades['trade_return'].mean():+.2%}"
+        else:
+            wr_sim = "N/A"
+            ev_sim = "N/A"
+
+        # 平均エントリー価格
+        avg_entry = f"{edf['entry_price'].mean():,.0f}"
+
+        print(f"{label:<20} {n:>6} {wr_20:>9} {avg_20:>9} {wr_sim:>9} {ev_sim:>8} {avg_entry:>10}")
+
+    # --- 逆指値 vs 当日終値の詳細差分 ---
+    imm = results_by_mode.get("immediate", [])
+    lim = results_by_mode.get("limit_52w", [])
+    nxt = results_by_mode.get("next_open", [])
+
+    if imm and lim:
+        print(f"\n--- 逆指値 vs 当日終値: エントリー価格差 ---")
+        # 同一シグナル日で比較
+        imm_by_key = {(e["ticker"], e["signal_date"]): e for e in imm}
+        diffs = []
+        for e in lim:
+            key = (e["ticker"], e["signal_date"])
+            imm_e = imm_by_key.get(key)
+            if imm_e:
+                diff_pct = (e["entry_price"] - imm_e["entry_price"]) / imm_e["entry_price"]
+                diffs.append(diff_pct)
+        if diffs:
+            arr = np.array(diffs)
+            better = (arr < 0).sum()
+            print(f"  比較可能: {len(diffs)}件")
+            print(f"  逆指値が安い: {better}件 ({better/len(diffs):.0%})")
+            print(f"  平均価格差: {arr.mean():+.2%} (負=逆指値有利)")
+            print(f"  中央値: {np.median(arr):+.2%}")
+
+    if imm and nxt:
+        print(f"\n--- 翌日始値 vs 当日終値: エントリー価格差 ---")
+        imm_by_key = {(e["ticker"], e["signal_date"]): e for e in imm}
+        diffs = []
+        for e in nxt:
+            key = (e["ticker"], e["signal_date"])
+            imm_e = imm_by_key.get(key)
+            if imm_e:
+                diff_pct = (e["entry_price"] - imm_e["entry_price"]) / imm_e["entry_price"]
+                diffs.append(diff_pct)
+        if diffs:
+            arr = np.array(diffs)
+            worse = (arr > 0).sum()
+            print(f"  比較可能: {len(diffs)}件")
+            print(f"  翌日始値が高い(不利): {worse}件 ({worse/len(diffs):.0%})")
+            print(f"  平均価格差: {arr.mean():+.2%} (正=翌日始値が不利)")
+            print(f"  中央値: {np.median(arr):+.2%}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="ブレイクアウト戦略バックテスト")
     parser.add_argument("--codes", type=str, default=None,
@@ -419,8 +564,11 @@ def main():
     parser.add_argument("--limit", type=int, default=20,
                         help="バックテスト銘柄数上限 (デフォルト: 20)")
     parser.add_argument("--entry", type=str, default="immediate",
-                        choices=["immediate", "golden_cross", "volume_surge", "gc_or_volume"],
+                        choices=["immediate", "next_open", "limit_52w",
+                                 "golden_cross", "volume_surge", "gc_or_volume"],
                         help="エントリータイミング (デフォルト: immediate)")
+    parser.add_argument("--compare-entry", action="store_true",
+                        help="3方式比較 (当日終値 vs 翌日始値 vs 逆指値)")
     parser.add_argument("--period", type=str, default=BACKTEST_PERIOD,
                         help=f"バックテスト期間 (デフォルト: {BACKTEST_PERIOD}, 拡大: 5y)")
     parser.add_argument("--save", action="store_true",
@@ -440,6 +588,11 @@ def main():
             codes = codes[:args.limit]
     else:
         print("[ERROR] --codes または --universe を指定してください")
+        return
+
+    # --- 3方式比較モード ---
+    if args.compare_entry:
+        _run_compare_entry(codes, suffix, args)
         return
 
     entry_label = args.entry if args.entry != "immediate" else "即時エントリー"
