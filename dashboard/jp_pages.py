@@ -533,18 +533,23 @@ def _get_prev_top_s() -> tuple:
 
 def _is_market_closed_day() -> bool:
     """土日・祝日判定（翌営業日までアクション不要）"""
+    import jpholiday
     today = datetime.now()
-    # 土日
     if today.weekday() >= 5:
         return True
-    # 日本の祝日（jpholidayがあれば使用）
-    try:
-        import jpholiday
-        if jpholiday.is_holiday(today.date()):
-            return True
-    except ImportError:
-        pass
+    if jpholiday.is_holiday(today.date()):
+        return True
     return False
+
+
+def _next_trading_date() -> str:
+    """次の取引日を返す"""
+    import jpholiday
+    from datetime import timedelta
+    d = datetime.now().date() + timedelta(days=1)
+    while d.weekday() >= 5 or jpholiday.is_holiday(d):
+        d += timedelta(days=1)
+    return d.strftime("%m/%d(%a)")
 
 
 def _render_action_hero(df: pd.DataFrame, prices: dict, names: dict):
@@ -552,26 +557,54 @@ def _render_action_hero(df: pd.DataFrame, prices: dict, names: dict):
 
     # 休場日チェック
     if _is_market_closed_day():
-        prev_code, prev_name = _get_prev_top_s()
-        hold_label = prev_name if prev_name else prev_code
-        st.markdown(
-            f"""<div style="
-                background: linear-gradient(135deg, #6b728015, #6b728005);
-                border: 2px solid #6b7280;
-                border-radius: 12px;
-                padding: 24px;
-                margin-bottom: 16px;
-            ">
-            <div style="font-size: 0.9em; color: #888; margin-bottom: 4px;">翌朝アクション</div>
-            <div style="font-size: 1.8em; font-weight: bold; color: #6b7280;">
-                😴 休場日 — アクション不要
-            </div>
-            <div style="font-size: 1.0em; color: #888; margin-top: 8px;">
-                現在保有: {hold_label} ({prev_code}) — 次の取引日までHOLD
-            </div>
-            </div>""",
-            unsafe_allow_html=True,
-        )
+        # 次の取引日のS最上位を表示（直近の計算結果ベース）
+        s_df = df[df["総合ランク"] == "S"]
+        top_s = s_df.iloc[0] if not s_df.empty else None
+        next_date = _next_trading_date()
+
+        if top_s is not None:
+            top_name = top_s["名前"] if top_s["名前"] else top_s["コード"]
+            top_code = top_s["コード"]
+            st.markdown(
+                f"""<div style="
+                    background: linear-gradient(135deg, #6b728015, #6b728005);
+                    border: 2px solid #6b7280;
+                    border-radius: 12px;
+                    padding: 24px;
+                    margin-bottom: 16px;
+                ">
+                <div style="font-size: 0.9em; color: #888; margin-bottom: 4px;">休場日</div>
+                <div style="font-size: 1.8em; font-weight: bold; color: #6b7280;">
+                    😴 休場日 — アクション不要
+                </div>
+                <div style="font-size: 1.1em; color: #ccc; margin-top: 12px;">
+                    {next_date} 寄り付き予定: 🟢 <b>{top_name}</b> ({top_code}) 総合{top_s['総合']:.0f}(S)
+                </div>
+                <div style="font-size: 0.85em; color: #888; margin-top: 4px;">
+                    ※ 取引日の16:00確定値で最終判断
+                </div>
+                </div>""",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                f"""<div style="
+                    background: linear-gradient(135deg, #6b728015, #6b728005);
+                    border: 2px solid #6b7280;
+                    border-radius: 12px;
+                    padding: 24px;
+                    margin-bottom: 16px;
+                ">
+                <div style="font-size: 0.9em; color: #888; margin-bottom: 4px;">休場日</div>
+                <div style="font-size: 1.8em; font-weight: bold; color: #6b7280;">
+                    😴 休場日 — アクション不要
+                </div>
+                <div style="font-size: 1.0em; color: #888; margin-top: 8px;">
+                    S銘柄なし — {next_date}の確定値を待つ
+                </div>
+                </div>""",
+                unsafe_allow_html=True,
+            )
         st.divider()
         return
 
