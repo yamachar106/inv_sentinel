@@ -59,21 +59,25 @@ def load_strength_data() -> dict:
 COMPANY_CODES_CSV = ROOT / "data" / "cache" / "company_codes.csv"
 
 
+def _load_jp_name_map() -> dict[str, str]:
+    """company_codes.csv からコード→日本語名のマッピングを構築"""
+    if not COMPANY_CODES_CSV.exists():
+        return {}
+    try:
+        df_codes = pd.read_csv(COMPANY_CODES_CSV, encoding="utf-8", dtype={"code": str})
+        return dict(zip(df_codes["code"].astype(str), df_codes["name"]))
+    except Exception:
+        return {}
+
+
 @st.cache_data(ttl=86400)
-def fetch_jp_names(tickers: list[str]) -> dict[str, str]:
+def fetch_jp_names(tickers: list[str], _version: int = 3) -> dict[str, str]:
     """JP銘柄の日本語企業名を取得（company_codes.csv → yfinanceフォールバック）"""
     names = {}
     if not tickers:
         return names
 
-    # company_codes.csv から日本語名を取得
-    code_name_map = {}
-    if COMPANY_CODES_CSV.exists():
-        try:
-            df_codes = pd.read_csv(COMPANY_CODES_CSV, encoding="utf-8", dtype={"code": str})
-            code_name_map = dict(zip(df_codes["code"].astype(str), df_codes["name"]))
-        except Exception:
-            pass
+    code_name_map = _load_jp_name_map()
 
     missing = []
     for t in tickers:
