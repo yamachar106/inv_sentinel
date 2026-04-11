@@ -257,10 +257,18 @@ def _build_jp_mega_limit_order_section(
 
 def _send_morning_reminder(today: str, dry_run: bool = False):
     """朝リマインド: 前日確定のS最上位アクションを再通知"""
+    import jpholiday
     from screener.signal_store import load_previous_enriched_signals, get_prev_top_s
     from screener.notifier import _resolve_webhook_url, _send_slack
 
     print(f">> 朝リマインド: {today}")
+
+    # 祝日チェック（土日はcronで除外済みだが祝日は別途チェック）
+    today_date = date.fromisoformat(today)
+    if jpholiday.is_holiday(today_date):
+        holiday_name = jpholiday.is_holiday_name(today_date)
+        print(f"  祝日({holiday_name}) — スキップ")
+        return
 
     # 直近のシグナルを取得（今日のデータはまだないので前日を探す）
     enriched = load_previous_enriched_signals(today)
