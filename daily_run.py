@@ -255,6 +255,85 @@ def _build_jp_mega_limit_order_section(
     return sections if sections else None
 
 
+def _send_morning_reminder(today: str, dry_run: bool = False):
+    """朝リマインド: 前日確定のS最上位アクションを再通知"""
+    from screener.signal_store import load_previous_enriched_signals, get_prev_top_s
+    from screener.notifier import _resolve_webhook_url, _send_slack
+
+    print(f">> 朝リマインド: {today}")
+
+    # 直近のシグナルを取得（今日のデータはまだないので前日を探す）
+    enriched = load_previous_enriched_signals(today)
+    mega_jp = enriched.get("mega:JP", [])
+
+    if not mega_jp:
+        print("  シグナルデータなし — スキップ")
+        return
+
+    # S最上位を特定
+    top_s = None
+    for s in mega_jp:
+        if s.get("total_rank") == "S":
+            top_s = s
+            break
+
+    # 名前解決（CSV日本語名を優先）
+    if top_s:
+        code = top_s.get("code", "")
+        name_map = {}
+        try:
+            csv_path = Path(__file__).resolve().parent / "data" / "cache" / "company_codes.csv"
+            if csv_path.exists():
+                import pandas as pd
+                df_csv = pd.read_csv(csv_path, encoding="utf-8", dtype={"code": str})
+                name_map = dict(zip(df_csv["code"].astype(str), df_csv["name"]))
+        except Exception:
+            pass
+        name = name_map.get(code, "") or top_s.get("name", "") or code
+        label = name
+
+        lines = [
+            f"*☀️ 朝リマインド* ({today} 08:00)",
+            "",
+            "━" * 25,
+            "🎯 *本日の寄り付きアクション*",
+            "━" * 25,
+            f"  🟢 *{label}* ({code}) を寄り付き成行で購入",
+            f"  総合 {top_s.get('total_score', 0):.0f}({top_s.get('total_rank', '?')}) "
+            f"| ¥{top_s.get('close', 0):,.0f}",
+            "",
+            "_前日16:00確定値ベース_",
+        ]
+    else:
+        lines = [
+            f"*☀️ 朝リマインド* ({today} 08:00)",
+            "",
+            "━" * 25,
+            "🎯 *本日の寄り付きアクション*",
+            "━" * 25,
+            "  ➡️ *CASH* — S銘柄なし、本日は見送り",
+        ]
+
+    msg = "\n".join(lines)
+
+    mega_url = _resolve_webhook_url("mega", "JP")
+    if not mega_url:
+        mega_url = _resolve_webhook_url()
+    if not mega_url:
+        print("  [WARN] SLACK_WEBHOOK_URL 未設定 — スキップ")
+        return
+
+    if dry_run:
+        print("  [DRY-RUN] 朝リマインド:")
+        print(msg)
+        return
+
+    if _send_slack(mega_url, msg):
+        print("  朝リマインド送信完了")
+    else:
+        print("  [ERROR] 朝リマインド送信失敗")
+
+
 def _run_jp_mega_only(args, today, regime_trend, regime_header, regime_dict):
     """JP MEGA S/Aスコアリングのみ実行（JP市場終了後の早期通知用）"""
     print("\n[JP-MEGA] JP MEGA ¥1兆+ S/Aスコアリング (単独実行)")
@@ -302,11 +381,18 @@ def main():
                         help="ヘルスチェックをスキップ")
     parser.add_argument("--strategy", type=str, default=None,
                         help="実行戦略 (jp-mega: JP MEGAのみ)")
+    parser.add_argument("--morning-reminder", action="store_true",
+                        help="朝リマインド（前日確定のアクションを再通知）")
     parser.add_argument("--market", type=str, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--jp-universe", type=str, default=None, help=argparse.SUPPRESS)
     args = parser.parse_args()
 
     today = date.today().isoformat()
+
+    if args.morning_reminder:
+        _send_morning_reminder(today, dry_run=args.dry_run)
+        return
+
     print(f">> MEGA BreakOut Daily Run: {today}")
     print("=" * 60)
 

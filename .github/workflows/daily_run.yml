@@ -6,6 +6,8 @@ on:
     - cron: "0 7 * * 1-5"
     # US市場終了後: 06:00 JST = 21:00 UTC（月〜金）— US + JP全戦略
     - cron: "0 21 * * 1-5"
+    # 朝リマインド: 08:00 JST = 23:00 UTC（日〜木）— 前日確定のアクション再通知
+    - cron: "0 23 * * 0-4"
 
   workflow_dispatch:
     inputs:
@@ -89,8 +91,15 @@ jobs:
 
           if [ "${{ github.event_name }}" = "schedule" ]; then
             echo "trigger=schedule" >> $GITHUB_OUTPUT
-            # JP夕方スケジュール (07:00 UTC) → JP MEGAのみ実行
             HOUR=$(date -u +%H)
+            # 朝リマインド (23:00 UTC = 08:00 JST) → 再通知のみ
+            if [ "$HOUR" -ge 22 ] || [ "$HOUR" -le 0 ]; then
+              ARGS="--morning-reminder"
+              echo "args=$ARGS" >> $GITHUB_OUTPUT
+              echo "Run args: $ARGS (morning reminder)"
+              exit 0
+            fi
+            # JP夕方スケジュール (07:00 UTC = 16:00 JST) → JP MEGAのみ実行
             if [ "$HOUR" -ge 6 ] && [ "$HOUR" -le 8 ]; then
               ARGS="--strategy jp-mega --skip-healthcheck"
               echo "args=$ARGS" >> $GITHUB_OUTPUT
