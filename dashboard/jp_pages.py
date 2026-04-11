@@ -531,8 +531,50 @@ def _get_prev_top_s() -> tuple:
     return None, ""
 
 
+def _is_market_closed_day() -> bool:
+    """土日・祝日判定（翌営業日までアクション不要）"""
+    today = datetime.now()
+    # 土日
+    if today.weekday() >= 5:
+        return True
+    # 日本の祝日（jpholidayがあれば使用）
+    try:
+        import jpholiday
+        if jpholiday.is_holiday(today.date()):
+            return True
+    except ImportError:
+        pass
+    return False
+
+
 def _render_action_hero(df: pd.DataFrame, prices: dict, names: dict):
     """翌朝アクション ヒーローセクション"""
+
+    # 休場日チェック
+    if _is_market_closed_day():
+        prev_code, prev_name = _get_prev_top_s()
+        hold_label = prev_name if prev_name else prev_code
+        st.markdown(
+            f"""<div style="
+                background: linear-gradient(135deg, #6b728015, #6b728005);
+                border: 2px solid #6b7280;
+                border-radius: 12px;
+                padding: 24px;
+                margin-bottom: 16px;
+            ">
+            <div style="font-size: 0.9em; color: #888; margin-bottom: 4px;">翌朝アクション</div>
+            <div style="font-size: 1.8em; font-weight: bold; color: #6b7280;">
+                😴 休場日 — アクション不要
+            </div>
+            <div style="font-size: 1.0em; color: #888; margin-top: 8px;">
+                現在保有: {hold_label} ({prev_code}) — 次の取引日までHOLD
+            </div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+        st.divider()
+        return
+
     # 当日のS最上位
     s_df = df[df["総合ランク"] == "S"]
     top_s = s_df.iloc[0] if not s_df.empty else None
