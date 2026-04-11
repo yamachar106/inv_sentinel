@@ -99,12 +99,18 @@ def load_previous_enriched_signals(target_date: str) -> dict[str, list[dict]]:
 
 def get_prev_top_s_code(target_date: str) -> str | None:
     """前日のJP MEGA S最上位銘柄コードを返す（最大7日遡行）。"""
+    code, _ = get_prev_top_s(target_date)
+    return code
+
+
+def get_prev_top_s(target_date: str) -> tuple:
+    """前日のJP MEGA S最上位銘柄の(code, name)を返す（最大7日遡行）。"""
     prev = load_previous_enriched_signals(target_date)
     mega_jp = prev.get("mega:JP", [])
     for s in mega_jp:
         if s.get("total_rank") == "S":
-            return s.get("code")
-    return None
+            return s.get("code"), s.get("name", "")
+    return None, ""
 
 
 def diff_mega_jp_signals(

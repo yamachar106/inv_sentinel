@@ -37,7 +37,7 @@ from screener.notifier import (
 from screener.signal_store import (
     save_signals, load_previous_signals, diff_signals, format_diff_summary,
     track_mega_pb, check_mega_upgrade, get_mega_bo_history,
-    get_prev_top_s_code,
+    get_prev_top_s,
 )
 from screener.universe import fetch_us_stocks
 
@@ -271,10 +271,11 @@ def _run_jp_mega_only(args, today, regime_trend, regime_header, regime_dict):
         mega_jp_signals = scan_mega_jp(regime=regime_trend, dry_run=args.dry_run)
         if mega_jp_signals and not args.dry_run:
             limit_section = _build_jp_mega_limit_order_section(mega_jp_signals, today)
-            prev_top = get_prev_top_s_code(today)
+            prev_code, prev_name = get_prev_top_s(today)
             notify_mega_jp(mega_jp_signals, today, regime_header=regime_header,
                            limit_order_section=limit_section,
-                           prev_top_s_code=prev_top)
+                           prev_top_s_code=prev_code,
+                           prev_top_s_name=prev_name)
             print(f"  JP Mega通知送信: {len(mega_jp_signals)}件")
     except Exception as e:
         print(f"  [ERROR] JP MEGA スキャン失敗: {e}")
@@ -387,10 +388,11 @@ def main():
         mega_jp_signals = scan_mega_jp(regime=regime_trend, dry_run=args.dry_run)
         if mega_jp_signals and not args.dry_run:
             limit_section = _build_jp_mega_limit_order_section(mega_jp_signals, today)
-            prev_top = get_prev_top_s_code(today)
+            prev_code, prev_name = get_prev_top_s(today)
             notify_mega_jp(mega_jp_signals, today, regime_header=regime_header,
                            limit_order_section=limit_section,
-                           prev_top_s_code=prev_top)
+                           prev_top_s_code=prev_code,
+                           prev_top_s_name=prev_name)
             print(f"  JP Mega通知送信: {len(mega_jp_signals)}件")
     except Exception as e:
         print(f"  [ERROR] JP MEGA スキャン失敗: {e}")
