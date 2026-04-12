@@ -1,5 +1,5 @@
 {
-  "_date": "2026-04-10",
+  "_date": "2026-04-12",
   "rows": [
     {
       "ticker": "NVDA",
@@ -26,7 +26,7 @@
       "rsi": 67.5,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.61,
+      "vol_ratio": 0.68,
       "signal": "-"
     },
     {
@@ -54,7 +54,7 @@
       "rsi": 61.8,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.5,
+      "vol_ratio": 0.54,
       "signal": "-"
     },
     {
@@ -110,7 +110,7 @@
       "rsi": 75.5,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 1.09,
+      "vol_ratio": 1.12,
       "signal": "-"
     },
     {
@@ -124,7 +124,7 @@
       "rsi": 58.7,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.81,
+      "vol_ratio": 0.82,
       "signal": "-"
     },
     {
@@ -138,7 +138,7 @@
       "rsi": 42.0,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.8,
+      "vol_ratio": 0.81,
       "signal": "-"
     },
     {
@@ -166,7 +166,7 @@
       "rsi": 57.8,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.46,
+      "vol_ratio": 0.61,
       "signal": "-"
     },
     {
@@ -180,7 +180,7 @@
       "rsi": 73.7,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.4,
+      "vol_ratio": 0.58,
       "signal": "-"
     },
     {
@@ -194,7 +194,7 @@
       "rsi": 41.4,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.64,
+      "vol_ratio": 0.87,
       "signal": "-"
     },
     {
@@ -208,7 +208,7 @@
       "rsi": 79.0,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.68,
+      "vol_ratio": 0.71,
       "signal": "PB"
     },
     {
@@ -222,7 +222,7 @@
       "rsi": 56.9,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.6,
+      "vol_ratio": 0.88,
       "signal": "PB"
     },
     {
@@ -250,7 +250,7 @@
       "rsi": 64.3,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.91,
+      "vol_ratio": 0.92,
       "signal": "PB"
     },
     {
@@ -264,7 +264,7 @@
       "rsi": 61.1,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 1.08,
+      "vol_ratio": 1.19,
       "signal": "-"
     },
     {
@@ -278,7 +278,7 @@
       "rsi": 52.0,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.63,
+      "vol_ratio": 0.76,
       "signal": "-"
     },
     {
@@ -292,7 +292,7 @@
       "rsi": 36.4,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.92,
+      "vol_ratio": 0.93,
       "signal": "-"
     },
     {
@@ -306,7 +306,7 @@
       "rsi": 80.3,
       "gc": true,
       "above_sma200": false,
-      "vol_ratio": 0.55,
+      "vol_ratio": 0.56,
       "signal": "-"
     },
     {
@@ -334,7 +334,7 @@
       "rsi": 34.9,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.7,
+      "vol_ratio": 0.83,
       "signal": "-"
     },
     {
@@ -348,7 +348,7 @@
       "rsi": 53.8,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.42,
+      "vol_ratio": 0.65,
       "signal": "-"
     },
     {
@@ -362,7 +362,7 @@
       "rsi": 33.7,
       "gc": true,
       "above_sma200": false,
-      "vol_ratio": 2.1,
+      "vol_ratio": 2.11,
       "signal": "-"
     },
     {
@@ -376,7 +376,7 @@
       "rsi": 73.7,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.96,
+      "vol_ratio": 0.97,
       "signal": "-"
     },
     {
@@ -390,7 +390,7 @@
       "rsi": 79.0,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.4,
+      "vol_ratio": 0.6,
       "signal": "-"
     },
     {
@@ -404,7 +404,7 @@
       "rsi": 72.9,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.48,
+      "vol_ratio": 0.64,
       "signal": "-"
     },
     {
@@ -418,7 +418,7 @@
       "rsi": 52.8,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.87,
+      "vol_ratio": 0.88,
       "signal": "-"
     },
     {
@@ -432,7 +432,7 @@
       "rsi": 64.8,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.61,
+      "vol_ratio": 0.62,
       "signal": "PB"
     },
     {
@@ -446,7 +446,7 @@
       "rsi": 61.1,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.5,
+      "vol_ratio": 0.78,
       "signal": "-"
     },
     {
@@ -474,7 +474,7 @@
       "rsi": 70.2,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.58,
+      "vol_ratio": 0.84,
       "signal": "PB"
     },
     {
@@ -502,7 +502,7 @@
       "rsi": 60.5,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.56,
+      "vol_ratio": 0.67,
       "signal": "-"
     },
     {
@@ -530,7 +530,7 @@
       "rsi": 57.1,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.82,
+      "vol_ratio": 0.86,
       "signal": "-"
     },
     {
@@ -572,7 +572,7 @@
       "rsi": 59.0,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.69,
+      "vol_ratio": 0.73,
       "signal": "PB"
     },
     {
@@ -656,7 +656,7 @@
       "rsi": 68.9,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.44,
+      "vol_ratio": 0.57,
       "signal": "-"
     },
     {
@@ -684,7 +684,7 @@
       "rsi": 45.0,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.81,
+      "vol_ratio": 0.83,
       "signal": "-"
     },
     {
@@ -706,13 +706,13 @@
       "close": 65.0,
       "high_52w": 65.0,
       "dist_pct": 0.0,
-      "sma20": 63.37,
+      "sma20": 63.42,
       "sma50": 63.7,
-      "sma200": 61.34,
+      "sma200": 61.37,
       "rsi": 99.0,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0,
+      "vol_ratio": 0.0,
       "signal": "-"
     },
     {
@@ -740,7 +740,7 @@
       "rsi": 39.0,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.75,
+      "vol_ratio": 0.94,
       "signal": "-"
     },
     {
@@ -754,13 +754,13 @@
       "rsi": 78.8,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.44,
+      "vol_ratio": 0.9,
       "signal": "PB"
     },
     {
       "ticker": "TMUS",
       "close": 195.7100067138672,
-      "high_52w": 262.2296142578125,
+      "high_52w": 262.2295837402344,
       "dist_pct": -25.37,
       "sma20": 207.03,
       "sma50": 209.14,
@@ -816,15 +816,15 @@
     {
       "ticker": "VZ",
       "close": 46.040000915527344,
-      "high_52w": 51.380001068115234,
-      "dist_pct": -10.39,
-      "sma20": 49.69,
-      "sma50": 49.01,
-      "sma200": 42.71,
-      "rsi": 20.0,
+      "high_52w": 50.618656158447266,
+      "dist_pct": -9.05,
+      "sma20": 48.99,
+      "sma50": 48.3,
+      "sma200": 42.08,
+      "rsi": 22.3,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.61,
+      "vol_ratio": 0.77,
       "signal": "-"
     },
     {
@@ -866,7 +866,7 @@
       "rsi": 74.1,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.46,
+      "vol_ratio": 0.6,
       "signal": "PB"
     },
     {
@@ -880,7 +880,7 @@
       "rsi": 67.3,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 1.69,
+      "vol_ratio": 1.73,
       "signal": "BO"
     }
   ]
