@@ -585,6 +585,24 @@
       "summary": "TotalEnergies SE, an integrated energy company, produces and markets oil and biofuels, natural gas, biogas and low-carbon hydrogen, renewables, and electricity in France, the United States, Europe, Br",
       "website": "https://totalenergies.com",
       "domain": "totalenergies.com"
+    },
+    "UBS": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.ubs.com&sz=128",
+      "summary_en": "UBS Group AG operates as a wealth manager and bank worldwide. It operates through five segments: Global Wealth Management, Personal & Corporate Banking, Asset Management, Investment Bank, and Non-Core and Legacy. The Global Wealth Management segment offers financial services, advice, and solutions; investment management, estate planning, and corporate advice services; and wealth management and banking products and services to private wealth and institutional customers. Its Personal & Corporate Banking segment provides banking, retirement, financing, investments, and strategic transactions to private, corporate, and institutional customers through its branch network and digital channels in Switzerland. The Asset Management segment offers diversified asset management services. Its Investment Bank segment provides equities, foreign exchange, precious metals, research, advisory, and capital markets services to institutional, corporate, financial sponsor, and Global Wealth Management customers, as well as focused rates and credit platform. The company also offers lending products, such as securities-based lending, mortgages, structured products, and tailored solutions; collateralized lending residential and commercial real estate, primarily against securities, residential and commercial real estate, other real assets (such as ships and aircraft), private market and hedge fund interest; and unsecured lending. The company was formerly known as UBS AG and changed its name to UBS Group AG in December 2014. UBS Group AG was founded in 1862 and is headquartered in Zurich, Switzerland.",
+      "industry_en": "Banks - Diversified",
+      "industry": "Banks - Diversified",
+      "summary": "UBS Group AG operates as a wealth manager and bank worldwide. It operates through five segments: Global Wealth Management, Personal & Corporate Banking, Asset Management, Investment Bank, and Non-Core",
+      "website": "https://www.ubs.com",
+      "domain": "www.ubs.com"
+    },
+    "KLAC": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.kla.com&sz=128",
+      "summary_en": "KLA Corporation, together with its subsidiaries, designs, manufactures, and markets process control, process-enabling, and yield management solutions for the semiconductor and related electronics industries worldwide. The company operates through three segments: Semiconductor Process Control; Specialty Semiconductor Process; and PCB and Component Inspection. It offers inspection and review tools to identify, locate, characterize, review, and analyze defects on various surfaces of patterned and unpatterned wafers; metrology systems to measure pattern dimensions, film thickness, film stress, layer-to-layer alignment, pattern placement, surface topography, and electro-optical properties for wafers; chemical process control equipment; wired and wireless sensor wafers and reticles; wafer defect inspection, review, and metrology systems; reticle inspection and metrology systems; wafer inspection and metrology systems; and semiconductor software solutions that provide run-time process control, defect excursion identification, process corrections, and defect classification to accelerate yield learning rates and reduce production risk. The company also provides etch, plasma dicing, deposition, and other wafer processing technologies and solutions for the semiconductor and microelectronics industry. In addition, it offers direct imaging, inspection, optical shaping, inkjet and additive printing, and computer-aided manufacturing and engineering solutions for the PCB market and inspection and metrology systems for quality control and yield improvement in advanced and traditional semiconductor packaging markets. The company was formerly known as KLA-Tencor Corporation and changed its name to KLA Corporation in July 2019. KLA Corporation was incorporated in 1975 and is headquartered in Milpitas, California.",
+      "industry_en": "Semiconductor Equipment & Materials",
+      "industry": "Semiconductor Equipment & Materials",
+      "summary": "KLA Corporation, together with its subsidiaries, designs, manufactures, and markets process control, process-enabling, and yield management solutions for the semiconductor and related electronics indu",
+      "website": "https://www.kla.com",
+      "domain": "www.kla.com"
     }
   }
 }
