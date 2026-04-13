@@ -1,24 +1,17 @@
 name: MEGA BreakOut Daily
 
 on:
-  schedule:
-    # JP市場終了後: 16:00 JST = 07:00 UTC（月〜金）— JP MEGAのみ
-    - cron: "0 7 * * 1-5"
-    # US市場終了後: 06:00 JST = 21:00 UTC（月〜金）— US + JP全戦略
-    - cron: "0 21 * * 1-5"
-    # 朝リマインド: 08:00 JST = 23:00 UTC（日〜木）— 前日確定のアクション再通知
-    - cron: "0 23 * * 0-4"
-
   workflow_dispatch:
     inputs:
       strategy:
-        description: "Strategy to run (blank = all)"
+        description: "Run mode"
         required: false
         type: choice
         options:
-          - ""
+          - full
           - jp-mega
-        default: ""
+          - morning-reminder
+        default: full
       universe:
         description: "US universe preset"
         required: false
@@ -88,50 +81,39 @@ jobs:
         id: params
         run: |
           ARGS=""
+          STRATEGY="${{ github.event.inputs.strategy }}"
 
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            echo "trigger=schedule" >> $GITHUB_OUTPUT
-            HOUR=$(date -u +%H)
-            # 朝リマインド (23:00 UTC = 08:00 JST) → 再通知のみ
-            if [ "$HOUR" -ge 22 ] || [ "$HOUR" -le 0 ]; then
-              ARGS="--morning-reminder"
-              echo "args=$ARGS" >> $GITHUB_OUTPUT
-              echo "Run args: $ARGS (morning reminder)"
-              exit 0
-            fi
-            # JP夕方スケジュール (07:00 UTC = 16:00 JST) → JP MEGAのみ実行
-            if [ "$HOUR" -ge 6 ] && [ "$HOUR" -le 8 ]; then
-              ARGS="--strategy jp-mega --skip-healthcheck"
-              echo "args=$ARGS" >> $GITHUB_OUTPUT
-              echo "Run args: $ARGS (JP evening schedule)"
-              exit 0
-            fi
-          else
-            echo "trigger=manual" >> $GITHUB_OUTPUT
+          if [ "$STRATEGY" = "morning-reminder" ]; then
+            ARGS="--morning-reminder"
+            echo "args=$ARGS" >> $GITHUB_OUTPUT
+            echo "mode=morning-reminder" >> $GITHUB_OUTPUT
+            echo "Run args: $ARGS"
+            exit 0
+          fi
 
-            STRATEGY="${{ github.event.inputs.strategy }}"
-            if [ -n "$STRATEGY" ]; then
-              ARGS="$ARGS --strategy $STRATEGY"
-            fi
+          if [ "$STRATEGY" = "jp-mega" ]; then
+            ARGS="--strategy jp-mega --skip-healthcheck"
+          fi
+          # "full" or default: no --strategy flag (daily_run.py runs all)
 
-            UNIVERSE="${{ github.event.inputs.universe }}"
-            LIMIT="${{ github.event.inputs.limit }}"
+          UNIVERSE="${{ github.event.inputs.universe }}"
+          LIMIT="${{ github.event.inputs.limit }}"
 
-            if [ -n "$UNIVERSE" ]; then
-              ARGS="$ARGS --universe $UNIVERSE"
-            fi
-            if [ "$LIMIT" != "0" ] && [ -n "$LIMIT" ]; then
-              ARGS="$ARGS --limit $LIMIT"
-            fi
-            if [ "${{ github.event.inputs.dry-run }}" = "true" ]; then
-              ARGS="$ARGS --dry-run"
-            fi
-            if [ "${{ github.event.inputs.skip-healthcheck }}" = "true" ]; then
-              ARGS="$ARGS --skip-healthcheck"
-            fi
+          if [ -n "$UNIVERSE" ]; then
+            ARGS="$ARGS --universe $UNIVERSE"
+          fi
+          if [ "$LIMIT" != "0" ] && [ -n "$LIMIT" ]; then
+            ARGS="$ARGS --limit $LIMIT"
+          fi
+          if [ "${{ github.event.inputs.dry-run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          if [ "${{ github.event.inputs.skip-healthcheck }}" = "true" ]; then
+            ARGS="$ARGS --skip-healthcheck"
           fi
 
           echo "args=$ARGS" >> $GITHUB_OUTPUT
+          echo "mode=$STRATEGY" >> $GITHUB_OUTPUT
           echo "Run args: $ARGS"
 
       - name: Run MEGA daily monitor
@@ -140,11 +122,13 @@ jobs:
           python daily_run.py ${{ steps.params.outputs.args }}
 
       - name: Refresh dashboard cache
+        if: steps.params.outputs.mode != 'morning-reminder'
         run: |
           echo "Refreshing MEGA dashboard cache..."
           python dashboard/refresh_cache.py || echo "Cache refresh failed (non-critical)"
 
       - name: Commit signal history
+        if: steps.params.outputs.mode != 'morning-reminder'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -154,7 +138,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "MEGA signals $(date -u +%Y-%m-%d) [${{ steps.params.outputs.trigger }}]"
+            git commit -m "MEGA signals $(date -u +%Y-%m-%d) [${{ steps.params.outputs.mode }}]"
             git push
           fi
 
@@ -165,7 +149,7 @@ jobs:
           if [ -n "$WEBHOOK" ]; then
             curl -s -X POST "$WEBHOOK" \
               -H 'Content-Type: application/json' \
-              -d "{\"text\":\"🚨 *MEGA Pipeline FAILED* (${{ steps.params.outputs.trigger }})\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\n即座に確認してください。BOシグナルを逃す可能性があります。\"}" \
+              -d "{\"text\":\"🚨 *MEGA Pipeline FAILED* (${{ steps.params.outputs.mode }})\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\n即座に確認してください。BOシグナルを逃す可能性があります。\"}" \
               --retry 3 --retry-delay 5
           fi
 
@@ -173,7 +157,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mega-${{ steps.params.outputs.trigger }}-${{ github.run_id }}
+          name: mega-${{ steps.params.outputs.mode }}-${{ github.run_id }}
           path: |
             data/signals/
             data/logs/
