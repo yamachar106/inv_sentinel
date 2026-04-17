@@ -390,6 +390,146 @@ def _run_jp_mega_only(args, today, regime_trend, regime_header, regime_dict):
     print(f"\nJP MEGA完了 ({elapsed:.0f}秒)")
 
 
+def _check_dead_mans_switch(today: str, dry_run: bool = False) -> int:
+    """前回シグナルからの経過日数をチェック。2日以上空いていればSlack警告。
+
+    Returns:
+        経過営業日数（0=正常、-1=シグナルなし）
+    """
+    import os
+    sig_dir = Path(__file__).resolve().parent / "data" / "signals"
+    if not sig_dir.exists():
+        return -1
+
+    # 日付付きJSONファイルを降順でスキャン
+    signal_files = sorted(
+        [f for f in os.listdir(sig_dir) if f[:4] == "2026" and f.endswith(".json")],
+        reverse=True,
+    )
+
+    if not signal_files:
+        return -1
+
+    latest = signal_files[0].replace(".json", "")
+    today_date = date.fromisoformat(today)
+    latest_date = date.fromisoformat(latest)
+    gap_days = (today_date - latest_date).days
+
+    # 土日を除いた営業日ギャップ（簡易計算）
+    biz_gap = 0
+    d = latest_date
+    from datetime import timedelta
+    while d < today_date:
+        d += timedelta(days=1)
+        if d.weekday() < 5:  # 月〜金
+            biz_gap += 1
+
+    if biz_gap >= 2:
+        msg = (
+            f"🚨 *Dead Man's Switch* ({today})\n"
+            f"最終シグナル: {latest}（{gap_days}日前, 営業日{biz_gap}日）\n"
+            f"パイプラインが停止している可能性があります。即座に確認してください。"
+        )
+        print(f"  [ALERT] シグナルギャップ検出: {latest} → {today} ({biz_gap}営業日)")
+        if not dry_run:
+            webhook = _resolve_webhook_url("mega", "JP") or _resolve_webhook_url()
+            if webhook:
+                _send_slack(webhook, msg)
+    elif biz_gap == 1:
+        print(f"  前回シグナル: {latest}（正常）")
+    else:
+        print(f"  前回シグナル: {latest}（当日）")
+
+    return biz_gap
+
+
+def _check_position_signal_alignment(
+    today: str,
+    dry_run: bool = False,
+) -> dict | None:
+    """保有ポジションと直近シグナルのS最上位の整合性をチェック。
+
+    Returns:
+        {"action": "HOLD"|"SWITCH"|"EXIT", ...} or None
+    """
+    portfolio = load_portfolio()
+    positions = portfolio.get("positions", {})
+
+    # mega_jp ポジションのみ対象
+    mega_positions = {
+        code: pos for code, pos in positions.items()
+        if pos.get("strategy") in ("mega", "mega_jp")
+    }
+
+    # 直近シグナルを取得
+    enriched = load_previous_signals(today)
+    # load_previous_signals はコードリストを返す。enriched版が必要
+    from screener.signal_store import load_previous_enriched_signals
+    enriched_data = load_previous_enriched_signals(today)
+    mega_jp = enriched_data.get("mega:JP", [])
+
+    s_stocks = sorted(
+        [s for s in mega_jp if s.get("total_rank") == "S"],
+        key=lambda x: -x.get("total_score", 0),
+    )
+    top_s_code = s_stocks[0]["code"] if s_stocks else None
+
+    if not mega_positions:
+        if top_s_code:
+            result = {
+                "action": "BUY",
+                "message": f"ポジションなし → S最上位 {top_s_code} を購入推奨",
+                "target_code": top_s_code,
+            }
+            print(f"  ⚠️ {result['message']}")
+        else:
+            print("  ポジションなし & S銘柄なし → CASH（正常）")
+            return None
+    else:
+        held_codes = list(mega_positions.keys())
+
+        if not top_s_code:
+            # S銘柄なし → EXIT
+            result = {
+                "action": "EXIT",
+                "message": f"S銘柄なし → {', '.join(held_codes)} を売却してCASH化推奨",
+                "held_codes": held_codes,
+            }
+            print(f"  🔴 {result['message']}")
+        elif top_s_code in held_codes:
+            # HOLD
+            top_score = s_stocks[0].get("total_score", 0)
+            print(f"  ✅ HOLD: {top_s_code} = S最上位 (score={top_score:.1f})")
+            return None
+        else:
+            # SWITCH
+            top_score = s_stocks[0].get("total_score", 0)
+            result = {
+                "action": "SWITCH",
+                "message": (
+                    f"S最上位が変更: {', '.join(held_codes)} → {top_s_code} "
+                    f"(score={top_score:.1f})"
+                ),
+                "held_codes": held_codes,
+                "target_code": top_s_code,
+            }
+            print(f"  🔄 {result['message']}")
+
+    # Slack通知
+    if result and not dry_run:
+        icon = {"EXIT": "🔴", "SWITCH": "🔄", "BUY": "🟢"}.get(result["action"], "⚠️")
+        msg = (
+            f"{icon} *ポジション整合性アラート* ({today})\n"
+            f"{result['message']}\n"
+            f"_翌営業日の寄りで対応してください_"
+        )
+        webhook = _resolve_webhook_url("mega", "JP") or _resolve_webhook_url()
+        if webhook:
+            _send_slack(webhook, msg)
+
+    return result
+
+
 def _run_portfolio_monitor(dry_run: bool = False) -> list:
     """ポジション監視: 売却シグナル検出 + Slack通知。
 
@@ -539,11 +679,20 @@ def main():
     if args.strategy == "monitor":
         print(f">> ポジション監視 ({today})")
         print("=" * 60)
+        print("\n[0] Dead Man's Switch")
+        _check_dead_mans_switch(today, dry_run=args.dry_run)
+        print("\n[1] ポジション監視")
         _run_portfolio_monitor(dry_run=args.dry_run)
+        print("\n[2] ポジション⇔シグナル整合性")
+        _check_position_signal_alignment(today, dry_run=args.dry_run)
         return
 
     print(f">> MEGA BreakOut Daily Run: {today}")
     print("=" * 60)
+
+    # ---- Dead Man's Switch ----
+    print("\n[0] Dead Man's Switch")
+    _check_dead_mans_switch(today, dry_run=args.dry_run)
 
     # ---- ヘルスチェック ----
     if not args.skip_healthcheck:
@@ -661,6 +810,8 @@ def main():
     # ---- ポジション監視 ----
     print("\n[6] ポジション監視")
     sell_signals = _run_portfolio_monitor(dry_run=args.dry_run)
+    print("\n[7] ポジション⇔シグナル整合性")
+    _check_position_signal_alignment(today, dry_run=args.dry_run)
 
     # ---- ダイジェスト通知 ----
     elapsed = time.time() - start_time
