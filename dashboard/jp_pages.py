@@ -716,6 +716,62 @@ def _render_signal_history_and_rotation():
     st.caption(f"直近{len(rows)}日間の切替回数: {switches}回")
 
 
+def _render_hero_ai_analysis(show_row, show_code: str, prices: dict):
+    """ヒーローセクション用のAI分析（expanderで折りたたみ）"""
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        try:
+            api_key = st.secrets["GOOGLE_API_KEY"]
+        except (KeyError, FileNotFoundError):
+            return
+
+    if not api_key or show_row is None:
+        return
+
+    ticker = show_row.get("ticker", f"{show_code}.T")
+    price_data = prices.get(ticker, {})
+    close = price_data.get("close", show_row.get("現在値", 0))
+    sma200 = price_data.get("sma200", 0)
+
+    # strength data from row
+    strength_data = load_strength_data()
+    info = strength_data.get("tickers", {}).get(ticker, {})
+
+    sl_price = round(close * 0.80) if close else 0
+    tp_price = round(close * 1.40) if close else 0
+
+    with st.expander(f"🤖 AI分析: {show_row.get('名前', show_code)} ({show_code})", expanded=True):
+        analysis = _generate_jp_analysis(
+            code=show_code,
+            name=show_row.get("名前", ""),
+            close=close,
+            high_52w=price_data.get("high_52w", show_row.get("52W高値", 0)),
+            dist_pct=price_data.get("dist_pct", show_row.get("52W距離", 0)),
+            rsi=price_data.get("rsi", show_row.get("RSI", 0)),
+            vol_ratio=price_data.get("vol_ratio", show_row.get("出来高比", 0)),
+            gc=price_data.get("gc", show_row.get("GC", False)),
+            sma200=sma200,
+            above_sma200=price_data.get("above_sma200", show_row.get("SMA200上", False)),
+            strength_score=info.get("strength_score", 0),
+            strength_rank=info.get("rank", "?"),
+            timing_score=show_row.get("タイミング", 0) if "タイミング" in show_row else 0,
+            total_score=show_row.get("総合", 0),
+            total_rank=show_row.get("総合ランク", "?"),
+            bt_ev=info.get("ev", show_row.get("BT_EV", 0)),
+            bt_wr=info.get("wr", show_row.get("BT_WR", 0)),
+            bt_pf=info.get("pf", 0),
+            bt_n=info.get("n", 0),
+            bear_ev=info.get("bear_ev", 0),
+            mcap=info.get("mcap", 0),
+            sl_price=sl_price,
+            tp_price=tp_price,
+        )
+        if analysis:
+            st.markdown(analysis)
+        else:
+            st.caption("AI分析を生成できませんでした")
+
+
 def _render_action_hero(df: pd.DataFrame, prices: dict, names: dict):
     """翌朝アクション ヒーローセクション"""
 
@@ -878,10 +934,26 @@ def _render_action_hero(df: pd.DataFrame, prices: dict, names: dict):
         unsafe_allow_html=True,
     )
 
-    # 1位銘柄の詳細（保有中でない場合は1位、保有中ならその銘柄を表示）
-    show_row = held_row if held_row is not None else top_row
-    show_code = rot_held if held_row is not None else top_code
+    # 注目銘柄の詳細（SWITCH/BUY時は対象銘柄、それ以外は保有銘柄）
+    if action in ("SWITCH", "BUY") and top_row is not None:
+        show_row = top_row
+        show_code = top_code
+        detail_label = f"切替先: {top_label} ({top_code})" if action == "SWITCH" else f"購入候補: {top_label} ({top_code})"
+    elif held_row is not None:
+        show_row = held_row
+        show_code = rot_held
+        detail_label = f"保有中: {held_label} ({rot_held})"
+    elif top_row is not None:
+        show_row = top_row
+        show_code = top_code
+        detail_label = f"総合1位: {top_label} ({top_code})"
+    else:
+        show_row = None
+        show_code = None
+        detail_label = ""
+
     if show_row is not None:
+        st.markdown(f"**{detail_label}**")
         cols = st.columns([2, 1.5, 1.5, 1.5])
         with cols[0]:
             close_series = prices.get(show_row["ticker"], {}).get("close_series")
@@ -904,6 +976,34 @@ def _render_action_hero(df: pd.DataFrame, prices: dict, names: dict):
             st.markdown(f"BT :{ev_color}[EV{ev:+.1f}%]")
             st.markdown(f"勝率 {show_row['BT_WR']:.0f}%")
             st.caption(f"SL ¥{show_row['SL']:,.0f} / TP ¥{show_row['TP']:,.0f}")
+
+        # SWITCH/BUY時は保有銘柄も並べて表示
+        if action == "SWITCH" and held_row is not None:
+            st.markdown(f"**売却: {held_label} ({rot_held})**")
+            hcols = st.columns([2, 1.5, 1.5, 1.5])
+            with hcols[0]:
+                h_series = prices.get(held_row["ticker"], {}).get("close_series")
+                if h_series is not None and len(h_series) > 20:
+                    _render_mini_chart(h_series, f"hero_held_{rot_held}", days=90)
+            with hcols[1]:
+                st.metric("現在値", f"¥{held_row['現在値']:,.0f}")
+                st.metric("総合スコア", f"{held_row['総合']:.0f} ({held_row['総合ランク']})")
+            with hcols[2]:
+                h_dist = held_row["52W距離"]
+                h_dist_color = "green" if h_dist >= -2 else "orange" if h_dist >= -5 else "red"
+                h_gc = "🟢" if held_row["GC"] else "🔴"
+                h_sma = "🟢" if held_row["SMA200上"] else "🔴"
+                st.markdown(f"52W :{h_dist_color}[{h_dist:+.1f}%]")
+                st.markdown(f"{h_gc} GC | {h_sma} SMA200")
+                st.markdown(f"RSI {held_row['RSI']:.0f} | Vol ×{held_row['出来高比']:.1f}")
+            with hcols[3]:
+                h_ev = held_row["BT_EV"]
+                h_ev_color = "green" if h_ev > 0 else "red"
+                st.markdown(f"BT :{h_ev_color}[EV{h_ev:+.1f}%]")
+                st.markdown(f"勝率 {held_row['BT_WR']:.0f}%")
+
+        # AI分析（注目銘柄）
+        _render_hero_ai_analysis(show_row, show_code, prices)
 
     st.divider()
 
