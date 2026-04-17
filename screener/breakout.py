@@ -34,6 +34,12 @@ from screener.config import (
     BREAKOUT_PULLBACK_ENABLED,
     BREAKOUT_PULLBACK_RSI_MAX,
     BREAKOUT_REQUIRE_ABOVE_SMA200,
+    VCP_MIN_CONTRACTIONS,
+    VCP_MAX_CONTRACTIONS,
+    VCP_CONTRACTION_RATIO,
+    VCP_VOLUME_DRY_RATIO,
+    VCP_BREAKOUT_VOLUME_SURGE,
+    VCP_LOOKBACK_DAYS,
 )
 
 # バッチダウンロードの1回あたりのティッカー数
@@ -369,3 +375,216 @@ def check_breakout_batch(
         "volume_ratio", "rsi", "above_sma_50", "above_sma_200", "gc_status",
     ]
     return df[[c for c in col_order if c in df.columns]]
+
+
+def detect_vcp(
+    df: pd.DataFrame,
+    min_contractions: int = VCP_MIN_CONTRACTIONS,
+    max_contractions: int = VCP_MAX_CONTRACTIONS,
+    contraction_ratio: float = VCP_CONTRACTION_RATIO,
+    volume_dry_ratio: float = VCP_VOLUME_DRY_RATIO,
+) -> dict | None:
+    """
+    VCP (Volatility Contraction Pattern) を検出する。
+
+    Minerviniのパターン: 各プルバックの振幅が前回比で縮小し、
+    出来高が枯渇していく。ブレイクアウト直前のセットアップ。
+
+    Args:
+        df: calculate_breakout_indicators() 済みのDataFrame
+        min_contractions: 最低収縮回数
+        max_contractions: 最大収縮回数
+        contraction_ratio: 前回比でこの倍率以下なら収縮と判定
+        volume_dry_ratio: 収縮中の出来高が平均のこの倍率以下
+
+    Returns:
+        VCP情報のdict or None (パターン未検出時)
+        {
+            "vcp_detected": True,
+            "contractions": int,        # 収縮回数
+            "depth_sequence": list,     # 各収縮の深さ(%)
+            "volume_drying": bool,      # 出来高枯渇しているか
+            "pivot_price": float,       # ピボット(ブレイクアウト)価格
+            "tightness": float,         # 最後の収縮の深さ(%)
+        }
+    """
+    if df is None or len(df) < VCP_LOOKBACK_DAYS // 2:
+        return None
+
+    # Use the lookback window
+    lookback = min(VCP_LOOKBACK_DAYS, len(df))
+    df_window = df.iloc[-lookback:].copy()
+
+    close = df_window["close"].values
+    high = df_window["high"].values
+    volume = df_window["volume"].values
+
+    if len(close) < 30:
+        return None
+
+    # --- Step 1: Find swing highs and lows ---
+    swing_points = _find_swing_points(close, window=5)
+
+    if len(swing_points) < 4:  # Need at least 2 highs and 2 lows
+        return None
+
+    # --- Step 2: Calculate contraction depths ---
+    depths = []
+    swing_highs = [p for p in swing_points if p["type"] == "high"]
+    swing_lows = [p for p in swing_points if p["type"] == "low"]
+
+    if len(swing_highs) < 2 or len(swing_lows) < 1:
+        return None
+
+    # Calculate depth of each pullback (from preceding high to following low)
+    for i in range(len(swing_highs) - 1):
+        h_idx = swing_highs[i]["idx"]
+        h_val = swing_highs[i]["value"]
+
+        # Find the next low after this high
+        next_low = None
+        for sl in swing_lows:
+            if sl["idx"] > h_idx:
+                next_low = sl
+                break
+
+        if next_low is None:
+            continue
+
+        depth_pct = (h_val - next_low["value"]) / h_val * 100
+        if depth_pct > 0:
+            depths.append({
+                "depth_pct": depth_pct,
+                "high_idx": h_idx,
+                "low_idx": next_low["idx"],
+            })
+
+    if len(depths) < min_contractions:
+        return None
+
+    # --- Step 3: Check contraction pattern (each depth < previous * ratio) ---
+    contractions = 1  # First depth counts as first contraction
+    contraction_depths = [depths[0]["depth_pct"]]
+
+    for i in range(1, len(depths)):
+        if depths[i]["depth_pct"] <= depths[i-1]["depth_pct"] * contraction_ratio:
+            contractions += 1
+            contraction_depths.append(depths[i]["depth_pct"])
+        elif depths[i]["depth_pct"] < depths[i-1]["depth_pct"]:
+            # Still contracting but not as aggressively
+            contractions += 1
+            contraction_depths.append(depths[i]["depth_pct"])
+        else:
+            # Reset if depth increases
+            contractions = 1
+            contraction_depths = [depths[i]["depth_pct"]]
+
+    if contractions < min_contractions or contractions > max_contractions:
+        return None
+
+    # --- Step 4: Check volume drying ---
+    vol_avg = np.mean(volume[:len(volume)//2]) if len(volume) > 10 else np.mean(volume)
+    recent_vol = np.mean(volume[-20:]) if len(volume) >= 20 else np.mean(volume[-10:])
+    volume_drying = (recent_vol / vol_avg) < volume_dry_ratio if vol_avg > 0 else False
+
+    # --- Step 5: Determine pivot price ---
+    # Pivot is the highest point in the pattern
+    pivot_price = float(max(h["value"] for h in swing_highs[-contractions:]))
+    tightness = contraction_depths[-1] if contraction_depths else 0
+
+    return {
+        "vcp_detected": True,
+        "contractions": contractions,
+        "depth_sequence": [round(d, 1) for d in contraction_depths],
+        "volume_drying": volume_drying,
+        "pivot_price": round(pivot_price, 2),
+        "tightness": round(tightness, 1),
+    }
+
+
+def _find_swing_points(close: np.ndarray, window: int = 5) -> list[dict]:
+    """ローカルの高値/安値ポイント(スイングポイント)を検出する。
+
+    Args:
+        close: 終値の配列
+        window: スイング判定に使う前後の幅
+
+    Returns:
+        [{"idx": int, "value": float, "type": "high"|"low"}, ...]
+    """
+    points = []
+    for i in range(window, len(close) - window):
+        # Check if local high
+        if close[i] == max(close[i-window:i+window+1]):
+            points.append({"idx": i, "value": float(close[i]), "type": "high"})
+        # Check if local low
+        elif close[i] == min(close[i-window:i+window+1]):
+            points.append({"idx": i, "value": float(close[i]), "type": "low"})
+    return points
+
+
+def check_breakout_with_vcp(
+    codes: list[str],
+    market: str = "JP",
+    regime: str = "",
+    prefetched_ohlcv: dict[str, pd.DataFrame] | None = None,
+) -> pd.DataFrame:
+    """
+    ブレイクアウト検出 + VCPフラグ付与のバッチ処理。
+
+    check_breakout_batch() の結果にVCP検出情報を追加する。
+
+    Returns:
+        check_breakout_batch()の結果にvcp_detected, vcp_contractions,
+        vcp_tightness 列を追加したDataFrame
+    """
+    suffix = TICKER_SUFFIX_JP if market.upper() == "JP" else TICKER_SUFFIX_US
+    code_to_ticker = {code: f"{code}{suffix}" for code in codes}
+    tickers = list(code_to_ticker.values())
+
+    # OHLCV取得
+    if prefetched_ohlcv is not None:
+        ohlcv_data = prefetched_ohlcv
+    else:
+        ohlcv_data = fetch_ohlcv_batch(tickers, period="1y")
+
+    # 通常のブレイクアウト検出
+    df_signals = check_breakout_batch(
+        codes, market=market, regime=regime, prefetched_ohlcv=ohlcv_data,
+    )
+
+    if df_signals.empty:
+        return df_signals
+
+    # VCP検出を各シグナル銘柄に対して実行
+    vcp_results = {}
+    for code in df_signals["code"].tolist():
+        ticker = code_to_ticker.get(code, "")
+        ohlcv = ohlcv_data.get(ticker)
+        if ohlcv is None or len(ohlcv) < 50:
+            continue
+
+        df_ind = calculate_breakout_indicators(ohlcv)
+        vcp = detect_vcp(df_ind)
+        if vcp:
+            vcp_results[code] = vcp
+
+    # VCPフラグを付与
+    df_signals["vcp_detected"] = df_signals["code"].map(
+        lambda c: c in vcp_results
+    )
+    df_signals["vcp_contractions"] = df_signals["code"].map(
+        lambda c: vcp_results.get(c, {}).get("contractions", 0)
+    )
+    df_signals["vcp_tightness"] = df_signals["code"].map(
+        lambda c: vcp_results.get(c, {}).get("tightness", 0)
+    )
+    df_signals["vcp_pivot"] = df_signals["code"].map(
+        lambda c: vcp_results.get(c, {}).get("pivot_price", 0)
+    )
+
+    n_vcp = sum(1 for v in vcp_results.values() if v)
+    if n_vcp > 0:
+        print(f"  VCPパターン検出: {n_vcp}件")
+
+    return df_signals

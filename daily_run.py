@@ -736,6 +736,75 @@ def _run_portfolio_monitor(dry_run: bool = False) -> list:
     return signals
 
 
+def _run_new_strategy_scans(today: str, dry_run: bool = False, regime: str = ""):
+    """新戦略のスキャンステップを実行する（PEAD, 上方修正, Stage Analysis）。
+
+    各戦略はtry/exceptで独立して実行し、1つが失敗しても他は継続する。
+    """
+    # ---- PEAD (Earnings Surprise) ----
+    try:
+        from screener.earnings_surprise import is_pead_season, format_pead_signals
+        if is_pead_season():
+            print("\n[8] Earnings Surprise / PEAD スキャン")
+            # PEADは重いのでウォッチリスト銘柄のみ対象
+            # フル実行は weekly で別途
+            print("  PEADシーズン — 週次バッチで実行")
+        else:
+            print("\n[8] PEAD: 非決算月 — スキップ")
+    except Exception as e:
+        print(f"\n[8] [ERROR] PEAD: {e}")
+
+    # ---- Stage Analysis (保有ポジション警告) ----
+    try:
+        from screener.sell_monitor import check_stage_warnings as _stage_warn
+        portfolio = load_portfolio()
+        positions = portfolio.get("positions", {})
+        if positions:
+            print("\n[9] Weinstein Stage 警告チェック")
+            # 現在の価格データを取得
+            import yfinance as yf
+            codes = list(positions.keys())
+            tickers = []
+            for code in codes:
+                pos = positions[code]
+                market = pos.get("market", "JP")
+                tickers.append(f"{code}.T" if market == "JP" else code)
+
+            price_data = {}
+            try:
+                data = yf.download(tickers, period="1d", progress=False)
+                if not data.empty:
+                    close_data = data["Close"]
+                    for code, ticker in zip(codes, tickers):
+                        try:
+                            if ticker in close_data.columns:
+                                val = close_data[ticker].iloc[-1]
+                            else:
+                                val = close_data.iloc[-1]
+                                if hasattr(val, "__len__") and not isinstance(val, (int, float)):
+                                    val = val.iloc[0]
+                            if val is not None and float(val) == float(val):
+                                price_data[code] = float(val)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+            stage_warnings = _stage_warn(positions, price_data)
+            if stage_warnings:
+                n = len(stage_warnings)
+                print(f"  ⚠️ Stage警告: {n}件")
+                for w in stage_warnings:
+                    print(f"    {w.code}: {w.message}")
+                if not dry_run:
+                    from screener.notifier import notify_sell_signals
+                    notify_sell_signals(stage_warnings, today)
+            else:
+                print("  Stage警告なし ✓")
+    except Exception as e:
+        print(f"\n[9] [ERROR] Stage Analysis: {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="MEGA BreakOut デイリーランナー")
     parser.add_argument("--universe", type=str, default="us_all",
@@ -899,6 +968,9 @@ def main():
     previous = load_previous_signals(today)
     diff = diff_signals(all_signals, previous)
     print(format_diff_summary(diff))
+
+    # ---- 新戦略スキャン（オプション）----
+    _run_new_strategy_scans(today, dry_run=args.dry_run, regime=regime_trend)
 
     # ---- ポジション監視 ----
     print("\n[6] ポジション監視")
