@@ -104,12 +104,12 @@ def get_prev_top_s_code(target_date: str) -> str | None:
 
 
 def get_prev_top_s(target_date: str) -> tuple:
-    """前日のJP MEGA S最上位銘柄の(code, name)を返す（最大7日遡行）。"""
+    """前日のJP MEGA 総合スコア1位銘柄の(code, name)を返す（最大7日遡行）。"""
     prev = load_previous_enriched_signals(target_date)
     mega_jp = prev.get("mega:JP", [])
-    for s in mega_jp:
-        if s.get("total_rank") == "S":
-            return s.get("code"), s.get("name", "")
+    if mega_jp:
+        top = max(mega_jp, key=lambda x: x.get("total_score", 0))
+        return top.get("code"), top.get("name", "")
     return None, ""
 
 

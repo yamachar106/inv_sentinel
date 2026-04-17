@@ -568,12 +568,12 @@ def _load_signal_history(days: int = 10) -> list[dict]:
             if not enriched:
                 continue
 
-            # S最上位
-            s_stocks = sorted(
-                [s for s in enriched if s.get("total_rank") == "S"],
-                key=lambda x: -x.get("total_score", 0),
-            )
-            top = s_stocks[0] if s_stocks else None
+            # 総合スコア1位（ランク問わず）
+            sorted_all = sorted(enriched, key=lambda x: -x.get("total_score", 0))
+            top = sorted_all[0] if sorted_all else None
+
+            s_count = sum(1 for s in enriched if s.get("total_rank") == "S")
+            a_count = sum(1 for s in enriched if s.get("total_rank") == "A")
 
             entry = {
                 "date": date_str,
@@ -581,8 +581,9 @@ def _load_signal_history(days: int = 10) -> list[dict]:
                 "top_name": (name_map.get(top["code"], "") or top.get("name", ""))
                             if top else None,
                 "top_score": top.get("total_score", 0) if top else 0,
-                "s_count": len(s_stocks),
-                "a_count": sum(1 for s in enriched if s.get("total_rank") == "A"),
+                "top_rank": top.get("total_rank", "") if top else "",
+                "s_count": s_count,
+                "a_count": a_count,
                 "total_count": len(enriched),
             }
             history.append(entry)
@@ -614,7 +615,7 @@ def _next_trading_date() -> str:
 
 
 def _render_signal_history_and_rotation():
-    """S最上位の推移テーブル + ローテーション状態の詳細表示"""
+    """総合1位の推移テーブル + ローテーション状態の詳細表示"""
 
     # ── ローテーション状態 ──
     rot = _load_rotation_state()
@@ -629,12 +630,14 @@ def _render_signal_history_and_rotation():
         confirm_cand = rot.get("confirm_candidate")
         confirm_count = rot.get("confirm_count", 0)
 
+        name_map = _load_jp_name_map()
+
         if mode == "long-hold":
             mode_label = "🔒 Long Hold"
             mode_desc = "SL(-20%)/TP(+40%)到達まで保有継続。ローテーション停止中。"
         else:
-            mode_label = "🔄 Confirm-3"
-            mode_desc = "新銘柄が3日連続TOP達成で切替。5日連続TOPでLH発動。"
+            mode_label = "🔄 3日確認ルール"
+            mode_desc = "総合スコア1位が3日連続で同じ銘柄ならエントリー/切替。5日連続1位でLong Hold発動。"
 
         st.markdown(f"**ローテーションモード:** {mode_label}")
         st.caption(mode_desc)
@@ -642,13 +645,12 @@ def _render_signal_history_and_rotation():
         cols = st.columns(4)
         with cols[0]:
             if held:
-                name_map = _load_jp_name_map()
                 label = name_map.get(held, held_name) or held
                 st.metric("保有銘柄", f"{label} ({held})")
             else:
-                st.metric("保有銘柄", "CASH")
+                st.metric("保有銘柄", "CASH（未エントリー）")
         with cols[1]:
-            st.metric("TOP連続", f"{streak}日",
+            st.metric("連続1位", f"{streak}日",
                        delta=f"LH発動まで{max(0, 5 - streak)}日" if mode != "long-hold" and held else None)
         with cols[2]:
             if buy_price and buy_price > 0:
@@ -659,24 +661,26 @@ def _render_signal_history_and_rotation():
                 st.metric("SL / TP", "—")
         with cols[3]:
             if confirm_cand and confirm_count > 0:
-                name_map = _load_jp_name_map()
                 cand_label = name_map.get(confirm_cand, confirm_cand)
-                st.metric("確認中", f"{cand_label} ({confirm_count}/3)")
+                if held:
+                    st.metric("切替候補", f"{cand_label} ({confirm_count}/3日)")
+                else:
+                    st.metric("エントリー候補", f"{cand_label} ({confirm_count}/3日)")
             else:
-                st.metric("確認中", "なし")
+                st.metric("候補", "なし")
 
         if updated:
             st.caption(f"最終更新: {updated}" + (f" | LH突入: {lh_entered}" if lh_entered else ""))
 
         st.markdown("---")
 
-    # ── S最上位 推移テーブル ──
+    # ── 総合1位 推移テーブル ──
     history = _load_signal_history(days=14)
     if not history:
         st.info("シグナル履歴がありません")
         return
 
-    st.markdown("**S最上位の日次推移**")
+    st.markdown("**総合1位の日次推移**")
 
     # テーブル構築
     rows = []
@@ -694,8 +698,8 @@ def _render_signal_history_and_rotation():
         rows.append({
             "日付": h["date"],
             "": change,
-            "S最上位": f"{name} ({top})" if top else "—",
-            "スコア": f"{score:.1f}" if score else "—",
+            "総合1位": f"{name} ({top})" if top else "—",
+            "スコア": f"{score:.1f}({h.get('top_rank', '')})" if score else "—",
             "S": h["s_count"],
             "A": h["a_count"],
             "計": h["total_count"],
@@ -717,54 +721,44 @@ def _render_action_hero(df: pd.DataFrame, prices: dict, names: dict):
 
     # 休場日チェック
     if _is_market_closed_day():
-        # 次の取引日のS最上位を表示（直近の計算結果ベース）
-        s_df = df[df["総合ランク"] == "S"]
-        top_s = s_df.iloc[0] if not s_df.empty else None
+        rot_state_h = _load_rotation_state()
+        rot_held_h = rot_state_h.get("held_code")
+        rot_held_name_h = rot_state_h.get("held_name", "")
         next_date = _next_trading_date()
+        name_map_h = _load_jp_name_map()
 
-        if top_s is not None:
-            top_name = top_s["名前"] if top_s["名前"] else top_s["コード"]
-            top_code = top_s["コード"]
-            st.markdown(
-                f"""<div style="
-                    background: linear-gradient(135deg, #6b728015, #6b728005);
-                    border: 2px solid #6b7280;
-                    border-radius: 12px;
-                    padding: 24px;
-                    margin-bottom: 16px;
-                ">
-                <div style="font-size: 0.9em; color: #888; margin-bottom: 4px;">休場日</div>
-                <div style="font-size: 1.8em; font-weight: bold; color: #6b7280;">
-                    😴 休場日 — アクション不要
-                </div>
-                <div style="font-size: 1.1em; color: #ccc; margin-top: 12px;">
-                    {next_date} 寄り付き予定: 🟢 <b>{top_name}</b> ({top_code}) 総合{top_s['総合']:.0f}(S)
-                </div>
-                <div style="font-size: 0.85em; color: #888; margin-top: 4px;">
-                    ※ 取引日の16:00確定値で最終判断
-                </div>
-                </div>""",
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown(
-                f"""<div style="
-                    background: linear-gradient(135deg, #6b728015, #6b728005);
-                    border: 2px solid #6b7280;
-                    border-radius: 12px;
-                    padding: 24px;
-                    margin-bottom: 16px;
-                ">
-                <div style="font-size: 0.9em; color: #888; margin-bottom: 4px;">休場日</div>
-                <div style="font-size: 1.8em; font-weight: bold; color: #6b7280;">
-                    😴 休場日 — アクション不要
-                </div>
-                <div style="font-size: 1.0em; color: #888; margin-top: 8px;">
-                    S銘柄なし — {next_date}の確定値を待つ
-                </div>
-                </div>""",
-                unsafe_allow_html=True,
-            )
+        # 総合1位
+        top_h = df.iloc[0] if not df.empty else None
+        top_name_h = top_h["名前"] if top_h is not None and top_h["名前"] else (top_h["コード"] if top_h is not None else "")
+        top_code_h = top_h["コード"] if top_h is not None else None
+
+        # 保有情報
+        held_info = ""
+        if rot_held_h:
+            held_label_h = name_map_h.get(rot_held_h, rot_held_name_h) or rot_held_h
+            held_info = f'<div style="font-size:1.0em;color:#ccc;margin-top:12px;">保有中: <b>{held_label_h}</b> ({rot_held_h})</div>'
+        if top_h is not None:
+            held_info += f'<div style="font-size:0.9em;color:#888;margin-top:4px;">総合1位: {top_name_h} ({top_code_h}) — {top_h["総合"]:.0f}({top_h["総合ランク"]})</div>'
+
+        st.markdown(
+            f"""<div style="
+                background: linear-gradient(135deg, #6b728015, #6b728005);
+                border: 2px solid #6b7280;
+                border-radius: 12px;
+                padding: 24px;
+                margin-bottom: 16px;
+            ">
+            <div style="font-size: 0.9em; color: #888; margin-bottom: 4px;">休場日</div>
+            <div style="font-size: 1.8em; font-weight: bold; color: #6b7280;">
+                😴 休場日 — アクション不要
+            </div>
+            {held_info}
+            <div style="font-size: 0.85em; color: #888; margin-top: 4px;">
+                ※ {next_date}の取引日16:00確定値で最終判断
+            </div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
         st.divider()
         return
 
@@ -779,65 +773,90 @@ def _render_action_hero(df: pd.DataFrame, prices: dict, names: dict):
     rot_buy_price = rot_state.get("buy_price")
     rot_updated = rot_state.get("updated", "")
 
-    # 当日のS最上位
-    s_df = df[df["総合ランク"] == "S"]
-    top_s = s_df.iloc[0] if not s_df.empty else None
-    top_code = top_s["コード"] if top_s is not None else None
-    top_name = top_s["名前"] if top_s is not None else ""
+    # 当日の総合スコア1位（ランク問わず）
+    top_row = df.iloc[0] if not df.empty else None
+    top_code = top_row["コード"] if top_row is not None else None
+    top_name = top_row["名前"] if top_row is not None else ""
+    top_rank = top_row["総合ランク"] if top_row is not None else ""
+    top_score = top_row["総合"] if top_row is not None else 0
 
-    # 前日のS最上位
-    prev_code, prev_name = _get_prev_top_s()
+    # 保有銘柄の情報
+    held_row = None
+    if rot_held:
+        held_rows = df[df["コード"] == rot_held]
+        held_row = held_rows.iloc[0] if not held_rows.empty else None
 
     # アクション判定（ローテーション状態を反映）
     top_label = top_name if top_name else top_code
+    name_map = _load_jp_name_map()
+    held_label = name_map.get(rot_held, rot_held_name) if rot_held else ""
+
     if rot_mode == "long-hold" and rot_held:
         action = "LONG_HOLD"
         action_icon = "🔒"
         action_color = "#8b5cf6"  # purple
-        held_label = rot_held_name or rot_held
-        action_text = f"LONG HOLD {held_label} — SL/TPまで保有"
-    elif top_code is None:
-        action = "EXIT"
-        action_icon = "➡️"
-        action_color = "#ef4444"
-        action_text = "EXIT to CASH — S銘柄なし、全売却"
-    elif prev_code is None:
+        action_text = f"LONG HOLD {held_label} ({rot_held}) — SL/TPのみ"
+    elif not rot_held and rot_confirm_count >= 3:
         action = "BUY"
         action_icon = "🟢"
         action_color = "#22c55e"
-        action_text = f"BUY {top_label} ({top_code})"
-    elif top_code == prev_code:
+        action_text = f"BUY {top_label} ({top_code}) — 3日連続1位確定"
+    elif not rot_held:
+        action = "WAIT"
+        action_icon = "⏳"
+        action_color = "#6b7280"
+        action_text = "CASH — エントリー待ち"
+    elif rot_held and top_code == rot_held:
         action = "HOLD"
         action_icon = "✅"
         action_color = "#3b82f6"
-        action_text = f"HOLD {top_label} — 変更なし"
-    else:
+        action_text = f"HOLD {held_label} ({rot_held})"
+    elif rot_held and rot_confirm_count >= 3:
         action = "SWITCH"
         action_icon = "🔄"
         action_color = "#f59e0b"
-        action_text = f"SWITCH → {top_label} ({top_code})"
+        action_text = f"SWITCH {held_label} → {top_label} ({top_code})"
+    elif rot_held:
+        action = "HOLD"
+        action_icon = "✅"
+        action_color = "#3b82f6"
+        action_text = f"HOLD {held_label} ({rot_held}) — 切替条件未達"
+    else:
+        action = "HOLD"
+        action_icon = "✅"
+        action_color = "#3b82f6"
+        action_text = "HOLD"
 
     # モードバッジ
     if rot_mode == "long-hold":
         mode_badge = '<span style="background:#8b5cf6;color:white;padding:2px 8px;border-radius:4px;font-size:0.75em;">🔒 Long Hold</span>'
-    elif rot_confirm_candidate and rot_confirm_count > 0:
-        mode_badge = f'<span style="background:#f59e0b;color:white;padding:2px 8px;border-radius:4px;font-size:0.75em;">確認 {rot_confirm_count}/3</span>'
     else:
-        mode_badge = '<span style="background:#3b82f6;color:white;padding:2px 8px;border-radius:4px;font-size:0.75em;">Hybrid LH</span>'
+        mode_badge = '<span style="background:#3b82f6;color:white;padding:2px 8px;border-radius:4px;font-size:0.75em;">3日確認ルール</span>'
 
     # SL/TP表示
     sltp_line = ""
-    if rot_buy_price and rot_buy_price > 0 and action in ("HOLD", "LONG_HOLD"):
+    if rot_buy_price and rot_buy_price > 0 and rot_held:
         sl = round(rot_buy_price * 0.80)
         tp = round(rot_buy_price * 1.40)
         sltp_line = f'<div style="font-size:0.85em;color:#888;margin-top:4px;">SL ¥{sl:,} (-20%) | TP ¥{tp:,} (+40%)</div>'
 
+    # 保有銘柄 vs 1位の関係を表示
+    status_line = ""
+    if rot_held and top_code and top_code != rot_held:
+        status_line = f'<div style="font-size:0.9em;color:#aaa;margin-top:8px;">保有: <b>{held_label}</b> ({rot_held})'
+        if held_row is not None:
+            status_line += f' — 総合{held_row["総合"]:.0f}({held_row["総合ランク"]})'
+        status_line += '</div>'
+        status_line += f'<div style="font-size:0.9em;color:#aaa;">1位: <b>{top_label}</b> ({top_code}) — 総合{top_score:.0f}({top_rank})</div>'
+
     # 確認中候補の表示
     confirm_line = ""
     if rot_confirm_candidate and rot_confirm_count > 0 and action not in ("LONG_HOLD",):
-        name_map = _load_jp_name_map()
         cand_name = name_map.get(rot_confirm_candidate, rot_confirm_candidate)
-        confirm_line = f'<div style="font-size:0.9em;color:#f59e0b;margin-top:6px;">⏳ 確認中: {cand_name} ({rot_confirm_candidate}) — {rot_confirm_count}/3日</div>'
+        if rot_held:
+            confirm_line = f'<div style="font-size:0.9em;color:#f59e0b;margin-top:6px;">⏳ 切替候補: {cand_name} ({rot_confirm_candidate}) — 連続1位 {rot_confirm_count}/3日達成で切替</div>'
+        else:
+            confirm_line = f'<div style="font-size:0.9em;color:#f59e0b;margin-top:6px;">⏳ エントリー候補: {cand_name} ({rot_confirm_candidate}) — 連続1位 {rot_confirm_count}/3日達成で購入</div>'
 
     # ヒーローカード
     st.markdown(
@@ -853,49 +872,45 @@ def _render_action_hero(df: pd.DataFrame, prices: dict, names: dict):
             {action_icon} {action_text}
         </div>
         {sltp_line}
+        {status_line}
         {confirm_line}
         </div>""",
         unsafe_allow_html=True,
     )
 
-    if top_s is not None:
-        # SWITCH の場合: 売り→買い表示
-        if action == "SWITCH":
-            prev_label = prev_name if prev_name else prev_code
-            st.markdown(
-                f"売り: **{prev_label}** ({prev_code}) → 買い: **{top_label}** ({top_code})"
-            )
-
-        # S最上位の詳細表示
+    # 1位銘柄の詳細（保有中でない場合は1位、保有中ならその銘柄を表示）
+    show_row = held_row if held_row is not None else top_row
+    show_code = rot_held if held_row is not None else top_code
+    if show_row is not None:
         cols = st.columns([2, 1.5, 1.5, 1.5])
         with cols[0]:
-            close_series = prices.get(top_s["ticker"], {}).get("close_series")
+            close_series = prices.get(show_row["ticker"], {}).get("close_series")
             if close_series is not None and len(close_series) > 20:
-                _render_mini_chart(close_series, f"hero_{top_code}", days=90)
+                _render_mini_chart(close_series, f"hero_{show_code}", days=90)
         with cols[1]:
-            st.metric("現在値", f"¥{top_s['現在値']:,.0f}")
-            st.metric("総合スコア", f"{top_s['総合']:.0f} (S)")
+            st.metric("現在値", f"¥{show_row['現在値']:,.0f}")
+            st.metric("総合スコア", f"{show_row['総合']:.0f} ({show_row['総合ランク']})")
         with cols[2]:
-            dist = top_s["52W距離"]
+            dist = show_row["52W距離"]
             dist_color = "green" if dist >= -2 else "orange" if dist >= -5 else "red"
-            gc_icon = "🟢" if top_s["GC"] else "🔴"
-            sma_icon = "🟢" if top_s["SMA200上"] else "🔴"
+            gc_icon = "🟢" if show_row["GC"] else "🔴"
+            sma_icon = "🟢" if show_row["SMA200上"] else "🔴"
             st.markdown(f"52W :{dist_color}[{dist:+.1f}%]")
             st.markdown(f"{gc_icon} GC | {sma_icon} SMA200")
-            st.markdown(f"RSI {top_s['RSI']:.0f} | Vol ×{top_s['出来高比']:.1f}")
+            st.markdown(f"RSI {show_row['RSI']:.0f} | Vol ×{show_row['出来高比']:.1f}")
         with cols[3]:
-            ev = top_s["BT_EV"]
+            ev = show_row["BT_EV"]
             ev_color = "green" if ev > 0 else "red"
             st.markdown(f"BT :{ev_color}[EV{ev:+.1f}%]")
-            st.markdown(f"勝率 {top_s['BT_WR']:.0f}%")
-            st.caption(f"SL ¥{top_s['SL']:,.0f} / TP ¥{top_s['TP']:,.0f}")
+            st.markdown(f"勝率 {show_row['BT_WR']:.0f}%")
+            st.caption(f"SL ¥{show_row['SL']:,.0f} / TP ¥{show_row['TP']:,.0f}")
 
     st.divider()
 
 
 def render_jp_action():
-    """JP MEGA S最上位フルベット — アクション + スコアボード"""
-    st.header("🎯 JP MEGA S最上位フルベット")
+    """JP MEGA 総合1位フルベット — アクション + スコアボード"""
+    st.header("🎯 JP MEGA 総合1位フルベット")
 
     strength_data = load_strength_data()
     if not strength_data:
@@ -934,13 +949,13 @@ def render_jp_action():
     n_gc = len(df[df["GC"]])
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("総合S", f"{n_s_total}銘柄", help="翌朝の購入候補")
-    c2.metric("総合A", f"{n_a_total}銘柄", help="次点候補")
+    c1.metric("総合S", f"{n_s_total}銘柄", help="地力+タイミングの総合評価")
+    c2.metric("総合A", f"{n_a_total}銘柄", help="総合評価A")
     c3.metric("SMA200上", f"{n_sma200_ok}/{len(df)}")
     c4.metric("GC", f"{n_gc}/{len(df)}")
 
-    # ─── S最上位 推移 + ローテーション状態 ───
-    with st.expander("📈 S最上位の推移 / ローテーション状態", expanded=False):
+    # ─── 総合1位 推移 + ローテーション状態 ───
+    with st.expander("📈 総合1位の推移 / ローテーション状態", expanded=False):
         _render_signal_history_and_rotation()
 
     st.divider()

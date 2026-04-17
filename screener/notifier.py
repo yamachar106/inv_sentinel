@@ -1117,17 +1117,17 @@ def _build_mega_jp_message(
         lines.extend(_build_rotation_action_section(rotation_result))
     else:
         # フォールバック: 旧ロジック（rotation_result未提供時）
-        s_signals = [s for s in signals if s["total_rank"] == "S"]
-        top_s = s_signals[0] if s_signals else None
+        sorted_sigs = sorted(signals, key=lambda x: -x.get("total_score", 0))
+        top_s = sorted_sigs[0] if sorted_sigs else None
         top_s_code = top_s["code"] if top_s else None
         top_s_name = top_s.get("name", "") if top_s else ""
         top_label = top_s_name if top_s_name else top_s_code
         prev_label = prev_top_s_name if prev_top_s_name else prev_top_s_code
 
-        lines.append("🎯 *翌朝アクション (S最上位フルベット)*")
+        lines.append("🎯 *翌朝アクション (総合1位フルベット)*")
         lines.append("━" * 25)
         if top_s is None:
-            lines.append("  ➡️ *EXIT to CASH* — S銘柄なし、全売却")
+            lines.append("  ➡️ *EXIT to CASH* — 対象銘柄なし")
         elif prev_top_s_code is None:
             lines.append(
                 f"  🟢 *BUY {top_label}* ({top_s_code}) ¥{top_s['close']:,.0f}"
@@ -1195,7 +1195,7 @@ def _build_rotation_action_section(rot: dict) -> list[str]:
     top_name = rot.get("top_name", "")
     top_label = top_name or top_code or ""
 
-    mode_str = "Long Hold" if mode == "long-hold" else "Hybrid LH"
+    mode_str = "Long Hold" if mode == "long-hold" else "3日確認ルール"
     lines.append(f"🎯 *翌朝アクション ({mode_str})*")
     lines.append("━" * 25)
 
@@ -1219,7 +1219,7 @@ def _build_rotation_action_section(rot: dict) -> list[str]:
         else:
             lines.append(f"  ✅ *HOLD* — 変更なし")
     elif action == "EXIT":
-        lines.append(f"  ➡️ *EXIT to CASH* — S銘柄なし")
+        lines.append(f"  ➡️ *EXIT to CASH* — 対象銘柄なし")
     elif action == "SL_EXIT":
         lines.append(f"  🔴 *SL EXIT* — {reason}")
     elif action == "TP_EXIT":

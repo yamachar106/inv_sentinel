@@ -93,11 +93,11 @@ def evaluate_rotation(
     if not MEGA_JP_LH_ENABLED:
         return _evaluate_simple(signals, state, today)
 
-    # S銘柄のTOP
-    s_signals = [s for s in signals if s.get("total_rank") == "S"]
-    top_code = s_signals[0]["code"] if s_signals else None
-    top_name = s_signals[0].get("name", "") if s_signals else None
-    top_score = s_signals[0].get("total_score", 0) if s_signals else 0
+    # 総合スコア1位（ランク問わず）
+    sorted_signals = sorted(signals, key=lambda x: -x.get("total_score", 0))
+    top_code = sorted_signals[0]["code"] if sorted_signals else None
+    top_name = sorted_signals[0].get("name", "") if sorted_signals else None
+    top_score = sorted_signals[0].get("total_score", 0) if sorted_signals else 0
 
     held_code = state.get("held_code")
     mode = state.get("mode", "confirm-3")
@@ -121,11 +121,11 @@ def evaluate_rotation(
         result["sl_price"] = round(buy_price * (1 + MEGA_JP_STOP_LOSS))
         result["tp_price"] = round(buy_price * (1 + MEGA_JP_PROFIT_TARGET))
 
-    # ---- S銘柄なし → EXIT ----
+    # ---- 対象銘柄なし → EXIT ----
     if top_code is None:
         if held_code:
             result["action"] = "EXIT"
-            result["reason"] = "S銘柄なし → CASH化"
+            result["reason"] = "対象銘柄なし → CASH化"
             state["held_code"] = None
             state["held_name"] = None
             state["held_since"] = None
@@ -137,7 +137,7 @@ def evaluate_rotation(
             state["confirm_count"] = 0
         else:
             result["action"] = "HOLD"
-            result["reason"] = "S銘柄なし — CASH維持"
+            result["reason"] = "対象銘柄なし — CASH維持"
         state["updated"] = today
         result["state"] = state
         return result
@@ -280,24 +280,24 @@ def _reset_to_cash(state: dict, today: str) -> None:
 
 def _evaluate_simple(signals, state, today):
     """LH無効時のシンプルなTOP追従（後方互換）。"""
-    s_signals = [s for s in signals if s.get("total_rank") == "S"]
-    top_code = s_signals[0]["code"] if s_signals else None
-    top_name = s_signals[0].get("name", "") if s_signals else None
+    sorted_signals = sorted(signals, key=lambda x: -x.get("total_score", 0))
+    top_code = sorted_signals[0]["code"] if sorted_signals else None
+    top_name = sorted_signals[0].get("name", "") if sorted_signals else None
 
     held_code = state.get("held_code")
 
     if not top_code:
         action = "EXIT" if held_code else "HOLD"
-        reason = "S銘柄なし"
+        reason = "対象銘柄なし"
     elif not held_code:
         action = "BUY"
-        reason = f"S最上位 {top_code} を購入"
+        reason = f"総合1位 {top_code} を購入"
     elif top_code == held_code:
         action = "HOLD"
-        reason = "S最上位 = 保有中"
+        reason = "総合1位 = 保有中"
     else:
         action = "SWITCH"
-        reason = f"S最上位変更: {held_code} → {top_code}"
+        reason = f"総合1位変更: {held_code} → {top_code}"
 
     state["updated"] = today
     return {
