@@ -33,7 +33,10 @@ from screener.mega_jp import scan_mega_jp, check_monthly_refresh
 from screener.notifier import (
     notify_mega, notify_mega_jp, _clean_us_name,
     _resolve_webhook_url, _send_slack,
+    notify_sell_signals,
 )
+from screener.portfolio import load_portfolio, save_portfolio, update_peak_prices
+from screener.sell_monitor import check_all_positions
 from screener.signal_store import (
     save_signals, load_previous_signals, diff_signals, format_diff_summary,
     track_mega_pb, check_mega_upgrade, get_mega_bo_history,
@@ -173,6 +176,7 @@ def build_digest(
     today: str,
     regime_header: str | None = None,
     mega_jp_signals: list[dict] | None = None,
+    sell_signals: list | None = None,
 ) -> str:
     """ダイジェストメッセージを構築"""
     lines = [f"*MEGA Daily Digest* ({today})\n"]
@@ -200,6 +204,15 @@ def build_digest(
         n_a = sum(1 for s in mega_jp_signals if s["total_rank"] == "A")
         n_bo_jp = sum(1 for s in mega_jp_signals if s.get("bo_signal") == "breakout")
         lines.append(f"🏯 *JP S/A: {n_s+n_a}件* (S:{n_s} A:{n_a} BO:{n_bo_jp})")
+
+    # 売却シグナル
+    if sell_signals:
+        has_any = True
+        n_high = sum(1 for s in sell_signals if s.urgency == "HIGH")
+        if n_high > 0:
+            lines.append(f"🔴 *売却シグナル: {n_high}件* — 要即時対応")
+        else:
+            lines.append(f"🟡 売却注意: {len(sell_signals)}件")
 
     if not has_any:
         lines.append("シグナルなし — 待機継続")
@@ -377,6 +390,127 @@ def _run_jp_mega_only(args, today, regime_trend, regime_header, regime_dict):
     print(f"\nJP MEGA完了 ({elapsed:.0f}秒)")
 
 
+def _run_portfolio_monitor(dry_run: bool = False) -> list:
+    """ポジション監視: 売却シグナル検出 + Slack通知。
+
+    Returns:
+        検出された SellSignal のリスト
+    """
+    import yfinance as yf
+
+    today_str = date.today().isoformat()
+    portfolio = load_portfolio()
+    positions = portfolio.get("positions", {})
+
+    if not positions:
+        print("  ポジションなし — スキップ")
+        return []
+
+    print(f"  監視中: {len(positions)}ポジション")
+
+    # 価格取得
+    errors = []
+    price_data = {}
+    codes = list(positions.keys())
+    tickers = []
+    for code in codes:
+        pos = positions[code]
+        market = pos.get("market", "JP")
+        tickers.append(f"{code}.T" if market == "JP" else code)
+
+    try:
+        data = yf.download(tickers, period="1d", progress=False)
+        if data.empty:
+            errors.append("yfinance: 価格データ取得失敗（空データ）")
+        else:
+            close = data["Close"]
+            for code, ticker in zip(codes, tickers):
+                try:
+                    if ticker in close.columns:
+                        val = close[ticker].iloc[-1]
+                    else:
+                        # single ticker: columns may not have ticker level
+                        val = close.iloc[-1]
+                        if hasattr(val, "__len__") and not isinstance(val, (int, float)):
+                            val = val.iloc[0]
+                    if val is not None and float(val) == float(val):  # not NaN
+                        price_data[code] = float(val)
+                    else:
+                        errors.append(f"価格取得失敗: {code}")
+                except Exception:
+                    errors.append(f"価格取得失敗: {code}")
+    except Exception as e:
+        errors.append(f"yfinance例外: {e}")
+
+    if errors:
+        for err in errors:
+            print(f"  [ERROR] {err}")
+
+    if not price_data:
+        msg = f"⚠️ ポジション監視失敗 ({today_str})\n価格データ取得不能: {', '.join(codes)}"
+        if not dry_run:
+            webhook = _resolve_webhook_url("mega", "JP") or _resolve_webhook_url()
+            if webhook:
+                _send_slack(webhook, msg)
+        return []
+
+    # ピーク価格更新
+    updated = update_peak_prices(price_data)
+    if updated:
+        print(f"  ピーク更新: {', '.join(updated)}")
+
+    # 売却ルールチェック
+    signals = check_all_positions(positions, price_data)
+
+    # ポジション状態を保存（peak_price等の更新を反映）
+    save_portfolio(portfolio)
+
+    # 現在値サマリー出力
+    for code, pos in positions.items():
+        cp = price_data.get(code)
+        if cp is None:
+            continue
+        bp = pos["buy_price"]
+        ret = (cp - bp) / bp
+        market = pos.get("market", "JP")
+        if market == "JP":
+            print(f"  {code}: {cp:,.0f}円 ({ret:+.1%}) peak={pos.get('peak_price', bp):,.0f}")
+        else:
+            print(f"  {code}: ${cp:,.2f} ({ret:+.1%}) peak=${pos.get('peak_price', bp):,.2f}")
+
+    # 売却シグナル通知
+    if signals:
+        n_high = sum(1 for s in signals if s.urgency == "HIGH")
+        n_med = sum(1 for s in signals if s.urgency == "MEDIUM")
+        print(f"  🚨 売却シグナル: {len(signals)}件 (HIGH:{n_high} MED:{n_med})")
+        for s in signals:
+            print(f"    {'🔴' if s.urgency == 'HIGH' else '🟡'} {s.code}: {s.message}")
+
+        if not dry_run:
+            if notify_sell_signals(signals, today_str):
+                print("  売却シグナル通知完了")
+            else:
+                print("  [ERROR] 売却シグナル通知失敗")
+                # フォールバック: MEGAチャンネルにも送信
+                webhook = _resolve_webhook_url("mega", "JP") or _resolve_webhook_url("mega", "US")
+                if webhook:
+                    fallback = f"⚠️ 売却シグナル {len(signals)}件 ({today_str})\n"
+                    fallback += "\n".join(f"  {s.code}: {s.message}" for s in signals)
+                    _send_slack(webhook, fallback)
+    else:
+        print("  売却シグナルなし ✓")
+
+    # エラーがあった場合の通知
+    if errors and not dry_run:
+        webhook = _resolve_webhook_url("mega", "JP") or _resolve_webhook_url()
+        if webhook:
+            err_msg = f"⚠️ ポジション監視エラー ({today_str})\n"
+            err_msg += "\n".join(f"  • {e}" for e in errors)
+            _send_slack(webhook, err_msg)
+
+    return signals
+
+
 def main():
     parser = argparse.ArgumentParser(description="MEGA BreakOut デイリーランナー")
     parser.add_argument("--universe", type=str, default="us_all",
@@ -388,7 +522,7 @@ def main():
     parser.add_argument("--skip-healthcheck", action="store_true",
                         help="ヘルスチェックをスキップ")
     parser.add_argument("--strategy", type=str, default=None,
-                        help="実行戦略 (jp-mega: JP MEGAのみ)")
+                        help="実行戦略 (jp-mega: JP MEGAのみ, monitor: ポジション監視のみ)")
     parser.add_argument("--morning-reminder", action="store_true",
                         help="朝リマインド（前日確定のアクションを再通知）")
     parser.add_argument("--market", type=str, default=None, help=argparse.SUPPRESS)
@@ -399,6 +533,13 @@ def main():
 
     if args.morning_reminder:
         _send_morning_reminder(today, dry_run=args.dry_run)
+        return
+
+    # ---- ポジション監視のみモード ----
+    if args.strategy == "monitor":
+        print(f">> ポジション監視 ({today})")
+        print("=" * 60)
+        _run_portfolio_monitor(dry_run=args.dry_run)
         return
 
     print(f">> MEGA BreakOut Daily Run: {today}")
@@ -517,6 +658,10 @@ def main():
     diff = diff_signals(all_signals, previous)
     print(format_diff_summary(diff))
 
+    # ---- ポジション監視 ----
+    print("\n[6] ポジション監視")
+    sell_signals = _run_portfolio_monitor(dry_run=args.dry_run)
+
     # ---- ダイジェスト通知 ----
     elapsed = time.time() - start_time
     print(f"\n完了 ({elapsed:.0f}秒)")
@@ -542,6 +687,7 @@ def main():
             mega_signals, today,
             regime_header=regime_header,
             mega_jp_signals=mega_jp_signals,
+            sell_signals=sell_signals if sell_signals else None,
         )
         # 押し目サマリーをダイジェストに追加
         if pullback_summary:

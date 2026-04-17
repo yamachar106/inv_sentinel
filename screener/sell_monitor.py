@@ -26,6 +26,10 @@ from screener.config import (
     BREAKOUT_STOP_LOSS,
     PARTIAL_PROFIT_TARGET,
     PARTIAL_PROFIT_RATIO,
+    MEGA_STOP_LOSS,
+    MEGA_PROFIT_TARGET,
+    MEGA_JP_STOP_LOSS,
+    MEGA_JP_PROFIT_TARGET,
 )
 
 
@@ -134,6 +138,14 @@ def _check_price_rules(pos: dict, current_price: float) -> list[SellSignal]:
                 rule="profit_target", urgency="HIGH",
                 message=f"2倍達成 ({ret:+.0%})",
             ))
+    elif strategy in ("mega", "mega_jp"):
+        tp = MEGA_JP_PROFIT_TARGET if market == "JP" else MEGA_PROFIT_TARGET
+        target = 1.0 + tp
+        if current_price >= buy_price * target:
+            signals.append(_sig(
+                rule="profit_target", urgency="HIGH",
+                message=f"利確目標達成 ({ret:+.0%}, 目標+{tp:.0%})",
+            ))
     else:
         # breakout
         target = 1.0 + BREAKOUT_PROFIT_TARGET  # 1.20
@@ -169,7 +181,12 @@ def _check_price_rules(pos: dict, current_price: float) -> list[SellSignal]:
 
     # ---- Rule 4: 損切りライン ----
     if not trailing_active:
-        stop = STOP_LOSS_PCT if strategy == "kuroten" else BREAKOUT_STOP_LOSS
+        if strategy == "kuroten":
+            stop = STOP_LOSS_PCT
+        elif strategy in ("mega", "mega_jp"):
+            stop = MEGA_JP_STOP_LOSS if market == "JP" else MEGA_STOP_LOSS
+        else:
+            stop = BREAKOUT_STOP_LOSS
         if ret <= stop:
             signals.append(_sig(
                 rule="stop_loss", urgency="HIGH",
@@ -228,7 +245,8 @@ def check_deficit_positions(positions: dict) -> list[SellSignal]:
         # IR Bank から四半期データ取得（DataFrameが返る）
         try:
             df = get_quarterly_data(code)
-        except Exception:
+        except Exception as e:
+            print(f"  [WARN] IR Bank データ取得失敗 ({code}): {e}")
             continue
 
         if df is None or df.empty or len(df) < 2:

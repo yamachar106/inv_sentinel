@@ -1,6 +1,13 @@
 name: MEGA BreakOut Daily
 
 on:
+  schedule:
+    # JP MEGA: 16:00 JST (月〜金)
+    - cron: "0 7 * * 1-5"
+    # Full Run (US+JP): 06:00 JST (火〜土)
+    - cron: "0 21 * * 1-5"
+    # 朝リマインド: 08:00 JST (月〜金)
+    - cron: "0 23 * * 0-4"
   workflow_dispatch:
     inputs:
       strategy:
@@ -10,6 +17,7 @@ on:
         options:
           - full
           - jp-mega
+          - monitor
           - morning-reminder
         default: full
       universe:
@@ -81,7 +89,20 @@ jobs:
         id: params
         run: |
           ARGS=""
-          STRATEGY="${{ github.event.inputs.strategy }}"
+
+          # schedule トリガーの場合、cron時刻からstrategyを判定
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            CRON="${{ github.event.schedule }}"
+            if [ "$CRON" = "0 23 * * 0-4" ]; then
+              STRATEGY="morning-reminder"
+            elif [ "$CRON" = "0 7 * * 1-5" ]; then
+              STRATEGY="jp-mega"
+            else
+              STRATEGY="full"
+            fi
+          else
+            STRATEGY="${{ github.event.inputs.strategy }}"
+          fi
 
           if [ "$STRATEGY" = "morning-reminder" ]; then
             ARGS="--morning-reminder"
@@ -93,6 +114,8 @@ jobs:
 
           if [ "$STRATEGY" = "jp-mega" ]; then
             ARGS="--strategy jp-mega --skip-healthcheck"
+          elif [ "$STRATEGY" = "monitor" ]; then
+            ARGS="--strategy monitor"
           fi
           # "full" or default: no --strategy flag (daily_run.py runs all)
 
@@ -135,6 +158,8 @@ jobs:
           for dir in data/signals data/universe data/cache; do
             [ -d "$dir" ] && git add "$dir/"
           done
+          [ -f data/portfolio.json ] && git add data/portfolio.json
+          [ -f data/portfolio_history.json ] && git add data/portfolio_history.json
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else

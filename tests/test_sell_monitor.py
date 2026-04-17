@@ -213,3 +213,46 @@ def test_profit_deceleration_no_trigger():
 
     signal = _check_profit_deceleration(df, pos, "1234")
     assert signal is None
+
+
+# ---------- MEGA戦略 ----------
+
+
+def test_profit_target_mega_jp():
+    """MEGA JP: +40%で利確シグナル (MEGA_JP_PROFIT_TARGET=0.40)。"""
+    pos = _make_position(strategy="mega_jp", buy_price=5000.0)
+    signals = _check_price_rules(pos, current_price=7000.0)
+
+    profit_signals = [s for s in signals if s.rule == "profit_target"]
+    assert len(profit_signals) == 1
+    assert profit_signals[0].urgency == "HIGH"
+    assert "利確目標達成" in profit_signals[0].message
+
+
+def test_profit_target_mega_us():
+    """MEGA US: +40%で利確シグナル (MEGA_PROFIT_TARGET=0.40)。"""
+    pos = _make_position(code="AAPL", strategy="mega", buy_price=200.0)
+    pos["market"] = "US"
+    signals = _check_price_rules(pos, current_price=280.0)
+
+    profit_signals = [s for s in signals if s.rule == "profit_target"]
+    assert len(profit_signals) == 1
+
+
+def test_stop_loss_mega_jp():
+    """MEGA JP: -20%で損切りシグナル (MEGA_JP_STOP_LOSS=-0.20)。"""
+    pos = _make_position(strategy="mega_jp", buy_price=5000.0)
+    signals = _check_price_rules(pos, current_price=4000.0)
+
+    sl_signals = [s for s in signals if s.rule == "stop_loss"]
+    assert len(sl_signals) == 1
+    assert sl_signals[0].urgency == "HIGH"
+
+
+def test_no_stop_loss_mega_at_minus_15():
+    """MEGA JP: -15%ではまだ損切りしない (閾値は-20%)。"""
+    pos = _make_position(strategy="mega_jp", buy_price=5000.0)
+    signals = _check_price_rules(pos, current_price=4250.0)
+
+    sl_signals = [s for s in signals if s.rule == "stop_loss"]
+    assert len(sl_signals) == 0

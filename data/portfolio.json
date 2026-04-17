@@ -1,0 +1,21 @@
+{
+  "positions": {
+    "4004": {
+      "code": "4004",
+      "strategy": "mega_jp",
+      "market": "JP",
+      "buy_date": "2026-04-14",
+      "buy_price": 13621.0,
+      "shares": 130,
+      "peak_price": 13621.0,
+      "trailing_active": false,
+      "partial_sold": false,
+      "notes": "S最上位フルベット開始",
+      "signal_context": {
+        "grade": "S",
+        "regime": "BULL",
+        "signal_date": "2026-04-14"
+      }
+    }
+  }
+}
