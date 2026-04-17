@@ -1065,12 +1065,14 @@ def notify_mega_jp(
     limit_order_section: list[str] | None = None,
     prev_top_s_code: str | None = None,
     prev_top_s_name: str = "",
+    rotation_result: dict | None = None,
 ) -> bool:
     """JP MEGA ¥1兆+ S/Aスコアリング通知を送信する。
 
     signals は mega_jp.scan_mega_jp() の返却値。
     prev_top_s_code: 前日のS最上位銘柄コード（ローテーション判定用）
     prev_top_s_name: 前日のS最上位銘柄の日本語名
+    rotation_result: evaluate_rotation()の結果（Hybrid LHモード時）
     """
     if not signals:
         return False
@@ -1084,7 +1086,7 @@ def notify_mega_jp(
 
     msg = _build_mega_jp_message(signals, date_str, regime_header,
                                   limit_order_section, prev_top_s_code,
-                                  prev_top_s_name)
+                                  prev_top_s_name, rotation_result)
     return _send_slack(mega_url, msg)
 
 
@@ -1095,6 +1097,7 @@ def _build_mega_jp_message(
     limit_order_section: list[str] | None = None,
     prev_top_s_code: str | None = None,
     prev_top_s_name: str = "",
+    rotation_result: dict | None = None,
 ) -> str:
     """JP MEGA S/Aスコアリング通知メッセージを構築"""
     lines = [f"*🏯 JP MEGA ¥1兆+ S/Aスコアリング* ({date_str})"]
@@ -1107,34 +1110,39 @@ def _build_mega_jp_message(
     n_bo = sum(1 for s in signals if s.get("bo_signal") == "breakout")
     lines.append(f"対象: S{n_s} A{n_a} | BO:{n_bo} 監視:{len(signals)-n_bo}\n")
 
-    # ローテーションアクション（S最上位フルベット戦略）
-    s_signals = [s for s in signals if s["total_rank"] == "S"]
-    top_s = s_signals[0] if s_signals else None
-    top_s_code = top_s["code"] if top_s else None
-    top_s_name = top_s.get("name", "") if top_s else ""
-    top_label = top_s_name if top_s_name else top_s_code
-    prev_label = prev_top_s_name if prev_top_s_name else prev_top_s_code
+    # ローテーションアクション
+    lines.append("━" * 25)
 
-    lines.append("━" * 25)
-    lines.append("🎯 *翌朝アクション (S最上位フルベット)*")
-    lines.append("━" * 25)
-    if top_s is None:
-        lines.append("  ➡️ *EXIT to CASH* — S銘柄なし、全売却")
-    elif prev_top_s_code is None:
-        lines.append(
-            f"  🟢 *BUY {top_label}* ({top_s_code}) ¥{top_s['close']:,.0f}"
-            f" (総合{top_s['total_score']:.0f})"
-        )
-    elif top_s_code == prev_top_s_code:
-        lines.append(
-            f"  ✅ *HOLD {top_label}* ({top_s_code}) — 変更なし"
-        )
+    if rotation_result:
+        lines.extend(_build_rotation_action_section(rotation_result))
     else:
-        lines.append(
-            f"  🔄 *SWITCH → {top_label}* ({top_s_code}) ¥{top_s['close']:,.0f}"
-            f" (総合{top_s['total_score']:.0f})"
-        )
-        lines.append(f"  　売り: {prev_label} ({prev_top_s_code}) → 買い: {top_label} ({top_s_code})")
+        # フォールバック: 旧ロジック（rotation_result未提供時）
+        s_signals = [s for s in signals if s["total_rank"] == "S"]
+        top_s = s_signals[0] if s_signals else None
+        top_s_code = top_s["code"] if top_s else None
+        top_s_name = top_s.get("name", "") if top_s else ""
+        top_label = top_s_name if top_s_name else top_s_code
+        prev_label = prev_top_s_name if prev_top_s_name else prev_top_s_code
+
+        lines.append("🎯 *翌朝アクション (S最上位フルベット)*")
+        lines.append("━" * 25)
+        if top_s is None:
+            lines.append("  ➡️ *EXIT to CASH* — S銘柄なし、全売却")
+        elif prev_top_s_code is None:
+            lines.append(
+                f"  🟢 *BUY {top_label}* ({top_s_code}) ¥{top_s['close']:,.0f}"
+                f" (総合{top_s['total_score']:.0f})"
+            )
+        elif top_s_code == prev_top_s_code:
+            lines.append(
+                f"  ✅ *HOLD {top_label}* ({top_s_code}) — 変更なし"
+            )
+        else:
+            lines.append(
+                f"  🔄 *SWITCH → {top_label}* ({top_s_code}) ¥{top_s['close']:,.0f}"
+                f" (総合{top_s['total_score']:.0f})"
+            )
+            lines.append(f"  　売り: {prev_label} ({prev_top_s_code}) → 買い: {top_label} ({top_s_code})")
     lines.append("")
 
     # BO銘柄を先頭に
@@ -1160,10 +1168,76 @@ def _build_mega_jp_message(
         lines.extend(limit_order_section)
 
     # BT実績
-    lines.append("*📈 S最上位フルベット (BT 5年)*")
-    lines.append("  CAGR+33% | MaxDD-35% | Sharpe1.24 | 200万→834万")
+    if rotation_result and rotation_result.get("mode") == "long-hold":
+        lines.append("*📈 Hybrid LH (WF BT 4年)*")
+        lines.append("  CAGR+40% | MaxDD-23% | Sharpe1.46")
+    else:
+        lines.append("*📈 Hybrid LH (WF BT 4年)*")
+        lines.append("  CAGR+40% | MaxDD-23% | Sharpe1.46")
 
     return "\n".join(lines)
+
+
+def _build_rotation_action_section(rot: dict) -> list[str]:
+    """Hybrid LHローテーションのアクションセクションを構築。"""
+    lines = []
+    action = rot.get("action", "HOLD")
+    mode = rot.get("mode", "confirm-3")
+    reason = rot.get("reason", "")
+    target_code = rot.get("target_code")
+    target_name = rot.get("target_name", "")
+    target_label = target_name or target_code or ""
+    confirm = rot.get("confirm_progress")
+    streak = rot.get("top_streak", 0)
+    sl_price = rot.get("sl_price")
+    tp_price = rot.get("tp_price")
+    top_code = rot.get("top_code", "")
+    top_name = rot.get("top_name", "")
+    top_label = top_name or top_code or ""
+
+    mode_str = "Long Hold" if mode == "long-hold" else "Hybrid LH"
+    lines.append(f"🎯 *翌朝アクション ({mode_str})*")
+    lines.append("━" * 25)
+
+    if action == "BUY":
+        lines.append(
+            f"  🟢 *BUY {target_label}* ({target_code})"
+        )
+    elif action == "SWITCH":
+        state = rot.get("state", {})
+        held_name = state.get("held_name", "")
+        held_code = state.get("held_code", "")  # already switched in state
+        # The previous held is in reason
+        lines.append(
+            f"  🔄 *SWITCH → {target_label}* ({target_code})"
+        )
+    elif action == "HOLD":
+        if mode == "long-hold":
+            lines.append(f"  🔒 *LONG HOLD* — SL/TPまで保有継続")
+        elif confirm:
+            lines.append(f"  ✅ *HOLD* — 確認中: {top_label} ({top_code}) {confirm}")
+        else:
+            lines.append(f"  ✅ *HOLD* — 変更なし")
+    elif action == "EXIT":
+        lines.append(f"  ➡️ *EXIT to CASH* — S銘柄なし")
+    elif action == "SL_EXIT":
+        lines.append(f"  🔴 *SL EXIT* — {reason}")
+    elif action == "TP_EXIT":
+        lines.append(f"  🎯 *TP EXIT* — {reason}")
+
+    # モード・ステータス行
+    status_parts = [f"モード: {mode}"]
+    if streak > 0:
+        status_parts.append(f"TOP連続: {streak}日")
+    if confirm:
+        status_parts.append(f"確認: {confirm}")
+    lines.append(f"  📊 {' | '.join(status_parts)}")
+
+    # SL/TP価格（保有中のみ）
+    if sl_price and tp_price and action not in ("EXIT", "SL_EXIT", "TP_EXIT"):
+        lines.append(f"  SL ¥{sl_price:,.0f} (-20%) | TP ¥{tp_price:,.0f} (+40%)")
+
+    return lines
 
 
 def _format_mega_jp_signal(signal: dict, compact: bool = False) -> list[str]:

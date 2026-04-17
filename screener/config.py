@@ -232,6 +232,12 @@ MEGA_JP_THRESHOLD = 1_000_000_000_000     # ¥1兆 — JP Mega判定閾値
 MEGA_JP_STOP_LOSS = -0.20                 # SL-20% (5年・10年とも最適)
 MEGA_JP_PROFIT_TARGET = 0.40              # TP+40% (5年・10年とも最適)
 
+# Hybrid LH ローテーション設定
+# BT検証 (WF 2022-2026): 確認3日+LH5日 → CAGR+40.4%, DD-23.1%, Sharpe1.46
+MEGA_JP_CONFIRM_DAYS = 3                  # 新規切替に必要な連続TOP日数
+MEGA_JP_LH_TRIGGER_DAYS = 5              # LHモード発動に必要な連続TOP日数
+MEGA_JP_LH_ENABLED = True                # Hybrid LHローテーション有効化
+
 # スコアリング重み
 MEGA_JP_STRENGTH_WEIGHT = 0.4             # 地力スコアの重み
 MEGA_JP_TIMING_WEIGHT = 0.6              # タイミングスコアの重み

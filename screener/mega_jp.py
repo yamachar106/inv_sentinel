@@ -36,8 +36,9 @@ from screener.config import (
 
 STRENGTH_PATH = Path("data/mega_jp_strength.json")
 
-# 月次更新: 毎月1-7日に自動再生成（BT再実行→地力スコア再計算、~1分）
-MONTHLY_UPDATE_WINDOW = 7  # 月初から何日以内に更新するか
+# 週次更新: 毎週土曜に自動再生成（BT再実行→地力スコア再計算、~1分）
+WEEKLY_REFRESH_DAY = 5  # 0=月, 5=土, 6=日
+WEEKLY_REFRESH_MAX_AGE = 7  # 最終更新からこの日数を超えたら強制更新
 
 
 def load_strength_scores() -> dict:
@@ -51,11 +52,17 @@ def load_strength_scores() -> dict:
 
 
 def check_monthly_refresh() -> bool:
-    """月次更新が必要か判定し、必要ならBT再実行→地力スコア再生成する。
+    """後方互換エイリアス。check_weekly_refresh() を呼ぶ。"""
+    return check_weekly_refresh()
 
-    更新条件:
-    - 現在が月初1-7日
-    - 地力スコアファイルの生成日が今月ではない
+
+def check_weekly_refresh() -> bool:
+    """週次更新が必要か判定し、必要ならBT再実行→地力スコア再生成する。
+
+    更新条件（いずれか）:
+    - 今日が土曜 かつ 今週まだ更新していない
+    - 最終更新から7日超経過（フォールバック）
+    - 地力スコアファイルが存在しない
 
     処理（~1分）:
     1. MEGA対象45銘柄のBTイベント再生成（~50秒）
@@ -64,23 +71,27 @@ def check_monthly_refresh() -> bool:
     Returns:
         True if refresh was executed
     """
-    from datetime import date, datetime
+    from datetime import date, datetime, timedelta
 
     today = date.today()
-    if today.day > MONTHLY_UPDATE_WINDOW:
-        return False
 
-    # 既存ファイルの生成日チェック
     if STRENGTH_PATH.exists():
         with open(STRENGTH_PATH, encoding="utf-8") as f:
             data = json.load(f)
         generated = data.get("generated", "")
         if generated:
             gen_date = datetime.strptime(generated, "%Y-%m-%d").date()
-            if gen_date.year == today.year and gen_date.month == today.month:
+            age = (today - gen_date).days
+
+            # 7日以内なら土曜以外はスキップ
+            if age <= WEEKLY_REFRESH_MAX_AGE and today.weekday() != WEEKLY_REFRESH_DAY:
                 return False
 
-    print("  📊 地力スコア月次更新を実行...")
+            # 土曜でも同日に既に更新済みならスキップ
+            if gen_date == today:
+                return False
+
+    print("  📊 地力スコア週次更新を実行...")
 
     # Step 1: MEGA対象銘柄のBTイベント再生成
     bt_refreshed = _refresh_bt_events()
@@ -316,7 +327,7 @@ def _refresh_bt_events() -> bool:
 
     # MEGA専用BTファイルとして保存
     data_dir = Path("data/backtest")
-    out_path = data_dir / "analysis_events_jp_mega_monthly.json"
+    out_path = data_dir / "analysis_events_jp_mega_weekly.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(all_events, f, ensure_ascii=False, default=str)
     print(f"  BT保存: {out_path} ({len(all_events)}件)")
@@ -348,13 +359,18 @@ def _regenerate_strength_scores() -> bool | dict:
     with open(mcap_path) as f:
         mcap_map = json.load(f)
 
-    # 全イベント読み込み（月次BT優先、なければ全区分BTにフォールバック）
+    # 全イベント読み込み（週次BT優先、なければ旧月次→全区分BTにフォールバック）
     all_events = []
+    weekly_path = data_dir / "analysis_events_jp_mega_weekly.json"
     monthly_path = data_dir / "analysis_events_jp_mega_monthly.json"
-    if monthly_path.exists():
+    if weekly_path.exists():
+        with open(weekly_path, encoding="utf-8") as f:
+            all_events.extend(json.load(f))
+        print(f"  週次BTデータ使用: {len(all_events)}件")
+    elif monthly_path.exists():
         with open(monthly_path, encoding="utf-8") as f:
             all_events.extend(json.load(f))
-        print(f"  月次BTデータ使用: {len(all_events)}件")
+        print(f"  旧月次BTデータ使用: {len(all_events)}件")
     else:
         for fname in [
             "analysis_events_jp_prime_5y.json",

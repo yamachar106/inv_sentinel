@@ -531,6 +531,67 @@ def _get_prev_top_s() -> tuple:
     return None, ""
 
 
+def _load_rotation_state() -> dict:
+    """Hybrid LH ローテーション状態を読み込む"""
+    path = ROOT / "data" / "mega_jp_rotation_state.json"
+    if path.exists():
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def _load_signal_history(days: int = 10) -> list[dict]:
+    """直近N日分のシグナル履歴からS最上位の推移を取得"""
+    sig_dir = ROOT / "data" / "signals"
+    if not sig_dir.exists():
+        return []
+
+    import os
+    files = sorted(
+        [f for f in os.listdir(sig_dir) if f[:4] == "2026" and f.endswith(".json")],
+        reverse=True,
+    )[:days]
+
+    history = []
+    name_map = _load_jp_name_map()
+
+    for fname in reversed(files):
+        date_str = fname.replace(".json", "")
+        fpath = sig_dir / fname
+        try:
+            with open(fpath, encoding="utf-8") as f:
+                data = json.load(f)
+            enriched = data.get("enriched", {}).get("mega:JP", [])
+            if not enriched:
+                continue
+
+            # S最上位
+            s_stocks = sorted(
+                [s for s in enriched if s.get("total_rank") == "S"],
+                key=lambda x: -x.get("total_score", 0),
+            )
+            top = s_stocks[0] if s_stocks else None
+
+            entry = {
+                "date": date_str,
+                "top_code": top["code"] if top else None,
+                "top_name": (name_map.get(top["code"], "") or top.get("name", ""))
+                            if top else None,
+                "top_score": top.get("total_score", 0) if top else 0,
+                "s_count": len(s_stocks),
+                "a_count": sum(1 for s in enriched if s.get("total_rank") == "A"),
+                "total_count": len(enriched),
+            }
+            history.append(entry)
+        except Exception:
+            continue
+
+    return history
+
+
 def _is_market_closed_day() -> bool:
     """土日・祝日判定（翌営業日までアクション不要）"""
     import jpholiday
@@ -550,6 +611,105 @@ def _next_trading_date() -> str:
     while d.weekday() >= 5 or jpholiday.is_holiday(d):
         d += timedelta(days=1)
     return d.strftime("%m/%d(%a)")
+
+
+def _render_signal_history_and_rotation():
+    """S最上位の推移テーブル + ローテーション状態の詳細表示"""
+
+    # ── ローテーション状態 ──
+    rot = _load_rotation_state()
+    if rot:
+        mode = rot.get("mode", "confirm-3")
+        held = rot.get("held_code")
+        held_name = rot.get("held_name", "")
+        streak = rot.get("top_streak", 0)
+        buy_price = rot.get("buy_price")
+        updated = rot.get("updated", "")
+        lh_entered = rot.get("lh_entered")
+        confirm_cand = rot.get("confirm_candidate")
+        confirm_count = rot.get("confirm_count", 0)
+
+        if mode == "long-hold":
+            mode_label = "🔒 Long Hold"
+            mode_desc = "SL(-20%)/TP(+40%)到達まで保有継続。ローテーション停止中。"
+        else:
+            mode_label = "🔄 Confirm-3"
+            mode_desc = "新銘柄が3日連続TOP達成で切替。5日連続TOPでLH発動。"
+
+        st.markdown(f"**ローテーションモード:** {mode_label}")
+        st.caption(mode_desc)
+
+        cols = st.columns(4)
+        with cols[0]:
+            if held:
+                name_map = _load_jp_name_map()
+                label = name_map.get(held, held_name) or held
+                st.metric("保有銘柄", f"{label} ({held})")
+            else:
+                st.metric("保有銘柄", "CASH")
+        with cols[1]:
+            st.metric("TOP連続", f"{streak}日",
+                       delta=f"LH発動まで{max(0, 5 - streak)}日" if mode != "long-hold" and held else None)
+        with cols[2]:
+            if buy_price and buy_price > 0:
+                sl = round(buy_price * 0.80)
+                tp = round(buy_price * 1.40)
+                st.metric("SL / TP", f"¥{sl:,} / ¥{tp:,}")
+            else:
+                st.metric("SL / TP", "—")
+        with cols[3]:
+            if confirm_cand and confirm_count > 0:
+                name_map = _load_jp_name_map()
+                cand_label = name_map.get(confirm_cand, confirm_cand)
+                st.metric("確認中", f"{cand_label} ({confirm_count}/3)")
+            else:
+                st.metric("確認中", "なし")
+
+        if updated:
+            st.caption(f"最終更新: {updated}" + (f" | LH突入: {lh_entered}" if lh_entered else ""))
+
+        st.markdown("---")
+
+    # ── S最上位 推移テーブル ──
+    history = _load_signal_history(days=14)
+    if not history:
+        st.info("シグナル履歴がありません")
+        return
+
+    st.markdown("**S最上位の日次推移**")
+
+    # テーブル構築
+    rows = []
+    prev_top = None
+    for h in history:
+        top = h["top_code"]
+        name = h["top_name"] or ""
+        score = h["top_score"]
+        change = ""
+        if prev_top is not None:
+            if top != prev_top:
+                change = "🔄"
+            else:
+                change = "→"
+        rows.append({
+            "日付": h["date"],
+            "": change,
+            "S最上位": f"{name} ({top})" if top else "—",
+            "スコア": f"{score:.1f}" if score else "—",
+            "S": h["s_count"],
+            "A": h["a_count"],
+            "計": h["total_count"],
+        })
+        prev_top = top
+
+    hist_df = pd.DataFrame(rows)
+    # 新しい順に表示
+    hist_df = hist_df.iloc[::-1].reset_index(drop=True)
+    st.dataframe(hist_df, use_container_width=True, hide_index=True)
+
+    # 切替回数サマリー
+    switches = sum(1 for r in rows if r[""] == "🔄")
+    st.caption(f"直近{len(rows)}日間の切替回数: {switches}回")
 
 
 def _render_action_hero(df: pd.DataFrame, prices: dict, names: dict):
@@ -608,6 +768,17 @@ def _render_action_hero(df: pd.DataFrame, prices: dict, names: dict):
         st.divider()
         return
 
+    # ローテーション状態
+    rot_state = _load_rotation_state()
+    rot_mode = rot_state.get("mode", "confirm-3")
+    rot_held = rot_state.get("held_code")
+    rot_held_name = rot_state.get("held_name", "")
+    rot_streak = rot_state.get("top_streak", 0)
+    rot_confirm_candidate = rot_state.get("confirm_candidate")
+    rot_confirm_count = rot_state.get("confirm_count", 0)
+    rot_buy_price = rot_state.get("buy_price")
+    rot_updated = rot_state.get("updated", "")
+
     # 当日のS最上位
     s_df = df[df["総合ランク"] == "S"]
     top_s = s_df.iloc[0] if not s_df.empty else None
@@ -617,9 +788,15 @@ def _render_action_hero(df: pd.DataFrame, prices: dict, names: dict):
     # 前日のS最上位
     prev_code, prev_name = _get_prev_top_s()
 
-    # アクション判定
+    # アクション判定（ローテーション状態を反映）
     top_label = top_name if top_name else top_code
-    if top_code is None:
+    if rot_mode == "long-hold" and rot_held:
+        action = "LONG_HOLD"
+        action_icon = "🔒"
+        action_color = "#8b5cf6"  # purple
+        held_label = rot_held_name or rot_held
+        action_text = f"LONG HOLD {held_label} — SL/TPまで保有"
+    elif top_code is None:
         action = "EXIT"
         action_icon = "➡️"
         action_color = "#ef4444"
@@ -640,6 +817,28 @@ def _render_action_hero(df: pd.DataFrame, prices: dict, names: dict):
         action_color = "#f59e0b"
         action_text = f"SWITCH → {top_label} ({top_code})"
 
+    # モードバッジ
+    if rot_mode == "long-hold":
+        mode_badge = '<span style="background:#8b5cf6;color:white;padding:2px 8px;border-radius:4px;font-size:0.75em;">🔒 Long Hold</span>'
+    elif rot_confirm_candidate and rot_confirm_count > 0:
+        mode_badge = f'<span style="background:#f59e0b;color:white;padding:2px 8px;border-radius:4px;font-size:0.75em;">確認 {rot_confirm_count}/3</span>'
+    else:
+        mode_badge = '<span style="background:#3b82f6;color:white;padding:2px 8px;border-radius:4px;font-size:0.75em;">Hybrid LH</span>'
+
+    # SL/TP表示
+    sltp_line = ""
+    if rot_buy_price and rot_buy_price > 0 and action in ("HOLD", "LONG_HOLD"):
+        sl = round(rot_buy_price * 0.80)
+        tp = round(rot_buy_price * 1.40)
+        sltp_line = f'<div style="font-size:0.85em;color:#888;margin-top:4px;">SL ¥{sl:,} (-20%) | TP ¥{tp:,} (+40%)</div>'
+
+    # 確認中候補の表示
+    confirm_line = ""
+    if rot_confirm_candidate and rot_confirm_count > 0 and action not in ("LONG_HOLD",):
+        name_map = _load_jp_name_map()
+        cand_name = name_map.get(rot_confirm_candidate, rot_confirm_candidate)
+        confirm_line = f'<div style="font-size:0.9em;color:#f59e0b;margin-top:6px;">⏳ 確認中: {cand_name} ({rot_confirm_candidate}) — {rot_confirm_count}/3日</div>'
+
     # ヒーローカード
     st.markdown(
         f"""<div style="
@@ -649,10 +848,12 @@ def _render_action_hero(df: pd.DataFrame, prices: dict, names: dict):
             padding: 24px;
             margin-bottom: 16px;
         ">
-        <div style="font-size: 0.9em; color: #888; margin-bottom: 4px;">翌朝アクション</div>
+        <div style="font-size: 0.9em; color: #888; margin-bottom: 4px;">翌朝アクション {mode_badge}</div>
         <div style="font-size: 1.8em; font-weight: bold; color: {action_color};">
             {action_icon} {action_text}
         </div>
+        {sltp_line}
+        {confirm_line}
         </div>""",
         unsafe_allow_html=True,
     )
@@ -705,7 +906,13 @@ def render_jp_action():
     generated = strength_data.get("generated", "不明")
     all_tickers = list(tickers_info.keys())
 
-    st.caption(f"地力スコア更新日: {generated} | SL-20%/TP+40% | 対象: ¥1兆+ {len(all_tickers)}銘柄")
+    # 更新ステータスバー
+    from datetime import timedelta
+    gen_date = datetime.strptime(generated, "%Y-%m-%d") if generated != "不明" else None
+    age_days = (datetime.now() - gen_date).days if gen_date else None
+    age_str = f"{age_days}日前" if age_days is not None else "不明"
+    age_color = "green" if age_days is not None and age_days <= 7 else "orange" if age_days is not None and age_days <= 14 else "red"
+    st.caption(f"地力スコア更新: :{age_color}[{generated} ({age_str})] | SL-20%/TP+40% | 対象: ¥1兆+ {len(all_tickers)}銘柄")
 
     # 価格データ + 社名取得
     with st.spinner(f"{len(all_tickers)}銘柄の価格データ取得中..."):
@@ -731,6 +938,10 @@ def render_jp_action():
     c2.metric("総合A", f"{n_a_total}銘柄", help="次点候補")
     c3.metric("SMA200上", f"{n_sma200_ok}/{len(df)}")
     c4.metric("GC", f"{n_gc}/{len(df)}")
+
+    # ─── S最上位 推移 + ローテーション状態 ───
+    with st.expander("📈 S最上位の推移 / ローテーション状態", expanded=False):
+        _render_signal_history_and_rotation()
 
     st.divider()
 

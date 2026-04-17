@@ -8,6 +8,8 @@ on:
     - cron: "0 21 * * 1-5"
     # 朝リマインド: 08:00 JST (月〜金)
     - cron: "0 23 * * 0-4"
+    # 地力スコア週次更新: 土曜 10:00 JST (BT再実行+地力スコア再計算)
+    - cron: "0 1 * * 6"
   workflow_dispatch:
     inputs:
       strategy:
@@ -96,6 +98,8 @@ jobs:
             if [ "$CRON" = "0 23 * * 0-4" ]; then
               STRATEGY="morning-reminder"
             elif [ "$CRON" = "0 7 * * 1-5" ]; then
+              STRATEGY="jp-mega"
+            elif [ "$CRON" = "0 1 * * 6" ]; then
               STRATEGY="jp-mega"
             else
               STRATEGY="full"

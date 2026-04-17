@@ -29,7 +29,10 @@ from screener.breakout import check_breakout_batch
 from screener.config import MEGA_THRESHOLD_US
 from screener.healthcheck import run_healthcheck
 from screener.market_regime import detect_regime, format_regime_header
-from screener.mega_jp import scan_mega_jp, check_monthly_refresh
+from screener.mega_jp import scan_mega_jp, check_weekly_refresh
+from screener.mega_jp_rotation import (
+    load_rotation_state, save_rotation_state, evaluate_rotation,
+)
 from screener.notifier import (
     notify_mega, notify_mega_jp, _clean_us_name,
     _resolve_webhook_url, _send_slack,
@@ -291,6 +294,12 @@ def _send_morning_reminder(today: str, dry_run: bool = False):
         print("  シグナルデータなし — スキップ")
         return
 
+    # ローテーション状態に基づくアクション表示
+    rot_state = load_rotation_state()
+    mode = rot_state.get("mode", "confirm-3")
+    held_code = rot_state.get("held_code")
+    held_name = rot_state.get("held_name", "")
+
     # S最上位を特定
     top_s = None
     for s in mega_jp:
@@ -298,42 +307,59 @@ def _send_morning_reminder(today: str, dry_run: bool = False):
             top_s = s
             break
 
-    # 名前解決（CSV日本語名を優先）
-    if top_s:
-        code = top_s.get("code", "")
-        name_map = {}
-        try:
-            csv_path = Path(__file__).resolve().parent / "data" / "cache" / "company_codes.csv"
-            if csv_path.exists():
-                import pandas as pd
-                df_csv = pd.read_csv(csv_path, encoding="utf-8", dtype={"code": str})
-                name_map = dict(zip(df_csv["code"].astype(str), df_csv["name"]))
-        except Exception:
-            pass
-        name = name_map.get(code, "") or top_s.get("name", "") or code
-        label = name
+    # 名前解決
+    name_map = {}
+    try:
+        csv_path = Path(__file__).resolve().parent / "data" / "cache" / "company_codes.csv"
+        if csv_path.exists():
+            import pandas as pd
+            df_csv = pd.read_csv(csv_path, encoding="utf-8", dtype={"code": str})
+            name_map = dict(zip(df_csv["code"].astype(str), df_csv["name"]))
+    except Exception:
+        pass
 
-        lines = [
-            f"*☀️ 朝リマインド* ({today} 08:00)",
-            "",
-            "━" * 25,
-            "🎯 *本日の寄り付きアクション*",
-            "━" * 25,
-            f"  🟢 *{label}* ({code}) を寄り付き成行で購入",
+    mode_str = "Long Hold" if mode == "long-hold" else "Hybrid LH"
+    lines = [
+        f"*☀️ 朝リマインド* ({today} 08:00)",
+        "",
+        "━" * 25,
+        f"🎯 *本日の寄り付きアクション ({mode_str})*",
+        "━" * 25,
+    ]
+
+    if mode == "long-hold" and held_code:
+        label = name_map.get(held_code, held_name) or held_code
+        buy_price = rot_state.get("buy_price")
+        sl_tp = ""
+        if buy_price:
+            sl = round(buy_price * 0.80)
+            tp = round(buy_price * 1.40)
+            sl_tp = f"\n  SL ¥{sl:,} | TP ¥{tp:,}"
+        lines.append(f"  🔒 *LONG HOLD {label}* ({held_code}) — SL/TPまで保有{sl_tp}")
+    elif held_code:
+        label = name_map.get(held_code, held_name) or held_code
+        confirm = rot_state.get("confirm_candidate")
+        confirm_count = rot_state.get("confirm_count", 0)
+        if confirm and confirm_count > 0:
+            confirm_name = name_map.get(confirm, "") or confirm
+            lines.append(f"  ✅ *HOLD {label}* ({held_code})")
+            lines.append(f"  確認中: {confirm_name} ({confirm}) {confirm_count}/3日")
+        else:
+            lines.append(f"  ✅ *HOLD {label}* ({held_code}) — 変更なし")
+    elif top_s:
+        code = top_s.get("code", "")
+        name = name_map.get(code, "") or top_s.get("name", "") or code
+        lines.append(
+            f"  🟢 *{name}* ({code}) を寄り付き成行で購入"
+        )
+        lines.append(
             f"  総合 {top_s.get('total_score', 0):.0f}({top_s.get('total_rank', '?')}) "
-            f"| ¥{top_s.get('close', 0):,.0f}",
-            "",
-            "_前日16:00確定値ベース_",
-        ]
+            f"| ¥{top_s.get('close', 0):,.0f}"
+        )
     else:
-        lines = [
-            f"*☀️ 朝リマインド* ({today} 08:00)",
-            "",
-            "━" * 25,
-            "🎯 *本日の寄り付きアクション*",
-            "━" * 25,
-            "  ➡️ *CASH* — S銘柄なし、本日は見送り",
-        ]
+        lines.append("  ➡️ *CASH* — S銘柄なし、本日は見送り")
+
+    lines.extend(["", "_前日16:00確定値ベース_"])
 
     msg = "\n".join(lines)
 
@@ -355,14 +381,57 @@ def _send_morning_reminder(today: str, dry_run: bool = False):
         print("  [ERROR] 朝リマインド送信失敗")
 
 
+def _evaluate_rotation_with_price(
+    mega_jp_signals: list[dict],
+    rot_state: dict,
+    today: str,
+) -> dict:
+    """ローテーション判定（現在価格の自動取得付き）。"""
+    current_price = None
+    held_code = rot_state.get("held_code")
+    if held_code:
+        # シグナルデータから現在価格を取得
+        for s in mega_jp_signals:
+            if s["code"] == held_code:
+                current_price = s.get("close")
+                break
+        # シグナルに含まれない場合はyfinanceフォールバック
+        if current_price is None:
+            try:
+                import yfinance as yf
+                ticker = f"{held_code}.T"
+                data = yf.download(ticker, period="1d", progress=False)
+                if not data.empty:
+                    col = "Close" if "Close" in data.columns else "close"
+                    current_price = float(data[col].iloc[-1])
+            except Exception:
+                pass
+
+    return evaluate_rotation(mega_jp_signals, rot_state, today, current_price)
+
+
+def _log_rotation_result(rot_result: dict) -> None:
+    """ローテーション判定結果をコンソールに出力。"""
+    action = rot_result.get("action", "?")
+    mode = rot_result.get("mode", "?")
+    reason = rot_result.get("reason", "")
+    icons = {
+        "HOLD": "✅", "BUY": "🟢", "SWITCH": "🔄",
+        "EXIT": "➡️", "SL_EXIT": "🔴", "TP_EXIT": "🎯",
+    }
+    icon = icons.get(action, "❓")
+    mode_tag = "🔒LH" if mode == "long-hold" else "C3"
+    print(f"  {icon} [{mode_tag}] {action}: {reason}")
+
+
 def _run_jp_mega_only(args, today, regime_trend, regime_header, regime_dict):
     """JP MEGA S/Aスコアリングのみ実行（JP市場終了後の早期通知用）"""
     print("\n[JP-MEGA] JP MEGA ¥1兆+ S/Aスコアリング (単独実行)")
     start_time = time.time()
 
     try:
-        if check_monthly_refresh():
-            print("  地力スコア月次更新完了")
+        if check_weekly_refresh():
+            print("  地力スコア週次更新完了")
     except Exception as e:
         print(f"  [WARN] 地力スコア更新失敗: {e}")
 
@@ -370,12 +439,19 @@ def _run_jp_mega_only(args, today, regime_trend, regime_header, regime_dict):
     try:
         mega_jp_signals = scan_mega_jp(regime=regime_trend, dry_run=args.dry_run)
         if mega_jp_signals and not args.dry_run:
+            # Hybrid LH ローテーション判定
+            rot_state = load_rotation_state()
+            rot_result = _evaluate_rotation_with_price(mega_jp_signals, rot_state, today)
+            save_rotation_state(rot_result["state"])
+            _log_rotation_result(rot_result)
+
             limit_section = _build_jp_mega_limit_order_section(mega_jp_signals, today)
             prev_code, prev_name = get_prev_top_s(today)
             notify_mega_jp(mega_jp_signals, today, regime_header=regime_header,
                            limit_order_section=limit_section,
                            prev_top_s_code=prev_code,
-                           prev_top_s_name=prev_name)
+                           prev_top_s_name=prev_name,
+                           rotation_result=rot_result)
             print(f"  JP Mega通知送信: {len(mega_jp_signals)}件")
     except Exception as e:
         print(f"  [ERROR] JP MEGA スキャン失敗: {e}")
@@ -474,6 +550,10 @@ def _check_position_signal_alignment(
     )
     top_s_code = s_stocks[0]["code"] if s_stocks else None
 
+    # LHモードチェック
+    rot_state = load_rotation_state()
+    is_lh = rot_state.get("mode") == "long-hold"
+
     if not mega_positions:
         if top_s_code:
             result = {
@@ -489,7 +569,7 @@ def _check_position_signal_alignment(
         held_codes = list(mega_positions.keys())
 
         if not top_s_code:
-            # S銘柄なし → EXIT
+            # S銘柄なし → EXIT（LHモードでもS銘柄消滅は例外EXIT）
             result = {
                 "action": "EXIT",
                 "message": f"S銘柄なし → {', '.join(held_codes)} を売却してCASH化推奨",
@@ -500,6 +580,11 @@ def _check_position_signal_alignment(
             # HOLD
             top_score = s_stocks[0].get("total_score", 0)
             print(f"  ✅ HOLD: {top_s_code} = S最上位 (score={top_score:.1f})")
+            return None
+        elif is_lh:
+            # LHモード中 → SWITCHしない
+            lh_held = rot_state.get("held_code", "")
+            print(f"  🔒 LH HOLD: {lh_held} (Long Holdモード — SL/TPのみ)")
             return None
         else:
             # SWITCH
@@ -760,23 +845,31 @@ def main():
             regime_header=regime_header,
         )
 
-    # ---- JP MEGA 地力スコア月次更新チェック ----
+    # ---- JP MEGA 地力スコア週次更新チェック ----
     print("\n[5] JP MEGA ¥1兆+ S/Aスコアリング")
     try:
-        if check_monthly_refresh():
-            print("  地力スコア月次更新完了")
+        if check_weekly_refresh():
+            print("  地力スコア週次更新完了")
     except Exception as e:
         print(f"  [WARN] 地力スコア更新失敗: {e}")
     mega_jp_signals = []
+    rot_result = None
     try:
         mega_jp_signals = scan_mega_jp(regime=regime_trend, dry_run=args.dry_run)
         if mega_jp_signals and not args.dry_run:
+            # Hybrid LH ローテーション判定
+            rot_state = load_rotation_state()
+            rot_result = _evaluate_rotation_with_price(mega_jp_signals, rot_state, today)
+            save_rotation_state(rot_result["state"])
+            _log_rotation_result(rot_result)
+
             limit_section = _build_jp_mega_limit_order_section(mega_jp_signals, today)
             prev_code, prev_name = get_prev_top_s(today)
             notify_mega_jp(mega_jp_signals, today, regime_header=regime_header,
                            limit_order_section=limit_section,
                            prev_top_s_code=prev_code,
-                           prev_top_s_name=prev_name)
+                           prev_top_s_name=prev_name,
+                           rotation_result=rot_result)
             print(f"  JP Mega通知送信: {len(mega_jp_signals)}件")
     except Exception as e:
         print(f"  [ERROR] JP MEGA スキャン失敗: {e}")
