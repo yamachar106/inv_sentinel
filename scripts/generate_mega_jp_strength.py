@@ -14,6 +14,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 import argparse
 import json
 from collections import defaultdict
+from datetime import date
 from pathlib import Path
 
 import numpy as np
@@ -201,7 +202,7 @@ def main():
 
     # 保存
     output = {
-        "generated": "2026-04-09",
+        "generated": date.today().isoformat(),
         "threshold_yen": args.threshold,
         "sl_tp": f"SL{SL:.0%}/TP{TP:.0%}",
         "tickers": strength_data,

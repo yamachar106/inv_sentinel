@@ -164,6 +164,8 @@ jobs:
           done
           [ -f data/portfolio.json ] && git add data/portfolio.json
           [ -f data/portfolio_history.json ] && git add data/portfolio_history.json
+          [ -f data/mega_jp_strength.json ] && git add data/mega_jp_strength.json
+          [ -f data/mega_jp_rotation_state.json ] && git add data/mega_jp_rotation_state.json
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else

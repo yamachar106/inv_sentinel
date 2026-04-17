@@ -27,7 +27,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 
 from screener.breakout import fetch_ohlcv_batch, calculate_breakout_indicators
 from screener.config import (
-    MEGA_JP_STRENGTH_WEIGHT, MEGA_JP_TIMING_WEIGHT, MEGA_JP_GRADE_S,
+    MEGA_JP_STRENGTH_WEIGHT, MEGA_JP_TIMING_WEIGHT, MEGA_JP_GRADE_S, MEGA_JP_GRADE_A,
     MEGA_JP_STOP_LOSS, MEGA_JP_PROFIT_TARGET,
 )
 
@@ -355,6 +355,8 @@ def main():
     parser.add_argument("--bear-suppress", action="store_true", help="BEAR時ノーポジ")
     parser.add_argument("--compare", action="store_true", help="通常 vs BEAR抑制 比較")
     parser.add_argument("--compare-regime", action="store_true", help="BEAR判定ロジック5種比較")
+    parser.add_argument("--compare-grade", action="store_true",
+                        help="S限定 vs S/A最上位 比較")
     args = parser.parse_args()
 
     raw = json.loads(Path("data/mega_jp_strength.json").read_text(encoding="utf-8"))
@@ -378,29 +380,34 @@ def main():
             all_trading_dates.add(dt)
         price_data[code] = prices
 
-    exec_map = {}
-    for code in codes:
-        ticker = code + ".T"
-        df = ohlcv.get(ticker)
-        if df is None or len(df) < 253:
-            continue
-        df = calculate_breakout_indicators(df)
-        s_info = sa.get(ticker, {})
-        s_score = s_info.get("strength_score", 0)
+    def build_exec_map(grade_threshold: float) -> dict:
+        """指定グレード閾値以上の最上位銘柄を日次で選択するexec_mapを構築"""
+        emap = {}
+        for code in codes:
+            ticker = code + ".T"
+            df = ohlcv.get(ticker)
+            if df is None or len(df) < 253:
+                continue
+            df = calculate_breakout_indicators(df)
+            s_info = sa.get(ticker, {})
+            s_score = s_info.get("strength_score", 0)
 
-        for i in range(252, len(df) - 1):
-            row = df.iloc[i]
-            close = float(row["close"])
-            sma200 = row.get("sma_200")
-            if pd.isna(sma200) or close <= sma200:
-                continue
-            timing = compute_timing_score(row, df, i)
-            total = s_score * MEGA_JP_STRENGTH_WEIGHT + timing * MEGA_JP_TIMING_WEIGHT
-            if total < MEGA_JP_GRADE_S:
-                continue
-            exec_dt = str(df.index[i + 1].date())
-            if exec_dt not in exec_map or total > exec_map[exec_dt][1]:
-                exec_map[exec_dt] = (code, total)
+            for i in range(252, len(df) - 1):
+                row = df.iloc[i]
+                close = float(row["close"])
+                sma200 = row.get("sma_200")
+                if pd.isna(sma200) or close <= sma200:
+                    continue
+                timing = compute_timing_score(row, df, i)
+                total = s_score * MEGA_JP_STRENGTH_WEIGHT + timing * MEGA_JP_TIMING_WEIGHT
+                if total < grade_threshold:
+                    continue
+                exec_dt = str(df.index[i + 1].date())
+                if exec_dt not in emap or total > emap[exec_dt][1]:
+                    emap[exec_dt] = (code, total)
+        return emap
+
+    exec_map = build_exec_map(MEGA_JP_GRADE_S)
 
     # レジームマップ（BEAR抑制に必要）
     regime_map = None
@@ -408,6 +415,38 @@ def main():
         print("日経225レジーム計算中...")
         regime_map = build_regime_map("original")
         _regime_summary(regime_map, "original")
+
+    if args.compare_grade:
+        exec_map_a = build_exec_map(MEGA_JP_GRADE_A)
+
+        # S限定の投資日/キャッシュ日
+        s_invest_days = len(exec_map)
+        a_invest_days = len(exec_map_a)
+        total_days = len(all_trading_dates)
+        print(f"\n投資日数: S限定={s_invest_days}/{total_days} ({s_invest_days/total_days*100:.0f}%)"
+              f" | S/A最上位={a_invest_days}/{total_days} ({a_invest_days/total_days*100:.0f}%)")
+
+        eq_s = run_simulation(exec_map, price_data, all_trading_dates,
+                               bear_suppress=False, label="S限定")
+        eq_a = run_simulation(exec_map_a, price_data, all_trading_dates,
+                               bear_suppress=False, label="S/A最上位")
+
+        # 比較サマリー
+        print()
+        print("=" * 70)
+        print("グレード比較サマリー: S限定 vs S/A最上位")
+        print("=" * 70)
+        for lbl, eq in [("S限定(≥75)", eq_s), ("S/A最上位(≥55)", eq_a)]:
+            final = eq["equity"].iloc[-1]
+            years = (eq["date"].iloc[-1] - eq["date"].iloc[0]).days / 365.25
+            cagr = (final / INITIAL) ** (1 / years) - 1
+            sharpe = eq["daily_ret"].mean() / eq["daily_ret"].std() * np.sqrt(252) if eq["daily_ret"].std() > 0 else 0
+            max_dd = eq["dd"].min()
+            cash_days = (eq["code"] == "CASH").sum()
+            cash_pct = cash_days / len(eq) * 100
+            print("  %-18s CAGR:%+6.1f%% | DD:%5.1f%% | Sharpe:%.2f | 最終:%s円 | CASH:%.0f%%" % (
+                lbl, cagr * 100, max_dd * 100, sharpe, format(int(final), ","), cash_pct))
+        return
 
     if args.compare_regime:
         print("日経225レジーム計算中（5種比較）...")

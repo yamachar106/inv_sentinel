@@ -551,7 +551,7 @@ def _load_signal_history(days: int = 10) -> list[dict]:
 
     import os
     files = sorted(
-        [f for f in os.listdir(sig_dir) if f[:4] == "2026" and f.endswith(".json")],
+        [f for f in os.listdir(sig_dir) if f[:4].isdigit() and f.endswith(".json")],
         reverse=True,
     )[:days]
 
@@ -910,9 +910,9 @@ def render_jp_action():
     from datetime import timedelta
     gen_date = datetime.strptime(generated, "%Y-%m-%d") if generated != "不明" else None
     age_days = (datetime.now() - gen_date).days if gen_date else None
-    age_str = f"{age_days}日前" if age_days is not None else "不明"
-    age_color = "green" if age_days is not None and age_days <= 7 else "orange" if age_days is not None and age_days <= 14 else "red"
-    st.caption(f"地力スコア更新: :{age_color}[{generated} ({age_str})] | SL-20%/TP+40% | 対象: ¥1兆+ {len(all_tickers)}銘柄")
+    age_color = "green" if age_days is not None and age_days <= 1 else "orange" if age_days is not None and age_days <= 3 else "red"
+    age_label = "最新" if age_days == 0 else f"{age_days}日前" if age_days is not None else "不明"
+    st.caption(f"スコア算出日: :{age_color}[{generated} ({age_label})] | SL-20%/TP+40% | 対象: ¥1兆+ {len(all_tickers)}銘柄")
 
     # 価格データ + 社名取得
     with st.spinner(f"{len(all_tickers)}銘柄の価格データ取得中..."):
