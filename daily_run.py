@@ -804,6 +804,75 @@ def _run_new_strategy_scans(today: str, dry_run: bool = False, regime: str = "")
     except Exception as e:
         print(f"\n[9] [ERROR] Stage Analysis: {e}")
 
+    # ---- コンフルエンス集計 ----
+    try:
+        from screener.confluence import ConfluenceScorer
+        print("\n[10] コンフルエンス集計")
+        scorer = ConfluenceScorer()
+        scorer.set_regime(regime)
+
+        # 直近シグナルからコンフルエンスを構築
+        from screener.signal_store import load_previous_enriched_signals
+        enriched = load_previous_enriched_signals(today)
+
+        # 各戦略のシグナルを追加
+        for key, signals in enriched.items():
+            codes = [s.get("code", "") for s in signals if s.get("code")]
+            if "mega:US" in key:
+                bo_codes = [s["code"] for s in signals
+                            if s.get("signal") in ("breakout", "breakout_overheated")]
+                if bo_codes:
+                    scorer.add_signals("mega_bo", bo_codes, market="US")
+                pb_codes = [s["code"] for s in signals
+                            if s.get("signal") == "pre_breakout"]
+                if pb_codes:
+                    scorer.add_signals("breakout", pb_codes, market="US")
+            elif "breakout:JP" in key:
+                scorer.add_signals("breakout", codes, market="JP")
+            elif "breakout:US" in key:
+                scorer.add_signals("breakout", codes, market="US")
+
+        # VCPフラグがあれば追加
+        for key, signals in enriched.items():
+            for s in signals:
+                if s.get("vcp_detected"):
+                    scorer.add_single("vcp", s["code"])
+
+        summary = scorer.summary()
+        n_multi = summary["conviction_2"] + summary["conviction_3"] + summary["conviction_4"]
+        print(f"  全{summary['total_stocks']}銘柄: "
+              f"確信度4={summary['conviction_4']} "
+              f"3={summary['conviction_3']} "
+              f"2={summary['conviction_2']} "
+              f"T+F重畳={summary['both_tech_fund']}")
+
+        if n_multi > 0 and not dry_run:
+            report = scorer.format_report(min_conviction=2)
+            if report:
+                from screener.notifier import _resolve_webhook_url, _send_slack
+                webhook = _resolve_webhook_url("mega", "JP") or _resolve_webhook_url()
+                if webhook:
+                    _send_slack(webhook, report)
+                    print("  コンフルエンスレポート送信完了")
+    except Exception as e:
+        print(f"\n[10] [ERROR] Confluence: {e}")
+
+    # ---- 短期カタリストスキャン ----
+    try:
+        from screener.catalyst import detect_monthly_anomaly, format_catalyst_signals
+        print("\n[11] 短期カタリスト")
+
+        # 月末効果チェック（軽量）
+        monthly = detect_monthly_anomaly()
+        if monthly["phase"] != "NEUTRAL":
+            print(f"  📅 {monthly['description']}")
+            print(f"     → {monthly['action']}")
+        else:
+            print(f"  月末効果: 対象外（月中）")
+
+    except Exception as e:
+        print(f"\n[11] [ERROR] Catalyst: {e}")
+
 
 def main():
     parser = argparse.ArgumentParser(description="MEGA BreakOut デイリーランナー")
