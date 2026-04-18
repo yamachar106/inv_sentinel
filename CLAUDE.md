@@ -39,6 +39,7 @@
 | **NASDAQ Screener API** (無料) | 全米株7,000+銘柄のシンボル・時価総額・セクター | 米国株ユニバース管理 |
 | **EDINET API** (無料) | H1累計(半期報告書)・FY(有報)のXBRL | クロスチェック用（`--edinet`フラグ） |
 | **Gemini Flash API** (無料) | AI分析・企業情報翻訳 | ダッシュボードAI分析 (1,000 RPD無料枠) |
+| **SEC EDGAR API** (無料) | Form 4 インサイダー取引 | クラスター買い検出（US向け） |
 
 ---
 
@@ -239,17 +240,22 @@ Slack通知
 
 --- daily_run.py 統合フロー ---
 
-[0] ヘルスチェック
-[!] キャッシュ無効化（本決算シーズン）
-[1] JP ブレイクアウト監視
-[2] JP 黒字転換 日次チェック
-[3] JP 上場市場変更監視
-[4] US ブレイクアウト監視
-[5] GCペンディングチェック
-[6] ポジション監視（売却シグナル5ルール → Slack通知、エラー時も通知）
-[7] 相場環境判定（SMA50/SMA200 → BULL/NEUTRAL/BEAR）
-[8] シグナル保存 + 差分計算
-[9] ダイジェスト通知（regime header + 売却シグナル件数）
+[0] Dead Man's Switch（パイプライン停止検出）
+[1] ヘルスチェック
+[2] 相場環境判定（SMA50/SMA200 → BULL/NEUTRAL/BEAR）
+[3] US ブレイクアウトスキャン → Mega ($200B+) 抽出
+[4] Mega シグナル処理（PB/BO/UPGRADE判定、重複抑制）
+[5] JP MEGA ¥1兆+ S/Aスコアリング + Hybrid LH ローテーション
+--- シグナル保存 + 差分計算 ---
+[8] Earnings Surprise / PEAD（月曜×決算月のみ実行）
+[8.5] 上方修正ドリフト（月曜に週次バッチ）
+[9] Weinstein Stage 3/4 警告（保有ポジション）
+[9.5] インサイダー・クラスター買い（月曜にUS MEGA対象）
+[10] コンフルエンス集計（全戦略シグナル重畳→確信度1-4）
+[11] 短期カタリスト（月末効果、決算ギャップ等）
+[6] ポジション監視（売却シグナル6ルール → Slack通知）
+[7] ポジション⇔シグナル整合性チェック
+--- ダイジェスト通知 → ダッシュボードキャッシュ更新 ---
 ```
 
 ---
@@ -332,6 +338,51 @@ Slack通知
 | US最低パーセンタイル | 70 | `RS_MIN_PERCENTILE_US` | 上位30% |
 | RS有効化 | True | `RS_ENABLED` | ブレイクアウト前段フィルタ |
 
+### VCP（config.py）
+
+| パラメータ | デフォルト値 | 変数名 | 根拠 |
+|-----------|------------|--------|------|
+| 最低収縮回数 | 2 | `VCP_MIN_CONTRACTIONS` | Minervini |
+| 収縮比率 | 0.60 | `VCP_CONTRACTION_RATIO` | 前回比60%以下で収縮 |
+| 出来高枯渇 | 0.70 | `VCP_VOLUME_DRY_RATIO` | 平均70%以下 |
+| BO時出来高 | 1.4倍 | `VCP_BREAKOUT_VOLUME_SURGE` | BO確認 |
+
+### PEAD / Earnings Surprise（config.py）
+
+| パラメータ | デフォルト値 | 変数名 | 根拠 |
+|-----------|------------|--------|------|
+| サプライズ下限 | 20% | `PEAD_MIN_SURPRISE_PCT` | Ball & Brown |
+| 保有期間 | 60営業日 | `PEAD_HOLD_DAYS` | 学術標準 |
+| 対象月 | 1,2,4,5,7,8,10,11 | `PEAD_ENABLED_MONTHS` | 決算シーズン |
+
+### 上方修正ドリフト（config.py）
+
+| パラメータ | デフォルト値 | 変数名 | 根拠 |
+|-----------|------------|--------|------|
+| 修正幅下限 | 10% | `REVISION_MIN_CHANGE_PCT` | 有意な修正 |
+| 保有期間 | 60営業日 | `REVISION_HOLD_DAYS` | ドリフト期間 |
+
+### Weinstein Stage Analysis（config.py）
+
+| パラメータ | デフォルト値 | 変数名 | 根拠 |
+|-----------|------------|--------|------|
+| SMA期間 | 150日 | `STAGE_SMA_PERIOD` | 30週 |
+| 出来高倍率 | 2.0倍 | `STAGE_VOLUME_SURGE` | Stage 2突入条件 |
+
+### インサイダー・クラスター買い（config.py）
+
+| パラメータ | デフォルト値 | 変数名 | 根拠 |
+|-----------|------------|--------|------|
+| クラスター窓 | 10日 | `INSIDER_CLUSTER_WINDOW_DAYS` | Lakonishok & Lee |
+| 最低購入者数 | 3人 | `INSIDER_MIN_BUYERS` | クラスター定義 |
+| 検索期間 | 90日 | `INSIDER_LOOKBACK_DAYS` | 直近3ヶ月 |
+
+### コンフルエンス（confluence.py）
+
+確信度レベル: シグナル1=LOW, 2=MODERATE, 3=HIGH, 4=VERY_HIGH
+レジーム別最低確信度: BULL=1, NEUTRAL=2, BEAR=3
+ポジションサイズ: Kelly基準 × レジーム乗数（BULL=0.5K, NEUTRAL=0.25K, BEAR=0.125K）
+
 ---
 
 ## 注意事項
@@ -349,6 +400,7 @@ Slack通知
 ---
 
 ## 参考資料
+- 急騰銘柄パターン分析：`data/references/surge_patterns_analysis.md`（20パターン網羅分析）
 - 書籍統合ルール対照表：`data/references/synthesis_all_books.md`（全9冊の投資ルール比較）
 - 書籍データ（9冊）：`data/references/`
 - 調査レポート：`C:\MyUniverse\SecondBrain\03_Resources\references\kuroten2bai_research.md`
