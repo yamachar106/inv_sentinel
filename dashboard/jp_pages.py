@@ -1095,11 +1095,28 @@ def render_jp_action():
 
     # 更新ステータスバー
     from datetime import timedelta
+
+    # 地力スコア算出日（週次更新）
     gen_date = datetime.strptime(generated, "%Y-%m-%d") if generated != "不明" else None
-    age_days = (datetime.now() - gen_date).days if gen_date else None
-    age_color = "green" if age_days is not None and age_days <= 1 else "orange" if age_days is not None and age_days <= 3 else "red"
-    age_label = "最新" if age_days == 0 else f"{age_days}日前" if age_days is not None else "不明"
-    st.caption(f"スコア算出日: :{age_color}[{generated} ({age_label})] | SL-20%/TP+40% | 対象: ¥1兆+ {len(all_tickers)}銘柄")
+    str_age = (datetime.now() - gen_date).days if gen_date else None
+    str_color = "green" if str_age is not None and str_age <= 7 else "orange" if str_age is not None and str_age <= 14 else "red"
+    str_label = "最新" if str_age == 0 else f"{str_age}日前" if str_age is not None else "不明"
+
+    # 総合スコア算出日（日次更新 = 最新シグナル日）
+    import os as _os
+    _sig_dir = ROOT / "data" / "signals"
+    _sig_files = sorted([f for f in _os.listdir(_sig_dir) if f[:4].isdigit() and f.endswith(".json")]) if _sig_dir.exists() else []
+    total_date = _sig_files[-1].replace(".json", "") if _sig_files else "不明"
+    total_gen = datetime.strptime(total_date, "%Y-%m-%d") if total_date != "不明" else None
+    total_age = (datetime.now() - total_gen).days if total_gen else None
+    total_color = "green" if total_age is not None and total_age <= 1 else "orange" if total_age is not None and total_age <= 3 else "red"
+    total_label = "最新" if total_age == 0 else f"{total_age}日前" if total_age is not None else "不明"
+
+    st.caption(
+        f"総合スコア(日次): :{total_color}[{total_date} ({total_label})] | "
+        f"地力スコア(週次): :{str_color}[{generated} ({str_label})] | "
+        f"SL-20%/TP+40% | 対象: ¥1兆+ {len(all_tickers)}銘柄"
+    )
 
     # 価格データ + 社名取得
     with st.spinner(f"{len(all_tickers)}銘柄の価格データ取得中..."):
