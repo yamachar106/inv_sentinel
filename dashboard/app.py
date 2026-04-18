@@ -1878,21 +1878,12 @@ def render_sector_map(df_tech: pd.DataFrame, universe: list[dict]):
 
 # ─── Main ─────────────────────────────────────────────
 
-def render_system_guide():
-    """システム全体像ガイドページ"""
-    guide_path = ROOT / "data" / "references" / "system_overview.md"
-    if guide_path.exists():
-        content = guide_path.read_text(encoding="utf-8")
-        st.markdown(content, unsafe_allow_html=True)
-    else:
-        st.error("system_overview.md が見つかりません")
-
-
 def main():
     page = render_sidebar()
 
-    # ─── System Guide ───
+    # ─── System Guide (Live Scanner) ───
     if page == "\U0001f4d6 System Guide":
+        from dashboard.guide_page import render_system_guide
         render_system_guide()
         return
 
