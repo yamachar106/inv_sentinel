@@ -180,6 +180,7 @@ def build_digest(
     regime_header: str | None = None,
     mega_jp_signals: list[dict] | None = None,
     sell_signals: list | None = None,
+    confluence_summary: dict | None = None,
 ) -> str:
     """ダイジェストメッセージを構築"""
     lines = [f"*MEGA Daily Digest* ({today})\n"]
@@ -216,6 +217,17 @@ def build_digest(
             lines.append(f"🔴 *売却シグナル: {n_high}件* — 要即時対応")
         else:
             lines.append(f"🟡 売却注意: {len(sell_signals)}件")
+
+    # コンフルエンス
+    if confluence_summary and confluence_summary.get("conviction_2", 0) > 0:
+        has_any = True
+        n2 = confluence_summary.get("conviction_2", 0)
+        n3 = confluence_summary.get("conviction_3", 0)
+        n4 = confluence_summary.get("conviction_4", 0)
+        high = n3 + n4
+        if high > 0:
+            lines.append(f"🎯 高確信コンフルエンス: {high}銘柄 (3+シグナル重畳)")
+        lines.append(f"📊 確信度2+: {n2+n3+n4}銘柄")
 
     if not has_any:
         lines.append("シグナルなし — 待機継続")
@@ -737,22 +749,77 @@ def _run_portfolio_monitor(dry_run: bool = False) -> list:
 
 
 def _run_new_strategy_scans(today: str, dry_run: bool = False, regime: str = ""):
-    """新戦略のスキャンステップを実行する（PEAD, 上方修正, Stage Analysis）。
+    """新戦略のスキャンステップを実行する。
 
     各戦略はtry/exceptで独立して実行し、1つが失敗しても他は継続する。
     """
+    pead_codes: list[str] = []
+    revision_codes: list[str] = []
+
     # ---- PEAD (Earnings Surprise) ----
     try:
-        from screener.earnings_surprise import is_pead_season, format_pead_signals
+        from screener.earnings_surprise import (
+            is_pead_season, scan_earnings_surprise, format_pead_signals,
+        )
+        print("\n[8] Earnings Surprise / PEAD スキャン")
         if is_pead_season():
-            print("\n[8] Earnings Surprise / PEAD スキャン")
-            # PEADは重いのでウォッチリスト銘柄のみ対象
-            # フル実行は weekly で別途
-            print("  PEADシーズン — 週次バッチで実行")
+            # 月曜日にフルスキャン、それ以外はスキップ
+            d = date.fromisoformat(today)
+            if d.weekday() == 0:  # 月曜
+                # JP MEGA ユニバースのコードを対象にする
+                from screener.signal_store import load_previous_enriched_signals
+                prev = load_previous_enriched_signals(today)
+                mega_jp = prev.get("mega:JP", [])
+                target_codes = [s["code"] for s in mega_jp if s.get("code")]
+                if target_codes:
+                    pead_results = scan_earnings_surprise(target_codes)
+                    pead_codes = [s["code"] for s in pead_results]
+                    if pead_results:
+                        msg = format_pead_signals(pead_results)
+                        if msg and not dry_run:
+                            webhook = _resolve_webhook_url("mega", "JP") or _resolve_webhook_url()
+                            if webhook:
+                                _send_slack(webhook, msg)
+                                print("  PEAD通知送信完了")
+                    else:
+                        print("  サプライズ銘柄なし")
+                else:
+                    print("  対象銘柄なし — スキップ")
+            else:
+                print("  PEADシーズン — 月曜に週次バッチ実行")
         else:
-            print("\n[8] PEAD: 非決算月 — スキップ")
+            print("  非決算月 — スキップ")
     except Exception as e:
-        print(f"\n[8] [ERROR] PEAD: {e}")
+        print(f"  [ERROR] PEAD: {e}")
+
+    # ---- 上方修正ドリフト (JP) ----
+    try:
+        from screener.revision_drift import scan_revisions, format_revision_signals
+        print("\n[8.5] 上方修正ドリフト")
+        d = date.fromisoformat(today)
+        if d.weekday() == 0:  # 月曜にスキャン
+            from screener.signal_store import load_previous_enriched_signals
+            prev = load_previous_enriched_signals(today)
+            mega_jp = prev.get("mega:JP", [])
+            target_codes = [s["code"] for s in mega_jp if s.get("code")]
+            if target_codes:
+                rev_results = scan_revisions(target_codes)
+                revision_codes = [s["code"] for s in rev_results]
+                if rev_results:
+                    msg = format_revision_signals(rev_results)
+                    if msg and not dry_run:
+                        webhook = _resolve_webhook_url("mega", "JP") or _resolve_webhook_url()
+                        if webhook:
+                            _send_slack(webhook, msg)
+                            print("  上方修正通知送信完了")
+                else:
+                    print("  上方修正銘柄なし")
+            else:
+                print("  対象銘柄なし — スキップ")
+        else:
+            print("  月曜に週次バッチ実行")
+    except Exception as e:
+        print(f"  [ERROR] Revision Drift: {e}")
 
     # ---- Stage Analysis (保有ポジション警告) ----
     try:
@@ -761,7 +828,6 @@ def _run_new_strategy_scans(today: str, dry_run: bool = False, regime: str = "")
         positions = portfolio.get("positions", {})
         if positions:
             print("\n[9] Weinstein Stage 警告チェック")
-            # 現在の価格データを取得
             import yfinance as yf
             codes = list(positions.keys())
             tickers = []
@@ -804,6 +870,35 @@ def _run_new_strategy_scans(today: str, dry_run: bool = False, regime: str = "")
     except Exception as e:
         print(f"\n[9] [ERROR] Stage Analysis: {e}")
 
+    # ---- インサイダー・クラスター買い (US) ----
+    try:
+        from screener.insider import scan_insider_clusters, format_insider_signals
+        print("\n[9.5] インサイダー・クラスター買い")
+        d = date.fromisoformat(today)
+        if d.weekday() == 0:  # 月曜にスキャン
+            # US MEGA銘柄を対象
+            from screener.signal_store import load_previous_enriched_signals
+            prev = load_previous_enriched_signals(today)
+            mega_us = prev.get("mega:US", [])
+            us_codes = [s["code"] for s in mega_us if s.get("code")]
+            if us_codes:
+                clusters = scan_insider_clusters(us_codes)
+                if clusters:
+                    msg = format_insider_signals(clusters)
+                    if msg and not dry_run:
+                        webhook = _resolve_webhook_url("mega", "US") or _resolve_webhook_url()
+                        if webhook:
+                            _send_slack(webhook, msg)
+                            print("  インサイダー通知送信完了")
+                else:
+                    print("  クラスター買いなし")
+            else:
+                print("  US MEGA銘柄なし — スキップ")
+        else:
+            print("  月曜に週次バッチ実行")
+    except Exception as e:
+        print(f"  [ERROR] Insider: {e}")
+
     # ---- コンフルエンス集計 ----
     try:
         from screener.confluence import ConfluenceScorer
@@ -838,6 +933,14 @@ def _run_new_strategy_scans(today: str, dry_run: bool = False, regime: str = "")
                 if s.get("vcp_detected"):
                     scorer.add_single("vcp", s["code"])
 
+        # PEADシグナルをコンフルエンスに追加
+        if pead_codes:
+            scorer.add_signals("pead", pead_codes, market="JP")
+
+        # 上方修正シグナルをコンフルエンスに追加
+        if revision_codes:
+            scorer.add_signals("kuroten", revision_codes, market="JP")
+
         summary = scorer.summary()
         n_multi = summary["conviction_2"] + summary["conviction_3"] + summary["conviction_4"]
         print(f"  全{summary['total_stocks']}銘柄: "
@@ -849,7 +952,6 @@ def _run_new_strategy_scans(today: str, dry_run: bool = False, regime: str = "")
         if n_multi > 0 and not dry_run:
             report = scorer.format_report(min_conviction=2)
             if report:
-                from screener.notifier import _resolve_webhook_url, _send_slack
                 webhook = _resolve_webhook_url("mega", "JP") or _resolve_webhook_url()
                 if webhook:
                     _send_slack(webhook, report)
@@ -859,7 +961,7 @@ def _run_new_strategy_scans(today: str, dry_run: bool = False, regime: str = "")
 
     # ---- 短期カタリストスキャン ----
     try:
-        from screener.catalyst import detect_monthly_anomaly, format_catalyst_signals
+        from screener.catalyst import detect_monthly_anomaly
         print("\n[11] 短期カタリスト")
 
         # 月末効果チェック（軽量）

@@ -81,11 +81,19 @@ kuroten-screener/
 │   ├── filters.py         ← 株価・時価総額フィルタ
 │   ├── notifier.py        ← Slack通知（strategy×marketルーティング+売却シグナル対応）
 │   ├── portfolio.py       ← ポジション管理CRUD+CLI
-│   ├── sell_monitor.py    ← 売却シグナル監視（5ルール）
+│   ├── sell_monitor.py    ← 売却シグナル監視（6ルール、Stage警告含む）
 │   ├── market_regime.py   ← 相場環境判定（BULL/NEUTRAL/BEAR）
 │   ├── performance.py     ← トレード履歴・勝率・PF統計
 │   ├── rs_ranking.py      ← Relative Strength ランキング（ブレイクアウト前段フィルタ）
-│   └── reporter.py        ← ウォッチリスト生成（リンク付き）
+│   ├── reporter.py        ← ウォッチリスト生成（リンク付き）
+│   ├── confluence.py      ← コンフルエンス（シグナル重畳）スコアリング（確信度1-4）
+│   ├── catalyst.py        ← 短期カタリスト検出（決算ギャップ、ストップ高、RSI反発、月末効果）
+│   ├── position_sizing.py ← レジーム適応型ケリー基準ポジションサイジング
+│   ├── expected_value.py  ← 期待値算定フレームワーク（全10戦略比較）
+│   ├── earnings_surprise.py ← PEAD戦略（決算サプライズドリフト）
+│   ├── revision_drift.py  ← 上方修正ドリフト（JP特化）
+│   ├── stage_analysis.py  ← Weinstein Stage Analysis（4ステージ判定）
+│   └── insider.py         ← インサイダー・クラスター買い検出（US向けSEC Form 4）
 ├── data/
 │   ├── portfolio.json     ← 保有ポジション管理
 │   ├── portfolio_history.json ← クローズ済みトレード履歴
@@ -114,6 +122,15 @@ kuroten-screener/
     ├── test_market_regime.py
     ├── test_performance.py
     ├── test_rs_ranking.py
+    ├── test_vcp.py
+    ├── test_confluence.py
+    ├── test_catalyst.py
+    ├── test_position_sizing.py
+    ├── test_expected_value.py
+    ├── test_earnings_surprise.py
+    ├── test_revision_drift.py
+    ├── test_insider.py
+    ├── test_stage_analysis.py
     └── test_integration.py
 ```
 
@@ -188,6 +205,10 @@ python -m screener.portfolio list                          # 全ポジション
 python -m screener.portfolio list --strategy kuroten       # 戦略フィルタ
 python -m screener.portfolio remove 3656                   # 単純削除
 python -m screener.portfolio remove 3656 --sell-price 2500 --sell-reason "2倍達成"  # 売却記録付き
+
+# 期待値フレームワーク
+python -m screener.expected_value              # 全戦略のEV一覧
+python -m screener.expected_value --detail     # 詳細表示（R:R, Kelly等）
 ```
 
 ---
