@@ -716,6 +716,75 @@ def _render_signal_history_and_rotation():
     st.caption(f"直近{len(rows)}日間の切替回数: {switches}回")
 
 
+def _render_pullback_levels(show_row, show_code: str, prices: dict):
+    """押し目ライン（SMA + フィボナッチ）を表示"""
+    ticker = show_row.get("ticker", f"{show_code}.T")
+    price_data = prices.get(ticker, {})
+    close_series = price_data.get("close_series")
+    close = price_data.get("close", show_row.get("現在値", 0))
+
+    if close_series is None or len(close_series) < 50 or not close:
+        return
+
+    sma20 = float(close_series.rolling(20).mean().iloc[-1])
+    sma50 = float(close_series.rolling(50).mean().iloc[-1])
+    sma200 = price_data.get("sma200", 0)
+
+    # 3ヶ月のフィボナッチ
+    recent = close_series.tail(min(63, len(close_series)))
+    low_3m = float(recent.min())
+    high_3m = float(recent.max())
+    fib_range = high_3m - low_3m
+
+    if fib_range <= 0:
+        return
+
+    fib_382 = high_3m - fib_range * 0.382
+    fib_500 = high_3m - fib_range * 0.500
+    fib_618 = high_3m - fib_range * 0.618
+
+    # ライン一覧を作成（現在値からの距離でソート）
+    levels = []
+    if sma20 > 0:
+        levels.append(("SMA20", sma20, "短期サポート"))
+    levels.append(("Fib 38.2%", fib_382, "浅い押し目"))
+    if sma50 > 0:
+        levels.append(("SMA50", sma50, "中期サポート"))
+    levels.append(("Fib 50%", fib_500, "半値押し"))
+    levels.append(("Fib 61.8%", fib_618, "深い押し目"))
+    if sma200 and sma200 > 0:
+        levels.append(("SMA200", sma200, "長期サポート（割れたら撤退）"))
+
+    # 現在値より下のラインのみ、近い順に
+    below = [(name, price, desc) for name, price, desc in levels if price < close]
+    below.sort(key=lambda x: -x[1])  # 高い順（近い順）
+
+    if not below:
+        return
+
+    with st.expander("📐 押し目ライン", expanded=True):
+        # 推奨ゾーンの判定
+        best = below[0]
+        best_gap = (close - best[1]) / close * 100
+
+        if best_gap <= 5:
+            st.success(f"推奨エントリーゾーン: {best[0]} ¥{best[1]:,.0f} まであと **{best_gap:.1f}%** — 近い")
+        else:
+            st.info(f"最寄りサポート: {best[0]} ¥{best[1]:,.0f} まで **{best_gap:.1f}%** — 押し目待ち余地あり")
+
+        for name, price, desc in below:
+            gap = (price - close) / close * 100  # negative
+            bar_pct = max(0, min(100, (price / close) * 100))
+            st.markdown(
+                f"**{name}** ¥{price:,.0f} ({gap:+.1f}%) — {desc}"
+            )
+
+        st.caption(
+            f"3M高値: ¥{high_3m:,.0f} / 3M安値: ¥{low_3m:,.0f} / "
+            f"SMA20乖離: {(close/sma20-1)*100:+.1f}% / SMA50乖離: {(close/sma50-1)*100:+.1f}%"
+        )
+
+
 def _render_hero_ai_analysis(show_row, show_code: str, prices: dict):
     """ヒーローセクション用のAI分析（expanderで折りたたみ）"""
     api_key = os.getenv("GOOGLE_API_KEY")
@@ -1001,6 +1070,9 @@ def _render_action_hero(df: pd.DataFrame, prices: dict, names: dict):
                 h_ev_color = "green" if h_ev > 0 else "red"
                 st.markdown(f"BT :{h_ev_color}[EV{h_ev:+.1f}%]")
                 st.markdown(f"勝率 {held_row['BT_WR']:.0f}%")
+
+        # 押し目ライン
+        _render_pullback_levels(show_row, show_code, prices)
 
         # AI分析（注目銘柄）
         _render_hero_ai_analysis(show_row, show_code, prices)
