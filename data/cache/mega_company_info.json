@@ -1,5 +1,5 @@
 {
-  "_date": "2026-04-18",
+  "_date": "2026-04-20",
   "tickers": {
     "NVDA": {
       "logo_url": "https://www.google.com/s2/favicons?domain=www.nvidia.com&sz=128",
@@ -19,15 +19,6 @@
       "website": "https://abc.xyz",
       "domain": "abc.xyz"
     },
-    "AAPL": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.apple.com&sz=128",
-      "summary_en": "Apple Inc. designs, manufactures, and markets smartphones, personal computers, tablets, wearables, and accessories worldwide. The company offers iPhone, a line of smartphones; Mac, a line of personal computers; iPad, a line of multi-purpose tablets; and wearables, home, and accessories comprising AirPods, Apple Vision Pro, Apple TV, Apple Watch, Beats products, and HomePod, as well as Apple branded and third-party accessories. It also provides AppleCare support and cloud services; and operates various platforms, including the App Store that allow customers to discover and download applications and digital content, such as books, music, video, games, and podcasts, as well as advertising services include third-party licensing arrangements and its own advertising platforms. In addition, the company offers various subscription-based services, such as Apple Arcade, a game subscription service; Apple Fitness+, a personalized fitness service; Apple Music, which offers users a curated listening experience with on-demand radio stations; Apple News+, a subscription news and magazine service; Apple TV, which offers exclusive original content and live sports; Apple Card, a co-branded credit card; and Apple Pay, a cashless payment service, as well as licenses its intellectual property. The company serves consumers, and small and mid-sized businesses; and the education, enterprise, and government markets. It distributes third-party applications for its products through the App Store. The company also sells its products through its retail and online stores, and direct sales force; and third-party cellular network carriers and resellers. The company was formerly known as Apple Computer, Inc. and changed its name to Apple Inc. in January 2007. Apple Inc. was founded in 1976 and is headquartered in Cupertino, California.",
-      "industry_en": "Consumer Electronics",
-      "industry": "Consumer Electronics",
-      "summary": "Apple Inc. designs, manufactures, and markets smartphones, personal computers, tablets, wearables, and accessories worldwide. The company offers iPhone, a line of smartphones; Mac, a line of personal ",
-      "website": "https://www.apple.com",
-      "domain": "www.apple.com"
-    },
     "GOOG": {
       "logo_url": "https://www.google.com/s2/favicons?domain=abc.xyz&sz=128",
       "summary_en": "Alphabet Inc. offers various products and platforms in the United States, Europe, the Middle East, Africa, the Asia-Pacific, Canada, and Latin America. It operates through Google Services, Google Cloud, and Other Bets segments. The Google Services segment provides products and services, including ads, Android, Chrome, devices, Gmail, Google Drive, Google Maps, Google Photos, Google Play, Search, and YouTube. It is also involved in the sale of apps and in-app purchases and digital content in Google Play and YouTube; and devices, as well as the provision of YouTube consumer subscription services, such as YouTube TV, YouTube Music and Premium, NFL Sunday Ticket, and Google One. The Google Cloud segment offers consumption-based fees and subscriptions for AI solutions, including AI infrastructure, Vertex AI platform, and Gemini enterprise. It also provides cybersecurity, and data and analytics services; Google Workspace that include cloud-based communication and collaboration tools for enterprises, such as Calendar, Gmail, Docs, Drive, and Meet; and other enterprise services. The Other Bets segment sells transportation and internet services. Alphabet Inc. was incorporated in 1998 and is headquartered in Mountain View, California.",
@@ -36,6 +27,15 @@
       "summary": "Alphabet Inc. offers various products and platforms in the United States, Europe, the Middle East, Africa, the Asia-Pacific, Canada, and Latin America. It operates through Google Services, Google Clou",
       "website": "https://abc.xyz",
       "domain": "abc.xyz"
+    },
+    "AAPL": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.apple.com&sz=128",
+      "summary_en": "Apple Inc. designs, manufactures, and markets smartphones, personal computers, tablets, wearables, and accessories worldwide. The company offers iPhone, a line of smartphones; Mac, a line of personal computers; iPad, a line of multi-purpose tablets; and wearables, home, and accessories comprising AirPods, Apple Vision Pro, Apple TV, Apple Watch, Beats products, and HomePod, as well as Apple branded and third-party accessories. It also provides AppleCare support and cloud services; and operates various platforms, including the App Store that allow customers to discover and download applications and digital content, such as books, music, video, games, and podcasts, as well as advertising services include third-party licensing arrangements and its own advertising platforms. In addition, the company offers various subscription-based services, such as Apple Arcade, a game subscription service; Apple Fitness+, a personalized fitness service; Apple Music, which offers users a curated listening experience with on-demand radio stations; Apple News+, a subscription news and magazine service; Apple TV, which offers exclusive original content and live sports; Apple Card, a co-branded credit card; and Apple Pay, a cashless payment service, as well as licenses its intellectual property. The company serves consumers, and small and mid-sized businesses; and the education, enterprise, and government markets. It distributes third-party applications for its products through the App Store. The company also sells its products through its retail and online stores, and direct sales force; and third-party cellular network carriers and resellers. The company was formerly known as Apple Computer, Inc. and changed its name to Apple Inc. in January 2007. Apple Inc. was founded in 1976 and is headquartered in Cupertino, California.",
+      "industry_en": "Consumer Electronics",
+      "industry": "Consumer Electronics",
+      "summary": "Apple Inc. designs, manufactures, and markets smartphones, personal computers, tablets, wearables, and accessories worldwide. The company offers iPhone, a line of smartphones; Mac, a line of personal ",
+      "website": "https://www.apple.com",
+      "domain": "www.apple.com"
     },
     "MSFT": {
       "logo_url": "https://www.google.com/s2/favicons?domain=www.microsoft.com&sz=128",
@@ -55,15 +55,6 @@
       "website": "https://www.amazon.com",
       "domain": "www.amazon.com"
     },
-    "TSM": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.tsmc.com&sz=128",
-      "summary_en": "Taiwan Semiconductor Manufacturing Company Limited, together with its subsidiaries, manufactures, packages, tests, and sells integrated circuits and other semiconductor devices in Taiwan, China, Europe, the Middle East, Africa, Japan, the United States, and internationally. It provides various wafer fabrication processes, such as processes to manufacture complementary metal- oxide-semiconductor (CMOS) logic, mixed-signal, radio frequency, embedded memory, bipolar CMOS mixed-signal, and others. The company also involved in providing customer and engineering support services; manufacturing of masks; investment in technology start-up companies; research, designing, developing, manufacturing, packaging, testing, and sale of color filters; and investment activities. Its products are used in high performance computing, smartphones, Internet of things, automotive, and digital consumer electronics. Taiwan Semiconductor Manufacturing Company Limited was incorporated in 1987 and is headquartered in Hsinchu City, Taiwan.",
-      "industry_en": "Semiconductors",
-      "industry": "Semiconductors",
-      "summary": "Taiwan Semiconductor Manufacturing Company Limited, together with its subsidiaries, manufactures, packages, tests, and sells integrated circuits and other semiconductor devices in Taiwan, China, Europ",
-      "website": "https://www.tsmc.com",
-      "domain": "www.tsmc.com"
-    },
     "AVGO": {
       "logo_url": "https://www.google.com/s2/favicons?domain=www.broadcom.com&sz=128",
       "summary_en": "Broadcom Inc. designs, develops, and supplies various semiconductor devices and infrastructure software solutions internationally. The company operates in two segments: Semiconductor Solutions and Infrastructure Software. The company offers networking connectivity, such as custom silicon solutions, ethernet switching & routing, ethernet NIC controllers, physical layer devices, and fiber optic components; wireless device connectivity, including RF semiconductor devices, connectivity solutions, custom touch controllers, and inductive charging ASICS; servers and storage system solutions, such as PCIE switches, SAS & raid products, fibre channel products, and HDD & SSD solutions; broadband solutions, includes set-top box, and broadband access; and industrial. The company also offers a private cloud software portfolio, including the VMware Cloud Foundation, Edge, vSphere foundation, telco cloud platform, private AI, live recovery, application networking and security, application development and data services; mainframe software, such as AIOPS & automation, database & data management, DEVX & DEVOPS, cybersecurity & compliance management, beyond code programs, foundational & open mainframe solutions; cybersecurity, such as endpoint, network, information, application security, and identity & access management; enterprise software; and fc san management. Its products are used in various applications in enterprise and data center networking, including artificial intelligence networking and connectivity, home connectivity, set-top boxes, broadband access, telecommunication equipment, wireless device and base stations, data center servers and storage systems, factory automation, power generation and alternative energy systems, and electronic displays. Broadcom Inc. was founded in 1961 and is headquartered in Palo Alto, California.",
@@ -72,6 +63,15 @@
       "summary": "Broadcom Inc. designs, develops, and supplies various semiconductor devices and infrastructure software solutions internationally. The company operates in two segments: Semiconductor Solutions and Inf",
       "website": "https://www.broadcom.com",
       "domain": "www.broadcom.com"
+    },
+    "TSM": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.tsmc.com&sz=128",
+      "summary_en": "Taiwan Semiconductor Manufacturing Company Limited, together with its subsidiaries, manufactures, packages, tests, and sells integrated circuits and other semiconductor devices in Taiwan, China, Europe, the Middle East, Africa, Japan, the United States, and internationally. It provides various wafer fabrication processes, such as processes to manufacture complementary metal- oxide-semiconductor (CMOS) logic, mixed-signal, radio frequency, embedded memory, bipolar CMOS mixed-signal, and others. The company also involved in providing customer and engineering support services; manufacturing of masks; investment in technology start-up companies; research, designing, developing, manufacturing, packaging, testing, and sale of color filters; and investment activities. Its products are used in high performance computing, smartphones, Internet of things, automotive, and digital consumer electronics. Taiwan Semiconductor Manufacturing Company Limited was incorporated in 1987 and is headquartered in Hsinchu City, Taiwan.",
+      "industry_en": "Semiconductors",
+      "industry": "Semiconductors",
+      "summary": "Taiwan Semiconductor Manufacturing Company Limited, together with its subsidiaries, manufactures, packages, tests, and sells integrated circuits and other semiconductor devices in Taiwan, China, Europ",
+      "website": "https://www.tsmc.com",
+      "domain": "www.tsmc.com"
     },
     "META": {
       "logo_url": "https://www.google.com/s2/favicons?domain=www.meta.com&sz=128",
@@ -91,7 +91,7 @@
       "website": "https://www.tesla.com",
       "domain": "www.tesla.com"
     },
-    "BRK/A": {
+    "BRK/B": {
       "logo_url": "",
       "summary_en": "",
       "industry_en": "",
@@ -100,7 +100,7 @@
       "website": "",
       "domain": ""
     },
-    "BRK/B": {
+    "BRK/A": {
       "logo_url": "",
       "summary_en": "",
       "industry_en": "",
@@ -136,15 +136,6 @@
       "website": "https://www.jpmorganchase.com",
       "domain": "www.jpmorganchase.com"
     },
-    "XOM": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=corporate.exxonmobil.com&sz=128",
-      "summary_en": "Exxon Mobil Corporation engages in the exploration and production of crude oil and natural gas in the United States, Canada, and internationally. The company operates through Upstream, Energy Products, Chemical Products, and Specialty Products segments. Its Upstream segment explores for and produces crude oil and natural gas. The Energy Products segment offers fuels, aromatics, and catalysts, as well as licensing services. Its Chemical Products segment manufactures and sells olefins, polyolefins, and intermediates. The Specialty Products segment offers finished lubricants, basestocks, waxes, synthetics, elastomers, and resins. It is also involved in the manufacture, trade, transport, and sale of crude oil, natural gas, petroleum products, petrochemicals, and other specialty products; and pursuit of lower-emission and business opportunities, including carbon capture and storage, hydrogen, lower-emission fuels, Proxxima resin systems, carbon materials, low-carbon data center, and lithium. In addition, the company offers aviation fuel. It sells its products under the Exxon, Esso, and Mobil brands. Exxon Mobil Corporation was founded in 1870 and is headquartered in Spring, Texas.",
-      "industry_en": "Oil & Gas Integrated",
-      "industry": "Oil & Gas Integrated",
-      "summary": "Exxon Mobil Corporation engages in the exploration and production of crude oil and natural gas in the United States, Canada, and internationally. The company operates through Upstream, Energy Products",
-      "website": "https://corporate.exxonmobil.com",
-      "domain": "corporate.exxonmobil.com"
-    },
     "AZN": {
       "logo_url": "https://www.google.com/s2/favicons?domain=www.astrazeneca.com&sz=128",
       "summary_en": "AstraZeneca PLC, a biopharmaceutical company, focuses on the discovery, development, manufacture, and commercialization of prescription medicines. The company offers Imjudo, Datroway, Iressa, Tagrisso, Imfinzi, Lynparza, Calquence, Enhertu, Orpathys, Truqap, Zoladex, Faslodex, Crestor, Andexxa, Onglyza, Symlin, XIGDUO XR, Atacand, Atacand HCT, Atacand Plus, Farxiga/Forxiga, Plendil, Modip, Splendil, Munobal, Flodil, Tenormin, Tenormine, Prenormine, Atenol, Zestril, Brilinta/Brilique, Komboglyze, Qtern, Wainua, Byetta, Lokelma, Seloken ZOK, Toprol-XL, Betaloc ZOK, XIGDUO, Accolate, Accoleit, Vanticon, Bricanyl Respules, Eklira Genuair/Tudorza/Bretaris, Pulmicort Turbuhaler, Symbicort Turbuhaler, Airsupra, Bricanyl Turbuhaler, Fasenra, Rhinocort, Tezspire, Bevespi Aerosphere, Daliresp/Daxas, Oxis Turbuhaler, Saphnelo, Breztri Aerosphere, Duaklir Genuair, Pulmicort Respules, and Symbicort pMDI. It also provides Beyfortus, Kavigale, Evusheld, Fluenz/FluMist, Synagis, Kanuma, Ultomiris, Koselugo, Voydeya, Soliris, Strensiq, Nexium, and other medicines. The company offers its products for ocology, cardiovascular, renal and metabolism, respiratory & immunology, vaccines and immune, and therapies rare diseases. It serves primary and specialty care physicians through distributors and local representative offices in the United Kingdom, the Americas, rest of Europe, Asia, Africa, and Australasia. It has a strategic agreement with Tempus and Pathos to develop the largest multimodal foundation model in oncology; and a strategic research collaboration with CSPC Pharmaceutical Group Limited to advance the discovery and development of novel oral candidates, with the potential to treat diseases across multiple indications. The company was formerly known as Zeneca Group PLC and changed its name to AstraZeneca PLC in April 1999. AstraZeneca PLC was incorporated in 1992 and is headquartered in Cambridge, the United Kingdom.",
@@ -153,6 +144,15 @@
       "summary": "AstraZeneca PLC, a biopharmaceutical company, focuses on the discovery, development, manufacture, and commercialization of prescription medicines. The company offers Imjudo, Datroway, Iressa, Tagrisso",
       "website": "https://www.astrazeneca.com",
       "domain": "www.astrazeneca.com"
+    },
+    "XOM": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=corporate.exxonmobil.com&sz=128",
+      "summary_en": "Exxon Mobil Corporation engages in the exploration and production of crude oil and natural gas in the United States, Canada, and internationally. The company operates through Upstream, Energy Products, Chemical Products, and Specialty Products segments. Its Upstream segment explores for and produces crude oil and natural gas. The Energy Products segment offers fuels, aromatics, and catalysts, as well as licensing services. Its Chemical Products segment manufactures and sells olefins, polyolefins, and intermediates. The Specialty Products segment offers finished lubricants, basestocks, waxes, synthetics, elastomers, and resins. It is also involved in the manufacture, trade, transport, and sale of crude oil, natural gas, petroleum products, petrochemicals, and other specialty products; and pursuit of lower-emission and business opportunities, including carbon capture and storage, hydrogen, lower-emission fuels, Proxxima resin systems, carbon materials, low-carbon data center, and lithium. In addition, the company offers aviation fuel. It sells its products under the Exxon, Esso, and Mobil brands. Exxon Mobil Corporation was founded in 1870 and is headquartered in Spring, Texas.",
+      "industry_en": "Oil & Gas Integrated",
+      "industry": "Oil & Gas Integrated",
+      "summary": "Exxon Mobil Corporation engages in the exploration and production of crude oil and natural gas in the United States, Canada, and internationally. The company operates through Upstream, Energy Products",
+      "website": "https://corporate.exxonmobil.com",
+      "domain": "corporate.exxonmobil.com"
     },
     "V": {
       "logo_url": "https://www.google.com/s2/favicons?domain=www.visa.com&sz=128",
@@ -190,6 +190,15 @@
       "website": "https://www.micron.com",
       "domain": "www.micron.com"
     },
+    "ORCL": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.oracle.com&sz=128",
+      "summary_en": "Oracle Corporation offers products and services that address enterprise information technology environments worldwide. Its Oracle cloud software as a service offering include various cloud software applications, including Oracle Fusion cloud enterprise resource planning ERP, Oracle Fusion cloud enterprise performance management EPM, Oracle Fusion cloud supply chain and manufacturing management SCM, Oracle Fusion cloud human capital management HCM, and NetSuite applications suite, Oracle Health applications, as well as Oracle Fusion Sales, Service, and Marketing. The company also offers cloud-based industry solutions for various industries; Oracle cloud license and on-premise license; and Oracle license support services. In addition, it provides cloud and license business' infrastructure technologies, such as the Oracle Database and MySQL Database; Java, a software development language; and middleware, including development tools and others. The company's cloud and license business' infrastructure technologies also comprise cloud-based compute, storage, and networking capabilities; and Oracle autonomous database, as well as AI, Internet-of-Things, machine learning, digital assistant, and blockchain. Further, it provides hardware products and other hardware-related software offerings, including Oracle engineered systems, enterprise servers, storage solutions, industry-specific hardware, virtualization software, operating systems, management software, and related hardware support services, and consulting and advanced customer services. It markets and sells its cloud, license, hardware, support, and services offerings directly to businesses in various industries, government agencies, and educational institutions, as well as through indirect channels. Oracle Corporation has a strategic alliance with Metron, Inc. The company was founded in 1977 and is headquartered in Austin, Texas.",
+      "industry_en": "Software - Infrastructure",
+      "industry": "Software - Infrastructure",
+      "summary": "Oracle Corporation offers products and services that address enterprise information technology environments worldwide. Its Oracle cloud software as a service offering include various cloud software ap",
+      "website": "https://www.oracle.com",
+      "domain": "www.oracle.com"
+    },
     "MA": {
       "logo_url": "https://www.google.com/s2/favicons?domain=www.mastercard.com&sz=128",
       "summary_en": "Mastercard Incorporated, a technology company, provides transaction processing and other payment-related products and services in the United States and internationally. The company offers products and services for account holders, merchants, financial institutions, digital partners, businesses, governments, and other organizations, such as programs that enable issuers to provide consumers with credits to defer payments; payment products and solutions that allow its customers to access funds in deposit and other accounts; prepaid programs services; consumer bill payment services; and commercial credit, debit, and prepaid payment products and solutions. It also provides solutions that enable businesses or governments to make payments to businesses, including Virtual Card Number, which is generated dynamically from an existing account and leverages the credit limit of the funding account; and a platform to optimize supplier payment enablement campaigns for financial institutions. In addition, the company offers Mastercard Move, which partners with digital messaging and payment platforms to enable consumers to send money directly within applications to other consumers; and partners with central banks, fintechs, and financial institutions, as well as enables various cross-border payment flows. Further, it provides security solutions; marketing, personalization, and issuer and merchant loyalty services; business and operational intelligence, advanced analytics and AI, consulting and agentic solutions, and payments and portfolio optimization; digital and authentication; processing and gateway solutions; and other solutions. The company offers payment solutions and services under the MasterCard, Maestro, and Cirrus names. Mastercard Incorporated was founded in 1966 and is headquartered in Purchase, New York.",
@@ -198,6 +207,15 @@
       "summary": "Mastercard Incorporated, a technology company, provides transaction processing and other payment-related products and services in the United States and internationally. The company offers products and",
       "website": "https://www.mastercard.com",
       "domain": "www.mastercard.com"
+    },
+    "AMD": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.amd.com&sz=128",
+      "summary_en": "Advanced Micro Devices, Inc. operates as a semiconductor company internationally. It operates in three segments: Data Center, Client and Gaming, and Embedded. The company offers artificial intelligence (AI) accelerators, microprocessors, and graphics processing units (GPUs) as standalone devices or as incorporated into accelerated processing units, chipsets, and data center and professional GPUs; and embedded processors and semi-custom system-on-chip (SoC) products, microprocessor and SoC development services and technology, data processing units, field programmable gate arrays (FPGA), system on modules, AI network interface cards, and adaptive SoC products. It provides processors under the AMD Ryzen, AMD Ryzen AI, AMD Ryzen PRO, AMD Ryzen Threadripper, AMD Ryzen Threadripper PRO, AMD Athlon, and AMD PRO A-Series brands; graphics under the AMD Radeon graphics and AMD Embedded Radeon graphics; professional graphics under the AMD Radeon Pro graphics brand; and AI and general-purpose compute infrastructure for hyperscale providers. The company offers data center graphics under the AMD Instinct accelerators and Radeon PRO V-series brands; server microprocessors under the AMD EPYC brand; low power solutions under the AMD Athlon, AMD Geode, AMD Ryzen, AMD EPYC, and AMD R-Series and G-Series brands; FPGA products under the Virtex-6, Virtex-7, Virtex UltraScale+, Kintex-7, Kintex UltraScale, Kintex UltraScale+, Artix-7, Artix UltraScale+, Spartan-6, and Spartan-7 brands; adaptive SOCs under the Zynq-7000, Zynq UltraScale+ MPSoC, Zynq UltraScale+ RFSoCs, Versal HBM, Versal Premium, Versal Prime, Versal AI Core, Versal AI Edge, Vitis, and Vivado brands; and compute and network acceleration board products under the Alveo and Pensando brands. It serves original equipment and design manufacturers, public cloud service providers, system integrators, distributors, and add-in-board manufacturers. The company was incorporated in 1969 and is headquartered in Santa Clara, California.",
+      "industry_en": "Semiconductors",
+      "industry": "Semiconductors",
+      "summary": "Advanced Micro Devices, Inc. operates as a semiconductor company internationally. It operates in three segments: Data Center, Client and Gaming, and Embedded. The company offers artificial intelligenc",
+      "website": "https://www.amd.com",
+      "domain": "www.amd.com"
     },
     "COST": {
       "logo_url": "https://www.google.com/s2/favicons?domain=www.costco.com&sz=128",
@@ -216,33 +234,6 @@
       "summary": "Netflix, Inc. provides entertainment services worldwide. The company offers television (TV) series, documentaries, feature films, games, and live programming across various genres and languages. It al",
       "website": "https://www.netflix.com",
       "domain": "www.netflix.com"
-    },
-    "AMD": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.amd.com&sz=128",
-      "summary_en": "Advanced Micro Devices, Inc. operates as a semiconductor company internationally. It operates in three segments: Data Center, Client and Gaming, and Embedded. The company offers artificial intelligence (AI) accelerators, microprocessors, and graphics processing units (GPUs) as standalone devices or as incorporated into accelerated processing units, chipsets, and data center and professional GPUs; and embedded processors and semi-custom system-on-chip (SoC) products, microprocessor and SoC development services and technology, data processing units, field programmable gate arrays (FPGA), system on modules, AI network interface cards, and adaptive SoC products. It provides processors under the AMD Ryzen, AMD Ryzen AI, AMD Ryzen PRO, AMD Ryzen Threadripper, AMD Ryzen Threadripper PRO, AMD Athlon, and AMD PRO A-Series brands; graphics under the AMD Radeon graphics and AMD Embedded Radeon graphics; professional graphics under the AMD Radeon Pro graphics brand; and AI and general-purpose compute infrastructure for hyperscale providers. The company offers data center graphics under the AMD Instinct accelerators and Radeon PRO V-series brands; server microprocessors under the AMD EPYC brand; low power solutions under the AMD Athlon, AMD Geode, AMD Ryzen, AMD EPYC, and AMD R-Series and G-Series brands; FPGA products under the Virtex-6, Virtex-7, Virtex UltraScale+, Kintex-7, Kintex UltraScale, Kintex UltraScale+, Artix-7, Artix UltraScale+, Spartan-6, and Spartan-7 brands; adaptive SOCs under the Zynq-7000, Zynq UltraScale+ MPSoC, Zynq UltraScale+ RFSoCs, Versal HBM, Versal Premium, Versal Prime, Versal AI Core, Versal AI Edge, Vitis, and Vivado brands; and compute and network acceleration board products under the Alveo and Pensando brands. It serves original equipment and design manufacturers, public cloud service providers, system integrators, distributors, and add-in-board manufacturers. The company was incorporated in 1969 and is headquartered in Santa Clara, California.",
-      "industry_en": "Semiconductors",
-      "industry": "Semiconductors",
-      "summary": "Advanced Micro Devices, Inc. operates as a semiconductor company internationally. It operates in three segments: Data Center, Client and Gaming, and Embedded. The company offers artificial intelligenc",
-      "website": "https://www.amd.com",
-      "domain": "www.amd.com"
-    },
-    "ORCL": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.oracle.com&sz=128",
-      "summary_en": "Oracle Corporation offers products and services that address enterprise information technology environments worldwide. Its Oracle cloud software as a service offering include various cloud software applications, including Oracle Fusion cloud enterprise resource planning ERP, Oracle Fusion cloud enterprise performance management EPM, Oracle Fusion cloud supply chain and manufacturing management SCM, Oracle Fusion cloud human capital management HCM, and NetSuite applications suite, Oracle Health applications, as well as Oracle Fusion Sales, Service, and Marketing. The company also offers cloud-based industry solutions for various industries; Oracle cloud license and on-premise license; and Oracle license support services. In addition, it provides cloud and license business' infrastructure technologies, such as the Oracle Database and MySQL Database; Java, a software development language; and middleware, including development tools and others. The company's cloud and license business' infrastructure technologies also comprise cloud-based compute, storage, and networking capabilities; and Oracle autonomous database, as well as AI, Internet-of-Things, machine learning, digital assistant, and blockchain. Further, it provides hardware products and other hardware-related software offerings, including Oracle engineered systems, enterprise servers, storage solutions, industry-specific hardware, virtualization software, operating systems, management software, and related hardware support services, and consulting and advanced customer services. It markets and sells its cloud, license, hardware, support, and services offerings directly to businesses in various industries, government agencies, and educational institutions, as well as through indirect channels. Oracle Corporation has a strategic alliance with Metron, Inc. The company was founded in 1977 and is headquartered in Austin, Texas.",
-      "industry_en": "Software - Infrastructure",
-      "industry": "Software - Infrastructure",
-      "summary": "Oracle Corporation offers products and services that address enterprise information technology environments worldwide. Its Oracle cloud software as a service offering include various cloud software ap",
-      "website": "https://www.oracle.com",
-      "domain": "www.oracle.com"
-    },
-    "CVX": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.chevron.com&sz=128",
-      "summary_en": "Chevron Corporation, through its subsidiaries, engages in the integrated energy and chemicals operations in the United States and internationally. It operates through Upstream, Downstream, and All Other segments. The Upstream segment engages in the exploration for, development, production, and transportation of crude oil and natural gas; processing, liquefaction, transportation, and regasification of liquefied natural gas; transportation of crude oil through pipelines; transportation, storage, and marketing of natural gas; carbon capture and storage; and operation of a gas-to-liquids plant. Its Downstream segment refines crude oil into petroleum products; markets crude oil, refined products, and lubricants; manufactures and markets renewable fuels; transports crude oil and refined products through pipeline, marine vessel, motor equipment, and rail car; and manufactures and markets commodity petrochemicals, plastics for industrial uses, and fuel and lubricant additives. The All Other segment engages in cash management and debt financing; insurance; real estate; and technology activities. It has operations in North America, South America, Europe, Africa, Asia, and Australia. The company was formerly known as ChevronTexaco Corporation and changed its name to Chevron Corporation in May 2005. Chevron Corporation was founded in 1879 and is headquartered in Houston, Texas.",
-      "industry_en": "Oil & Gas Integrated",
-      "industry": "Oil & Gas Integrated",
-      "summary": "Chevron Corporation, through its subsidiaries, engages in the integrated energy and chemicals operations in the United States and internationally. It operates through Upstream, Downstream, and All Oth",
-      "website": "https://www.chevron.com",
-      "domain": "www.chevron.com"
     },
     "BAC": {
       "logo_url": "https://www.google.com/s2/favicons?domain=www.bankofamerica.com&sz=128",
@@ -271,86 +262,14 @@
       "website": "https://www.abbvie.com",
       "domain": "www.abbvie.com"
     },
-    "PG": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.pginvestor.com&sz=128",
-      "summary_en": "The Procter & Gamble Company provides branded consumer packaged goods worldwide. It operates through Beauty; Grooming; Health Care; Fabric & Home Care; and Baby, Feminine & Family Care segments. The company offers conditioners, shampoos, styling aids, and treatments under the Head & Shoulders, Herbal Essences, Pantene, and Rejoice brands; antiperspirants, deodorants, and personal cleansing products under the Native, Old Spice, Safeguard, and Secret brands; and facial moisturizers, cleaners, and treatments under the Olay and SK-II brands. It also provides blades, razors, shave products, appliances, and other grooming products under the Braun, Gillette, and Venus brands. In addition, the company offers toothbrushes, toothpastes, and other oral care products under the Crest and Oral-B brands; and gastrointestinal, pain relief, rapid diagnostics, respiratory, vitamins/minerals/supplements, and other personal health care products under the Metamucil, Neurobion, Pepto-Bismol, and Vicks brands. Further, it provides fabric enhancers, and laundry additives and detergents under the Ariel, Downy, Gain, and Tide brands; and air and dish care, P&G professional, and surface care under the Cascade, Dawn, Fairy, Febreze, Mr. Clean, and Swiffer brands. Additionally, the company offers baby wipes, and taped diapers and pants under the Luvs and Pampers brands; adult incontinence and menstrual care products under the Always, Always Discreet, and Tampax brands; and paper towels, tissues, and toilet papers under the Bounty, Charmin, and Puffs brands. It sells its products through mass merchandisers, social and e-commerce channels, grocery and specialty beauty stores, membership club stores, drug and department stores, distributors, wholesalers, airport duty-free and high-frequency stores, pharmacies, electronics stores, and professional channels, as well as directly to consumers. The Procter & Gamble Company was founded in 1837 and is headquartered in Cincinnati, Ohio.",
-      "industry_en": "Household & Personal Products",
-      "industry": "Household & Personal Products",
-      "summary": "The Procter & Gamble Company provides branded consumer packaged goods worldwide. It operates through Beauty; Grooming; Health Care; Fabric & Home Care; and Baby, Feminine & Family Care segments. The c",
-      "website": "https://www.pginvestor.com",
-      "domain": "www.pginvestor.com"
-    },
-    "HD": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.homedepot.com&sz=128",
-      "summary_en": "The Home Depot, Inc. operates as a home improvement retailer in the United States and internationally. It sells various building materials, home improvement products, lawn and garden products, and décor products, as well as facilities maintenance, repair, and operations products. The company also offers installation services for flooring, water heaters, baths, garage doors, cabinets, cabinet makeovers, countertops, sheds, furnaces and central air systems, and windows. In addition, it provides tool and equipment rental services. The company serves consumers, such as do-it-yourself homeowners and do-it-for-me customers; and professional renovators/remodelers, general contractors, small to medium homebuilders, maintenance professionals, handymen, property managers, building service contractors and specialty tradespeople, such as electricians, landscapers, plumbers, painters, pool contractors, and roofers. It sells its products through websites and its mobile applications, including homedepot.com; homedepot.ca and homedepot.com.mx; blinds.com, justblinds.com, and americanblinds.com for custom window coverings; thecompanystore.com, an online site for textiles and décor products; hdsupply.com for maintenance, repair, and operations products and related services; and srsdistribution.com, heritagelandscapesupplygroup.com, and heritagepoolsupplygroup.com for roofing and building materials, landscape, and pool products; and The Home Depot stores. The Home Depot, Inc. was incorporated in 1978 and is headquartered in Atlanta, Georgia.",
-      "industry_en": "Home Improvement Retail",
-      "industry": "Home Improvement Retail",
-      "summary": "The Home Depot, Inc. operates as a home improvement retailer in the United States and internationally. It sells various building materials, home improvement products, lawn and garden products, and déc",
-      "website": "https://www.homedepot.com",
-      "domain": "www.homedepot.com"
-    },
-    "KO": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.coca-colacompany.com&sz=128",
-      "summary_en": "The Coca-Cola Company, a beverage company, manufactures and sells various nonalcoholic beverages in the United States and internationally. The company provides Trademark Coca-Cola, sparkling soft drinks and flavors; water, sports, coffee, and tea; juice, value-added dairy, and plant-based beverages; and emerging beverages. It also offers beverage concentrates and syrups, as well as fountain syrups to fountain retailers comprising restaurants and convenience stores. The company sells its products under the Coca-Cola, Diet Coke/Coca-Cola Light, Coca-Cola Zero Sugar, caffeine free Diet Coke, Cherry Coke, Fanta, Sprite, Simply, Fanta Orange, Fanta Zero Orange, Fanta Zero Sugar, Fanta Apple, Sprite Zero Sugar, Simply Orange, Simply Apple, Simply Grapefruit, Fresca, Schweppes, Thums Up, Aquarius, Ayataka, BODYARMOR, Ciel, Costa, Crystal, Dasani, Fuze Tea, Georgia, glacéau smartwater, glacéau vitaminwater, Gold Peak, I LOHAS, Powerade, Topo Chico, Core Power, Del Valle, fairlife, innocent, Maaza, Minute Maid, Minute Maid Pulpy, Santa Clara, and dogadan brands. It operates through a network of independent bottling partners, distributors, wholesalers, and retailers, as well as through bottling and distribution operators. The Coca-Cola Company was founded in 1886 and is headquartered in Atlanta, Georgia.",
-      "industry_en": "Beverages - Non-Alcoholic",
-      "industry": "Beverages - Non-Alcoholic",
-      "summary": "The Coca-Cola Company, a beverage company, manufactures and sells various nonalcoholic beverages in the United States and internationally. The company provides Trademark Coca-Cola, sparkling soft drin",
-      "website": "https://www.coca-colacompany.com",
-      "domain": "www.coca-colacompany.com"
-    },
-    "LRCX": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.lamresearch.com&sz=128",
-      "summary_en": "Lam Research Corporation designs, manufactures, markets, refurbishes, and services semiconductor processing equipment used in the fabrication of integrated circuits in the United States, China, Korea, Taiwan, Japan, Southeast Asia, and Europe. The company offers ALTUS systems to deposit conformal or selective films for tungsten or molybdenum metallization applications; SABRE electrochemical deposition products for copper interconnect transition that offers copper damascene manufacturing; SPEED gapfill high-density plasma chemical vapor deposition (CVD) products; Striker single-wafer atomic layer deposition products for dielectric film solutions; and VECTOR plasma-enhanced CVD products. It also provides Flex for dielectric etch applications; Vantex, a dielectric etch system that provides RF technology and repeatable wafer-to-wafer performance enabled by Equipment Intelligence solutions; Kiyo for conductor etch applications; Syndion for through-silicon via etch applications; and Versys metal products for metal etch processes. In addition, the company offers Coronus bevel clean products to enhance die yield; and Da Vinci, DV-Prime, EOS, and SP series products to address various wafer cleaning applications. Further, it provides Reliant deposition, etch, and clean products; and Sense.i platform products, as well as customer service, spares, and upgrades. Lam Research Corporation was incorporated in 1980 and is headquartered in Fremont, California.",
-      "industry_en": "Semiconductor Equipment & Materials",
-      "industry": "Semiconductor Equipment & Materials",
-      "summary": "Lam Research Corporation designs, manufactures, markets, refurbishes, and services semiconductor processing equipment used in the fabrication of integrated circuits in the United States, China, Korea,",
-      "website": "https://www.lamresearch.com",
-      "domain": "www.lamresearch.com"
-    },
-    "CSCO": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.cisco.com&sz=128",
-      "summary_en": "Cisco Systems, Inc. designs, develops, and sells technologies that help to power, secure, and draw insights from the internet in the Americas, Europe, the Middle East, Africa, the Asia Pacific, Japan, and China. The company offers data center switching; network security, identity and access management, and secure access service edge; threat intelligence, detection, and response solutions; interconnects public and private wireline and mobile networks, delivering connectivity to campus, data center, and branch networks; WEBEX suite, collaboration devices, and contact center; communication platform as a service software, including perpetual licenses, subscription arrangements, and hardware solutions; network assurance, monitoring and analytics, and observability suite; issue resolution, software support, and hardware replacement; professional services, such as planning, design, implementation, and high-value consulting; service and support packages, financing, and managed network services; and regional, national, and international wireline carriers, webscale products, internet, and cable. It also delivers connectivity to campus, data center, and branch networks; wireless products, including indoor and outdoor wireless coverage designed for seamless roaming use of voice, video, and data applications; end-to-end collaboration solutions through cloud, on-premise, or within hybrid cloud environments, transition collaboration solutions from on-premise to the cloud; and network assurance, monitoring and analytics, and observability suite. In addition, it offers technical support and advisory services. The company serves businesses, public institutions, governments, and service providers. It sells its products and services directly, through systems integrators, service providers, resellers, and distributors. Cisco Systems, Inc. was incorporated in 1984 and is headquartered in San Jose, California.",
-      "industry_en": "Communication Equipment",
-      "industry": "Communication Equipment",
-      "summary": "Cisco Systems, Inc. designs, develops, and sells technologies that help to power, secure, and draw insights from the internet in the Americas, Europe, the Middle East, Africa, the Asia Pacific, Japan,",
-      "website": "https://www.cisco.com",
-      "domain": "www.cisco.com"
-    },
-    "GE": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.geaerospace.com&sz=128",
-      "summary_en": "General Electric Company, doing business as GE Aerospace, designs and produces commercial and defense aircraft engines, integrated engine components, electric power, and aircraft systems. The company operates through two segments, Commercial Engines & Services, and Defense & Propulsion Technologies. The Commercial Engines & Services segment designs, develops, manufactures, maintenance, repair, and overhaul (MRO) services of jet engines and sale of spare parts for commercial airframes, business aviation, and aeroderivative applications. The Defense & Propulsion Technologies designs, develops, manufactures, and services jet engines and avionics and power systems for governments, militaries, and commercial airframers, as well as MRO of engines and the sale of spare parts. This segment also offers aircraft components and systems, such as small turboprop engines, aeroengine mechanical transmissions, turbines, combustors and controls, additive manufacturing, propeller systems, ignition systems, sensors and engine accessories for fixed wing and rotorcraft applications for commercial and military end users under the Avio Aero, Unison, Dowty Propellers, and Colibrium Additive brands. The company operates in the United States, Europe, Asia, the Americas, the Middle East, and Africa. General Electric Company was incorporated in 1892 and is based in Evendale, Ohio.",
-      "industry_en": "Aerospace & Defense",
-      "industry": "Aerospace & Defense",
-      "summary": "General Electric Company, doing business as GE Aerospace, designs and produces commercial and defense aircraft engines, integrated engine components, electric power, and aircraft systems. The company ",
-      "website": "https://www.geaerospace.com",
-      "domain": "www.geaerospace.com"
-    },
-    "AMAT": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.appliedmaterials.com&sz=128",
-      "summary_en": "Applied Materials, Inc. provides materials engineering solutions, equipment, services, and software to the semiconductor and related industries in the United States, China, Korea, Taiwan, Japan, Southeast Asia, Europe, and internationally. The company operates through Semiconductor Systems and Applied Global Services (AGS) segments. The Semiconductor Systems segment includes semiconductor capital equipment to enable materials engineering steps, including etch, rapid thermal processing, deposition, chemical mechanical planarization, metrology and inspection, wafer packaging, and ion implantation. The AGS segment offers integrated solutions to optimize equipment and fab performance and productivity comprising spares, upgrades, services, and 200 millimeter and other equipment and factory automation software for semiconductor and other products. It serves manufacturers of semiconductor wafers and chips, and other electronic devices. Applied Materials, Inc. was incorporated in 1967 and is headquartered in Santa Clara, California.",
-      "industry_en": "Semiconductor Equipment & Materials",
-      "industry": "Semiconductor Equipment & Materials",
-      "summary": "Applied Materials, Inc. provides materials engineering solutions, equipment, services, and software to the semiconductor and related industries in the United States, China, Korea, Taiwan, Japan, South",
-      "website": "https://www.appliedmaterials.com",
-      "domain": "www.appliedmaterials.com"
-    },
-    "INTC": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.intel.com&sz=128",
-      "summary_en": "Intel Corporation designs, develops, manufactures, markets, sells, and services computing and related end products and services in the United States, Ireland, Israel, and internationally. It operates through three segments: CCG, DCAI, and Intel Foundry. The company offers client computing group products, including client and commercial CPUs, discrete client GPUs, edge computing, and connectivity products; data center and AI products, such as server CPUs, discrete GPUs, and networking products; and semiconductors comprising wafer fabrication, substrates, and other related products and services. It also provides driving assistance and self-driving solutions; and develops and manufactures multi-beam mask writing tools. The company sells its products through sales organizations, distributors, resellers, retailers, and OEM partners. It serves original equipment manufacturers, original design manufacturers, cloud service providers, and other manufacturers and service providers. Intel Corporation has a strategic collaboration with Infosys Limited to develop a multi-layer AI fabric that unifies infrastructure, models, data, applications, and workflows into a composable and agent-ready ecosystem. The company was incorporated in 1968 and is headquartered in Santa Clara, California.",
-      "industry_en": "Semiconductors",
-      "industry": "Semiconductors",
-      "summary": "Intel Corporation designs, develops, manufactures, markets, sells, and services computing and related end products and services in the United States, Ireland, Israel, and internationally. It operates ",
-      "website": "https://www.intel.com",
-      "domain": "www.intel.com"
-    },
-    "HSBC": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.hsbc.com&sz=128",
-      "summary_en": "HSBC Holdings plc engages in the provision of banking and financial products and services worldwide. It operates through four segments: Hong Kong, UK, Corporate and Institutional Banking, and International Wealth and Premier Banking. The Hong Kong segment is involved in the retail banking and wealth and commercial banking of HSBC Hong Kong and Hang Seng Bank. The UK segment engages in UK retail banking and wealth, as well as first direct and M&S Bank, UK Commercial Banking, and HSBC Innovation Bank. The Corporate and Institutional Banking segment is involved in transaction banking and capital markets. The International Wealth and Premier Banking segment is involved in the business comprising premier banking outside of Hong Kong and the UK, its private bank, asset management, and insurance businesses. The company was founded in 1865 and is headquartered in London, the United Kingdom.",
-      "industry_en": "Banks - Diversified",
-      "industry": "Banks - Diversified",
-      "summary": "HSBC Holdings plc engages in the provision of banking and financial products and services worldwide. It operates through four segments: Hong Kong, UK, Corporate and Institutional Banking, and Internat",
-      "website": "https://www.hsbc.com",
-      "domain": "www.hsbc.com"
+    "CVX": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.chevron.com&sz=128",
+      "summary_en": "Chevron Corporation, through its subsidiaries, engages in the integrated energy and chemicals operations in the United States and internationally. It operates through Upstream, Downstream, and All Other segments. The Upstream segment engages in the exploration for, development, production, and transportation of crude oil and natural gas; processing, liquefaction, transportation, and regasification of liquefied natural gas; transportation of crude oil through pipelines; transportation, storage, and marketing of natural gas; carbon capture and storage; and operation of a gas-to-liquids plant. Its Downstream segment refines crude oil into petroleum products; markets crude oil, refined products, and lubricants; manufactures and markets renewable fuels; transports crude oil and refined products through pipeline, marine vessel, motor equipment, and rail car; and manufactures and markets commodity petrochemicals, plastics for industrial uses, and fuel and lubricant additives. The All Other segment engages in cash management and debt financing; insurance; real estate; and technology activities. It has operations in North America, South America, Europe, Africa, Asia, and Australia. The company was formerly known as ChevronTexaco Corporation and changed its name to Chevron Corporation in May 2005. Chevron Corporation was founded in 1879 and is headquartered in Houston, Texas.",
+      "industry_en": "Oil & Gas Integrated",
+      "industry": "Oil & Gas Integrated",
+      "summary": "Chevron Corporation, through its subsidiaries, engages in the integrated energy and chemicals operations in the United States and internationally. It operates through Upstream, Downstream, and All Oth",
+      "website": "https://www.chevron.com",
+      "domain": "www.chevron.com"
     },
     "PLTR": {
       "logo_url": "https://www.google.com/s2/favicons?domain=www.palantir.com&sz=128",
@@ -361,14 +280,59 @@
       "website": "https://www.palantir.com",
       "domain": "www.palantir.com"
     },
-    "MRK": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.merck.com&sz=128",
-      "summary_en": "Merck & Co., Inc. operates as a healthcare company worldwide. It offers human health pharmaceutical for various areas under the Keytruda, Keytruda Qlex, Welireg, Gardasil, ProQuad, M-M-R II, Varivax, Vaxneuvance, Capvaxive, RotaTeq, Pneumovax 23, Bridion, Prevymis, Dificid, Zerbaxa, Winrevair, Adempas/ Verquvo, Ohtuvayre, Lagevrio, Isentress/Isentress HD, Delstrigo, Pifeltro, Belsomra, Januvia, and Janumet brands. The company also provides veterinary pharmaceuticals, vaccines and health management solutions and services, such as livestock products under the Nuflor, Bovilis/Vista, Bovilis Cryptium, Banamine, Estrumate, Matrix, Resflor, Zuprevo, Revalor, Safe-Guard, M+Pac, Porcilis, Circumvent, Nobilis/Innovax, Paracox and Coccivac, Exzolt, Slice, Imvixa, Clynav, Aquavac/Norvax, Aquaflor, Flexolt brands; Allflex Livestock Intelligence solutions; and companion animal products under the Bravecto One-Month, Bravecto Injectable/Quantum, Bravecto TriUNO, Bravecto Plus, Sentinel Spectrum, Sentinel Flavor Tabs, Numelvi, Optimmune, Nobivac NXT, GilvetMab, Otomax, Mometamax, Mometamax Ultra, Posatex, Caninsulin/Vetsulin, Panacur, Safeguard, Regumate, Prestige, Scalibor/Exspot, Sure Petcare, and Home Again brands. It has development and commercialization agreement for three of Daiichi Sankyo's deruxtecan ADC candidates; AstraZeneca PLC to co-development and co-commercialize AstraZeneca's Lynparza products for multiple cancer types; licensed to develop, manufacture and commercialize LM-299, a novel investigational PD-1/VEGF bispecific antibody from LaNova; and collaboration agreement with Eisai Co., Ltd., Bayer AG, and Ridgeback Biotherapeutics LP, as well Moderna, Inc. Merck & Co., Inc. has strategic collaboration with Infinimmune, Inc. to discover and develop antibodies against multiple therapeutic targets. The company was founded in 1891 and is headquartered in Rahway, New Jersey.",
-      "industry_en": "Drug Manufacturers - General",
-      "industry": "Drug Manufacturers - General",
-      "summary": "Merck & Co., Inc. operates as a healthcare company worldwide. It offers human health pharmaceutical for various areas under the Keytruda, Keytruda Qlex, Welireg, Gardasil, ProQuad, M-M-R II, Varivax, ",
-      "website": "https://www.merck.com",
-      "domain": "www.merck.com"
+    "HD": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.homedepot.com&sz=128",
+      "summary_en": "The Home Depot, Inc. operates as a home improvement retailer in the United States and internationally. It sells various building materials, home improvement products, lawn and garden products, and décor products, as well as facilities maintenance, repair, and operations products. The company also offers installation services for flooring, water heaters, baths, garage doors, cabinets, cabinet makeovers, countertops, sheds, furnaces and central air systems, and windows. In addition, it provides tool and equipment rental services. The company serves consumers, such as do-it-yourself homeowners and do-it-for-me customers; and professional renovators/remodelers, general contractors, small to medium homebuilders, maintenance professionals, handymen, property managers, building service contractors and specialty tradespeople, such as electricians, landscapers, plumbers, painters, pool contractors, and roofers. It sells its products through websites and its mobile applications, including homedepot.com; homedepot.ca and homedepot.com.mx; blinds.com, justblinds.com, and americanblinds.com for custom window coverings; thecompanystore.com, an online site for textiles and décor products; hdsupply.com for maintenance, repair, and operations products and related services; and srsdistribution.com, heritagelandscapesupplygroup.com, and heritagepoolsupplygroup.com for roofing and building materials, landscape, and pool products; and The Home Depot stores. The Home Depot, Inc. was incorporated in 1978 and is headquartered in Atlanta, Georgia.",
+      "industry_en": "Home Improvement Retail",
+      "industry": "Home Improvement Retail",
+      "summary": "The Home Depot, Inc. operates as a home improvement retailer in the United States and internationally. It sells various building materials, home improvement products, lawn and garden products, and déc",
+      "website": "https://www.homedepot.com",
+      "domain": "www.homedepot.com"
+    },
+    "INTC": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.intel.com&sz=128",
+      "summary_en": "Intel Corporation designs, develops, manufactures, markets, sells, and services computing and related end products and services in the United States, Ireland, Israel, and internationally. It operates through three segments: CCG, DCAI, and Intel Foundry. The company offers client computing group products, including client and commercial CPUs, discrete client GPUs, edge computing, and connectivity products; data center and AI products, such as server CPUs, discrete GPUs, and networking products; and semiconductors comprising wafer fabrication, substrates, and other related products and services. It also provides driving assistance and self-driving solutions; and develops and manufactures multi-beam mask writing tools. The company sells its products through sales organizations, distributors, resellers, retailers, and OEM partners. It serves original equipment manufacturers, original design manufacturers, cloud service providers, and other manufacturers and service providers. Intel Corporation has a strategic collaboration with Infosys Limited to develop a multi-layer AI fabric that unifies infrastructure, models, data, applications, and workflows into a composable and agent-ready ecosystem. The company was incorporated in 1968 and is headquartered in Santa Clara, California.",
+      "industry_en": "Semiconductors",
+      "industry": "Semiconductors",
+      "summary": "Intel Corporation designs, develops, manufactures, markets, sells, and services computing and related end products and services in the United States, Ireland, Israel, and internationally. It operates ",
+      "website": "https://www.intel.com",
+      "domain": "www.intel.com"
+    },
+    "PG": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.pginvestor.com&sz=128",
+      "summary_en": "The Procter & Gamble Company provides branded consumer packaged goods worldwide. It operates through Beauty; Grooming; Health Care; Fabric & Home Care; and Baby, Feminine & Family Care segments. The company offers conditioners, shampoos, styling aids, and treatments under the Head & Shoulders, Herbal Essences, Pantene, and Rejoice brands; antiperspirants, deodorants, and personal cleansing products under the Native, Old Spice, Safeguard, and Secret brands; and facial moisturizers, cleaners, and treatments under the Olay and SK-II brands. It also provides blades, razors, shave products, appliances, and other grooming products under the Braun, Gillette, and Venus brands. In addition, the company offers toothbrushes, toothpastes, and other oral care products under the Crest and Oral-B brands; and gastrointestinal, pain relief, rapid diagnostics, respiratory, vitamins/minerals/supplements, and other personal health care products under the Metamucil, Neurobion, Pepto-Bismol, and Vicks brands. Further, it provides fabric enhancers, and laundry additives and detergents under the Ariel, Downy, Gain, and Tide brands; and air and dish care, P&G professional, and surface care under the Cascade, Dawn, Fairy, Febreze, Mr. Clean, and Swiffer brands. Additionally, the company offers baby wipes, and taped diapers and pants under the Luvs and Pampers brands; adult incontinence and menstrual care products under the Always, Always Discreet, and Tampax brands; and paper towels, tissues, and toilet papers under the Bounty, Charmin, and Puffs brands. It sells its products through mass merchandisers, social and e-commerce channels, grocery and specialty beauty stores, membership club stores, drug and department stores, distributors, wholesalers, airport duty-free and high-frequency stores, pharmacies, electronics stores, and professional channels, as well as directly to consumers. The Procter & Gamble Company was founded in 1837 and is headquartered in Cincinnati, Ohio.",
+      "industry_en": "Household & Personal Products",
+      "industry": "Household & Personal Products",
+      "summary": "The Procter & Gamble Company provides branded consumer packaged goods worldwide. It operates through Beauty; Grooming; Health Care; Fabric & Home Care; and Baby, Feminine & Family Care segments. The c",
+      "website": "https://www.pginvestor.com",
+      "domain": "www.pginvestor.com"
+    },
+    "CSCO": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.cisco.com&sz=128",
+      "summary_en": "Cisco Systems, Inc. designs, develops, and sells technologies that help to power, secure, and draw insights from the internet in the Americas, Europe, the Middle East, Africa, the Asia Pacific, Japan, and China. The company offers data center switching; network security, identity and access management, and secure access service edge; threat intelligence, detection, and response solutions; interconnects public and private wireline and mobile networks, delivering connectivity to campus, data center, and branch networks; WEBEX suite, collaboration devices, and contact center; communication platform as a service software, including perpetual licenses, subscription arrangements, and hardware solutions; network assurance, monitoring and analytics, and observability suite; issue resolution, software support, and hardware replacement; professional services, such as planning, design, implementation, and high-value consulting; service and support packages, financing, and managed network services; and regional, national, and international wireline carriers, webscale products, internet, and cable. It also delivers connectivity to campus, data center, and branch networks; wireless products, including indoor and outdoor wireless coverage designed for seamless roaming use of voice, video, and data applications; end-to-end collaboration solutions through cloud, on-premise, or within hybrid cloud environments, transition collaboration solutions from on-premise to the cloud; and network assurance, monitoring and analytics, and observability suite. In addition, it offers technical support and advisory services. The company serves businesses, public institutions, governments, and service providers. It sells its products and services directly, through systems integrators, service providers, resellers, and distributors. Cisco Systems, Inc. was incorporated in 1984 and is headquartered in San Jose, California.",
+      "industry_en": "Communication Equipment",
+      "industry": "Communication Equipment",
+      "summary": "Cisco Systems, Inc. designs, develops, and sells technologies that help to power, secure, and draw insights from the internet in the Americas, Europe, the Middle East, Africa, the Asia Pacific, Japan,",
+      "website": "https://www.cisco.com",
+      "domain": "www.cisco.com"
+    },
+    "LRCX": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.lamresearch.com&sz=128",
+      "summary_en": "Lam Research Corporation designs, manufactures, markets, refurbishes, and services semiconductor processing equipment used in the fabrication of integrated circuits in the United States, China, Korea, Taiwan, Japan, Southeast Asia, and Europe. The company offers ALTUS systems to deposit conformal or selective films for tungsten or molybdenum metallization applications; SABRE electrochemical deposition products for copper interconnect transition that offers copper damascene manufacturing; SPEED gapfill high-density plasma chemical vapor deposition (CVD) products; Striker single-wafer atomic layer deposition products for dielectric film solutions; and VECTOR plasma-enhanced CVD products. It also provides Flex for dielectric etch applications; Vantex, a dielectric etch system that provides RF technology and repeatable wafer-to-wafer performance enabled by Equipment Intelligence solutions; Kiyo for conductor etch applications; Syndion for through-silicon via etch applications; and Versys metal products for metal etch processes. In addition, the company offers Coronus bevel clean products to enhance die yield; and Da Vinci, DV-Prime, EOS, and SP series products to address various wafer cleaning applications. Further, it provides Reliant deposition, etch, and clean products; and Sense.i platform products, as well as customer service, spares, and upgrades. Lam Research Corporation was incorporated in 1980 and is headquartered in Fremont, California.",
+      "industry_en": "Semiconductor Equipment & Materials",
+      "industry": "Semiconductor Equipment & Materials",
+      "summary": "Lam Research Corporation designs, manufactures, markets, refurbishes, and services semiconductor processing equipment used in the fabrication of integrated circuits in the United States, China, Korea,",
+      "website": "https://www.lamresearch.com",
+      "domain": "www.lamresearch.com"
+    },
+    "KO": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.coca-colacompany.com&sz=128",
+      "summary_en": "The Coca-Cola Company, a beverage company, manufactures and sells various nonalcoholic beverages in the United States and internationally. The company provides Trademark Coca-Cola, sparkling soft drinks and flavors; water, sports, coffee, and tea; juice, value-added dairy, and plant-based beverages; and emerging beverages. It also offers beverage concentrates and syrups, as well as fountain syrups to fountain retailers comprising restaurants and convenience stores. The company sells its products under the Coca-Cola, Diet Coke/Coca-Cola Light, Coca-Cola Zero Sugar, caffeine free Diet Coke, Cherry Coke, Fanta, Sprite, Simply, Fanta Orange, Fanta Zero Orange, Fanta Zero Sugar, Fanta Apple, Sprite Zero Sugar, Simply Orange, Simply Apple, Simply Grapefruit, Fresca, Schweppes, Thums Up, Aquarius, Ayataka, BODYARMOR, Ciel, Costa, Crystal, Dasani, Fuze Tea, Georgia, glacéau smartwater, glacéau vitaminwater, Gold Peak, I LOHAS, Powerade, Topo Chico, Core Power, Del Valle, fairlife, innocent, Maaza, Minute Maid, Minute Maid Pulpy, Santa Clara, and dogadan brands. It operates through a network of independent bottling partners, distributors, wholesalers, and retailers, as well as through bottling and distribution operators. The Coca-Cola Company was founded in 1886 and is headquartered in Atlanta, Georgia.",
+      "industry_en": "Beverages - Non-Alcoholic",
+      "industry": "Beverages - Non-Alcoholic",
+      "summary": "The Coca-Cola Company, a beverage company, manufactures and sells various nonalcoholic beverages in the United States and internationally. The company provides Trademark Coca-Cola, sparkling soft drin",
+      "website": "https://www.coca-colacompany.com",
+      "domain": "www.coca-colacompany.com"
     },
     "BABA": {
       "logo_url": "https://www.google.com/s2/favicons?domain=www.alibabagroup.com&sz=128",
@@ -379,23 +343,32 @@
       "website": "https://www.alibabagroup.com",
       "domain": "www.alibabagroup.com"
     },
-    "NVS": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.novartis.com&sz=128",
-      "summary_en": "Novartis AG researches, develops, manufactures, distributes, markets, and sells pharmaceutical medicines in Switzerland and internationally. The company offers Entresto, an angiotensin receptorneprilysin inhibitor to treat symptomatic chronic heart failure with reduced ejection fraction (HFrEF); Cosentyx to treat plaque psoriasis, pso riatic arthritis, ankylosing spondylitis, and nonradiographic axial spondy loarthritis; Kisqali, a selective oral cyclin dependent inhibitor of kinases 4 and 6 (CDK4/6); Promacta/Revolade to treat immune thrombocytopenia (ITP), thrombocytopenia, and patients with severe aplastic anemia (SAA); Tafinlar+Mekinist, an oral combination therapy to treat patients with certain types of cancers; and Jakavi for the treatment of myelofibrosis, polycythemia vera, and acute or chronic graftversushost disease (GvHD). It also provides Tasigna to treat philadelphia chromosomepositive chronic myeloid leukemia in the chronic and/or accelerated phase; Xolair for the treatment of allergic asthma and nasal polyps or severe chronic rhinosi nusitis with nasal polyps; Ilaris to treat fever syndromes, Still's disease, and acute gouty arthritis; Pluvicto to treat prostatespecific membrane anti genpositive metastatic castrationresistant prostate cancer; Sandostatin SC and Sandostatin LAR to treat acromegaly carcinoid tumors and other types of functional gastro intestinal and pancreatic neuroendocrine tumors; Zolgensma for the treatment of genetic root cause of spinal muscular atrophy; Lucentis; Leqvio to reduce LDL cholesterol; Lutathera; Scemblix; and Fabhalta. The company focuses on therapeutic areas, such as cardiovascular, renal and metabolic, immunology, neuroscience, oncology, and hematology. It has a license and collaboration agreement with Alnylam Pharmaceuticals, Inc. to develop, manufacture, and commercialize Leqvio (inclisiran), a therapy to reduce LDL cholesterol. Novartis AG was incorporated in 1996 and is headquartered in Basel, Switzerland.",
-      "industry_en": "Drug Manufacturers - General",
-      "industry": "Drug Manufacturers - General",
-      "summary": "Novartis AG researches, develops, manufactures, distributes, markets, and sells pharmaceutical medicines in Switzerland and internationally. The company offers Entresto, an angiotensin receptorneprily",
-      "website": "https://www.novartis.com",
-      "domain": "www.novartis.com"
+    "GE": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.geaerospace.com&sz=128",
+      "summary_en": "General Electric Company, doing business as GE Aerospace, designs and produces commercial and defense aircraft engines, integrated engine components, electric power, and aircraft systems. The company operates through two segments, Commercial Engines & Services, and Defense & Propulsion Technologies. The Commercial Engines & Services segment designs, develops, manufactures, maintenance, repair, and overhaul (MRO) services of jet engines and sale of spare parts for commercial airframes, business aviation, and aeroderivative applications. The Defense & Propulsion Technologies designs, develops, manufactures, and services jet engines and avionics and power systems for governments, militaries, and commercial airframers, as well as MRO of engines and the sale of spare parts. This segment also offers aircraft components and systems, such as small turboprop engines, aeroengine mechanical transmissions, turbines, combustors and controls, additive manufacturing, propeller systems, ignition systems, sensors and engine accessories for fixed wing and rotorcraft applications for commercial and military end users under the Avio Aero, Unison, Dowty Propellers, and Colibrium Additive brands. The company operates in the United States, Europe, Asia, the Americas, the Middle East, and Africa. General Electric Company was incorporated in 1892 and is based in Evendale, Ohio.",
+      "industry_en": "Aerospace & Defense",
+      "industry": "Aerospace & Defense",
+      "summary": "General Electric Company, doing business as GE Aerospace, designs and produces commercial and defense aircraft engines, integrated engine components, electric power, and aircraft systems. The company ",
+      "website": "https://www.geaerospace.com",
+      "domain": "www.geaerospace.com"
     },
-    "UBS": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.ubs.com&sz=128",
-      "summary_en": "UBS Group AG operates as a wealth manager and bank worldwide. It operates through five segments: Global Wealth Management, Personal & Corporate Banking, Asset Management, Investment Bank, and Non-Core and Legacy. The Global Wealth Management segment offers financial services, advice, and solutions; investment management, estate planning, and corporate advice services; and wealth management and banking products and services to private wealth and institutional customers. Its Personal & Corporate Banking segment provides banking, retirement, financing, investments, and strategic transactions to private, corporate, and institutional customers through its branch network and digital channels in Switzerland. The Asset Management segment offers diversified asset management services. Its Investment Bank segment provides equities, foreign exchange, precious metals, research, advisory, and capital markets services to institutional, corporate, financial sponsor, and Global Wealth Management customers, as well as focused rates and credit platform. The company also offers lending products, such as securities-based lending, mortgages, structured products, and tailored solutions; collateralized lending residential and commercial real estate, primarily against securities, residential and commercial real estate, other real assets (such as ships and aircraft), private market and hedge fund interest; and unsecured lending. The company was formerly known as UBS AG and changed its name to UBS Group AG in December 2014. UBS Group AG was founded in 1862 and is headquartered in Zurich, Switzerland.",
+    "HSBC": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.hsbc.com&sz=128",
+      "summary_en": "HSBC Holdings plc engages in the provision of banking and financial products and services worldwide. It operates through four segments: Hong Kong, UK, Corporate and Institutional Banking, and International Wealth and Premier Banking. The Hong Kong segment is involved in the retail banking and wealth and commercial banking of HSBC Hong Kong and Hang Seng Bank. The UK segment engages in UK retail banking and wealth, as well as first direct and M&S Bank, UK Commercial Banking, and HSBC Innovation Bank. The Corporate and Institutional Banking segment is involved in transaction banking and capital markets. The International Wealth and Premier Banking segment is involved in the business comprising premier banking outside of Hong Kong and the UK, its private bank, asset management, and insurance businesses. The company was founded in 1865 and is headquartered in London, the United Kingdom.",
       "industry_en": "Banks - Diversified",
       "industry": "Banks - Diversified",
-      "summary": "UBS Group AG operates as a wealth manager and bank worldwide. It operates through five segments: Global Wealth Management, Personal & Corporate Banking, Asset Management, Investment Bank, and Non-Core",
-      "website": "https://www.ubs.com",
-      "domain": "www.ubs.com"
+      "summary": "HSBC Holdings plc engages in the provision of banking and financial products and services worldwide. It operates through four segments: Hong Kong, UK, Corporate and Institutional Banking, and Internat",
+      "website": "https://www.hsbc.com",
+      "domain": "www.hsbc.com"
+    },
+    "AMAT": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.appliedmaterials.com&sz=128",
+      "summary_en": "Applied Materials, Inc. provides materials engineering solutions, equipment, services, and software to the semiconductor and related industries in the United States, China, Korea, Taiwan, Japan, Southeast Asia, Europe, and internationally. The company operates through Semiconductor Systems and Applied Global Services (AGS) segments. The Semiconductor Systems segment includes semiconductor capital equipment to enable materials engineering steps, including etch, rapid thermal processing, deposition, chemical mechanical planarization, metrology and inspection, wafer packaging, and ion implantation. The AGS segment offers integrated solutions to optimize equipment and fab performance and productivity comprising spares, upgrades, services, and 200 millimeter and other equipment and factory automation software for semiconductor and other products. It serves manufacturers of semiconductor wafers and chips, and other electronic devices. Applied Materials, Inc. was incorporated in 1967 and is headquartered in Santa Clara, California.",
+      "industry_en": "Semiconductor Equipment & Materials",
+      "industry": "Semiconductor Equipment & Materials",
+      "summary": "Applied Materials, Inc. provides materials engineering solutions, equipment, services, and software to the semiconductor and related industries in the United States, China, Korea, Taiwan, Japan, South",
+      "website": "https://www.appliedmaterials.com",
+      "domain": "www.appliedmaterials.com"
     },
     "MS": {
       "logo_url": "https://www.google.com/s2/favicons?domain=www.morganstanley.com&sz=128",
@@ -415,6 +388,24 @@
       "website": "https://www.unitedhealthgroup.com",
       "domain": "www.unitedhealthgroup.com"
     },
+    "MRK": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.merck.com&sz=128",
+      "summary_en": "Merck & Co., Inc. operates as a healthcare company worldwide. It offers human health pharmaceutical for various areas under the Keytruda, Keytruda Qlex, Welireg, Gardasil, ProQuad, M-M-R II, Varivax, Vaxneuvance, Capvaxive, RotaTeq, Pneumovax 23, Bridion, Prevymis, Dificid, Zerbaxa, Winrevair, Adempas/ Verquvo, Ohtuvayre, Lagevrio, Isentress/Isentress HD, Delstrigo, Pifeltro, Belsomra, Januvia, and Janumet brands. The company also provides veterinary pharmaceuticals, vaccines and health management solutions and services, such as livestock products under the Nuflor, Bovilis/Vista, Bovilis Cryptium, Banamine, Estrumate, Matrix, Resflor, Zuprevo, Revalor, Safe-Guard, M+Pac, Porcilis, Circumvent, Nobilis/Innovax, Paracox and Coccivac, Exzolt, Slice, Imvixa, Clynav, Aquavac/Norvax, Aquaflor, Flexolt brands; Allflex Livestock Intelligence solutions; and companion animal products under the Bravecto One-Month, Bravecto Injectable/Quantum, Bravecto TriUNO, Bravecto Plus, Sentinel Spectrum, Sentinel Flavor Tabs, Numelvi, Optimmune, Nobivac NXT, GilvetMab, Otomax, Mometamax, Mometamax Ultra, Posatex, Caninsulin/Vetsulin, Panacur, Safeguard, Regumate, Prestige, Scalibor/Exspot, Sure Petcare, and Home Again brands. It has development and commercialization agreement for three of Daiichi Sankyo's deruxtecan ADC candidates; AstraZeneca PLC to co-development and co-commercialize AstraZeneca's Lynparza products for multiple cancer types; licensed to develop, manufacture and commercialize LM-299, a novel investigational PD-1/VEGF bispecific antibody from LaNova; and collaboration agreement with Eisai Co., Ltd., Bayer AG, and Ridgeback Biotherapeutics LP, as well Moderna, Inc. Merck & Co., Inc. has strategic collaboration with Infinimmune, Inc. to discover and develop antibodies against multiple therapeutic targets. The company was founded in 1891 and is headquartered in Rahway, New Jersey.",
+      "industry_en": "Drug Manufacturers - General",
+      "industry": "Drug Manufacturers - General",
+      "summary": "Merck & Co., Inc. operates as a healthcare company worldwide. It offers human health pharmaceutical for various areas under the Keytruda, Keytruda Qlex, Welireg, Gardasil, ProQuad, M-M-R II, Varivax, ",
+      "website": "https://www.merck.com",
+      "domain": "www.merck.com"
+    },
+    "NVS": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.novartis.com&sz=128",
+      "summary_en": "Novartis AG researches, develops, manufactures, distributes, markets, and sells pharmaceutical medicines in Switzerland and internationally. The company offers Entresto, an angiotensin receptorneprilysin inhibitor to treat symptomatic chronic heart failure with reduced ejection fraction (HFrEF); Cosentyx to treat plaque psoriasis, pso riatic arthritis, ankylosing spondylitis, and nonradiographic axial spondy loarthritis; Kisqali, a selective oral cyclin dependent inhibitor of kinases 4 and 6 (CDK4/6); Promacta/Revolade to treat immune thrombocytopenia (ITP), thrombocytopenia, and patients with severe aplastic anemia (SAA); Tafinlar+Mekinist, an oral combination therapy to treat patients with certain types of cancers; and Jakavi for the treatment of myelofibrosis, polycythemia vera, and acute or chronic graftversushost disease (GvHD). It also provides Tasigna to treat philadelphia chromosomepositive chronic myeloid leukemia in the chronic and/or accelerated phase; Xolair for the treatment of allergic asthma and nasal polyps or severe chronic rhinosi nusitis with nasal polyps; Ilaris to treat fever syndromes, Still's disease, and acute gouty arthritis; Pluvicto to treat prostatespecific membrane anti genpositive metastatic castrationresistant prostate cancer; Sandostatin SC and Sandostatin LAR to treat acromegaly carcinoid tumors and other types of functional gastro intestinal and pancreatic neuroendocrine tumors; Zolgensma for the treatment of genetic root cause of spinal muscular atrophy; Lucentis; Leqvio to reduce LDL cholesterol; Lutathera; Scemblix; and Fabhalta. The company focuses on therapeutic areas, such as cardiovascular, renal and metabolic, immunology, neuroscience, oncology, and hematology. It has a license and collaboration agreement with Alnylam Pharmaceuticals, Inc. to develop, manufacture, and commercialize Leqvio (inclisiran), a therapy to reduce LDL cholesterol. Novartis AG was incorporated in 1996 and is headquartered in Basel, Switzerland.",
+      "industry_en": "Drug Manufacturers - General",
+      "industry": "Drug Manufacturers - General",
+      "summary": "Novartis AG researches, develops, manufactures, distributes, markets, and sells pharmaceutical medicines in Switzerland and internationally. The company offers Entresto, an angiotensin receptorneprily",
+      "website": "https://www.novartis.com",
+      "domain": "www.novartis.com"
+    },
     "TM": {
       "logo_url": "https://www.google.com/s2/favicons?domain=global.toyota&sz=128",
       "summary_en": "Toyota Motor Corporation designs, manufactures, assembles, and sells passenger vehicles, minivans and commercial vehicles, and related parts and accessories in Japan, North America, Europe, Asia, Central and South America, Oceania, Africa, the Middle East, and internationally. It operates through Automotive, Financial Services, and All Other segments. The company offers subcompact and compact cars; mini-vehicles; mid-size, luxury, sports, and specialty cars; recreational and sport-utility vehicles; pickup trucks; minivans; trucks; and buses. It also develops and sells battery electric vehicles and batteries. In addition, the company provides financial services, such as retail financing and leasing, wholesale financing, insurance, and credit cards. Further, it operates GAZOO.com, a web portal for automobile information, as well as engages in telecommunications and other businesses. It offers vehicles under the Toyota and Lexus brand names. Toyota Motor Corporation was founded in 1933 and is headquartered in Toyota, Japan.",
@@ -423,24 +414,6 @@
       "summary": "Toyota Motor Corporation designs, manufactures, assembles, and sells passenger vehicles, minivans and commercial vehicles, and related parts and accessories in Japan, North America, Europe, Asia, Cent",
       "website": "https://global.toyota/en",
       "domain": "global.toyota"
-    },
-    "RTX": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.rtx.com&sz=128",
-      "summary_en": "RTX Corporation, an aerospace and defense company, provides systems and services for commercial, military, and government customers worldwide. It operates through three segments: Collins Aerospace (Collins), Pratt & Whitney, and Raytheon. The Collins segment offers aerospace and defense products, and aftermarket services for civil and military aircraft manufacturers and commercial airlines, as well as regional, business, and general aviation, defense, and commercial space operations. This segment designs, manufactures, and supplies electric power generation and management and distribution, environmental control, flight control, air data and aircraft sensing, engine control, and engine nacelle systems, as well as engine components; cabin interiors, including seating, oxygen, food and beverage preparation, storage and galley, lavatory, and wastewater management systems; connected aviation solutions and services; and systems solutions for connected battlespace, test and training range systems, crew escape systems, and simulation and training. It also provides spare parts, overhaul and repair, engineering and technical support, training and fleet management solutions, and asset and information management services. The Pratt & Whitney segment supplies aircraft engines for commercial, military, business jet, and general aviation customers; and produces, sells, and services military and commercial auxiliary power units, as well as offers fleet management and aftermarket maintenance, repair, and overhaul services. The Raytheon segment provides defensive and offensive threat detection, tracking, and mitigation capabilities for government and commercial customers. This segment offers sensors, mission orchestration and satellite control products, and software. The company was formerly known as Raytheon Technologies Corporation and changed its name to RTX Corporation in July 2023. RTX Corporation was incorporated in 1934 and is headquartered in Arlington, Virginia.",
-      "industry_en": "Aerospace & Defense",
-      "industry": "Aerospace & Defense",
-      "summary": "RTX Corporation, an aerospace and defense company, provides systems and services for commercial, military, and government customers worldwide. It operates through three segments: Collins Aerospace (Co",
-      "website": "https://www.rtx.com",
-      "domain": "www.rtx.com"
-    },
-    "SHEL": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.shell.com&sz=128",
-      "summary_en": "Shell plc operates as an energy and petrochemical company in Europe, Asia, Oceania, Africa, the United States, and other parts of the Americas. It operates through the following segments: Integrated Gas, Upstream, Marketing, Chemicals and Products, and Renewables and Energy Solutions. The company explores for and extracts natural gas to produce liquefied natural gas or convert it into gas-to-liquids (GTL) fuels and other products; explores for and extracts crude oil, natural gas, and natural gas liquids; and operates marketing and transportation of oil, gas, and liquids, supported by the infrastructure required to deliver them to market or to process them within Shell's chemical manufacturing plants and refineries. It is also involved in marketing, which includes mobility, lubricants, and sectors focused on decarbonization; operates a retail network, including electric vehicle charging, convenience retail, and the wholesale commercial fuels business for transport and industry; sells products for road transport and machinery in manufacturing, mining, power generation, agriculture, and construction; and provides low-carbon energy solutions, such as biofuels, to a broad range of commercial customers, including those in the aviation, marine, and agriculture sectors. In addition, the company offers chemicals and products, including chemicals manufacturing plants with their own marketing network, and refineries that turn crude oil and other feedstocks into a range of oil products, which are moved and marketed around the world for domestic, industrial, and transport use; and operates a pipeline business, trading, and optimization of crude oil, oil products, and petrochemicals. The company was formerly known as Royal Dutch Shell plc and changed its name to Shell plc in January 2022. Shell plc was founded in 1897 and is headquartered in London, United Kingdom.",
-      "industry_en": "Oil & Gas Integrated",
-      "industry": "Oil & Gas Integrated",
-      "summary": "Shell plc operates as an energy and petrochemical company in Europe, Asia, Oceania, Africa, the United States, and other parts of the Americas. It operates through the following segments: Integrated G",
-      "website": "https://www.shell.com",
-      "domain": "www.shell.com"
     },
     "GS": {
       "logo_url": "https://www.google.com/s2/favicons?domain=www.goldmansachs.com&sz=128",
@@ -460,6 +433,24 @@
       "website": "https://www.gevernova.com",
       "domain": "www.gevernova.com"
     },
+    "RTX": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.rtx.com&sz=128",
+      "summary_en": "RTX Corporation, an aerospace and defense company, provides systems and services for commercial, military, and government customers worldwide. It operates through three segments: Collins Aerospace (Collins), Pratt & Whitney, and Raytheon. The Collins segment offers aerospace and defense products, and aftermarket services for civil and military aircraft manufacturers and commercial airlines, as well as regional, business, and general aviation, defense, and commercial space operations. This segment designs, manufactures, and supplies electric power generation and management and distribution, environmental control, flight control, air data and aircraft sensing, engine control, and engine nacelle systems, as well as engine components; cabin interiors, including seating, oxygen, food and beverage preparation, storage and galley, lavatory, and wastewater management systems; connected aviation solutions and services; and systems solutions for connected battlespace, test and training range systems, crew escape systems, and simulation and training. It also provides spare parts, overhaul and repair, engineering and technical support, training and fleet management solutions, and asset and information management services. The Pratt & Whitney segment supplies aircraft engines for commercial, military, business jet, and general aviation customers; and produces, sells, and services military and commercial auxiliary power units, as well as offers fleet management and aftermarket maintenance, repair, and overhaul services. The Raytheon segment provides defensive and offensive threat detection, tracking, and mitigation capabilities for government and commercial customers. This segment offers sensors, mission orchestration and satellite control products, and software. The company was formerly known as Raytheon Technologies Corporation and changed its name to RTX Corporation in July 2023. RTX Corporation was incorporated in 1934 and is headquartered in Arlington, Virginia.",
+      "industry_en": "Aerospace & Defense",
+      "industry": "Aerospace & Defense",
+      "summary": "RTX Corporation, an aerospace and defense company, provides systems and services for commercial, military, and government customers worldwide. It operates through three segments: Collins Aerospace (Co",
+      "website": "https://www.rtx.com",
+      "domain": "www.rtx.com"
+    },
+    "SHEL": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.shell.com&sz=128",
+      "summary_en": "Shell plc operates as an energy and petrochemical company in Europe, Asia, Oceania, Africa, the United States, and other parts of the Americas. It operates through the following segments: Integrated Gas, Upstream, Marketing, Chemicals and Products, and Renewables and Energy Solutions. The company explores for and extracts natural gas to produce liquefied natural gas or convert it into gas-to-liquids (GTL) fuels and other products; explores for and extracts crude oil, natural gas, and natural gas liquids; and operates marketing and transportation of oil, gas, and liquids, supported by the infrastructure required to deliver them to market or to process them within Shell's chemical manufacturing plants and refineries. It is also involved in marketing, which includes mobility, lubricants, and sectors focused on decarbonization; operates a retail network, including electric vehicle charging, convenience retail, and the wholesale commercial fuels business for transport and industry; sells products for road transport and machinery in manufacturing, mining, power generation, agriculture, and construction; and provides low-carbon energy solutions, such as biofuels, to a broad range of commercial customers, including those in the aviation, marine, and agriculture sectors. In addition, the company offers chemicals and products, including chemicals manufacturing plants with their own marketing network, and refineries that turn crude oil and other feedstocks into a range of oil products, which are moved and marketed around the world for domestic, industrial, and transport use; and operates a pipeline business, trading, and optimization of crude oil, oil products, and petrochemicals. The company was formerly known as Royal Dutch Shell plc and changed its name to Shell plc in January 2022. Shell plc was founded in 1897 and is headquartered in London, United Kingdom.",
+      "industry_en": "Oil & Gas Integrated",
+      "industry": "Oil & Gas Integrated",
+      "summary": "Shell plc operates as an energy and petrochemical company in Europe, Asia, Oceania, Africa, the United States, and other parts of the Americas. It operates through the following segments: Integrated G",
+      "website": "https://www.shell.com",
+      "domain": "www.shell.com"
+    },
     "WFC": {
       "logo_url": "https://www.google.com/s2/favicons?domain=www.wellsfargo.com&sz=128",
       "summary_en": "Wells Fargo & Company, a financial services company, provides diversified banking, investment, mortgage, and consumer and commercial finance products and services in the United States and internationally. It operates through four segments: Consumer Banking and Lending; Commercial Banking; Corporate and Investment Banking; and Wealth and Investment Management. The company's financial products and services includes checking and savings accounts, and credit and debit cards, as well as home, auto, personal, and small business lending services. It also provides personalized wealth management, brokerage, financial planning, lending, private banking, trust and fiduciary products and services; and financial solutions to private, family owned and public companies through products and services including banking and credit products across multiple industry sectors and municipalities, secured lending and lease products, and treasury management. In addition, it offers a suite of capital markets, banking, and financial products and services, such as corporate banking, investment banking, treasury management, commercial real estate lending and servicing, equity, and fixed income solutions, as well as sales, trading, and research capabilities services to corporate, commercial real estate, government, and institutional clients. Wells Fargo & Company was founded in 1852 and is headquartered in San Francisco, California.",
@@ -468,15 +459,6 @@
       "summary": "Wells Fargo & Company, a financial services company, provides diversified banking, investment, mortgage, and consumer and commercial finance products and services in the United States and internationa",
       "website": "https://www.wellsfargo.com",
       "domain": "www.wellsfargo.com"
-    },
-    "PM": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.pmi.com&sz=128",
-      "summary_en": "Philip Morris International Inc. operates as a tobacco company. The company offers cigarettes and smoke-free products, including heat-not-burn, e-vapor, and oral nicotine products under the IQOS, VEEV, and ZYN brands; and consumer accessories, such as lighters and matches. It also offers wellness products. The company was incorporated in 1987 and is headquartered in Stamford, Connecticut.",
-      "industry_en": "Tobacco",
-      "industry": "Tobacco",
-      "summary": "Philip Morris International Inc. operates as a tobacco company. The company offers cigarettes and smoke-free products, including heat-not-burn, e-vapor, and oral nicotine products under the IQOS, VEEV",
-      "website": "https://www.pmi.com",
-      "domain": "www.pmi.com"
     },
     "RY": {
       "logo_url": "https://www.google.com/s2/favicons?domain=www.rbc.com&sz=128",
@@ -487,50 +469,14 @@
       "website": "https://www.rbc.com",
       "domain": "www.rbc.com"
     },
-    "CCZ": {
-      "logo_url": "",
-      "summary_en": "",
-      "industry_en": "",
-      "industry": "",
-      "summary": "",
-      "website": "",
-      "domain": ""
-    },
-    "LIN": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.linde.com&sz=128",
-      "summary_en": "Linde plc operates as an industrial gas company worldwide. It offers atmospheric gases, including oxygen, nitrogen, argon, and rare gases; and process gases, such as hydrogen, helium, carbon dioxide, carbon monoxide, electronic gases, specialty gases, and acetylene. The company also engages in designing and constructing of turnkey process plants for third-party customers, as well as for the gas businesses in various locations comprising air separation, hydrogen, synthesis, olefin, and natural gas plants. It serves healthcare, chemicals and energy, manufacturing, metals and mining, food and beverage, and electronics industries. The company operates in the United States, Brazil, Mexico, Canada, Germany, the Unted Kingdom, Eastern Europe, China, Australia, South Korea, And India. Linde plc was founded in 1879 and is based in Woking, the United Kingdom.",
-      "industry_en": "Specialty Chemicals",
-      "industry": "Specialty Chemicals",
-      "summary": "Linde plc operates as an industrial gas company worldwide. It offers atmospheric gases, including oxygen, nitrogen, argon, and rare gases; and process gases, such as hydrogen, helium, carbon dioxide, ",
-      "website": "https://www.linde.com",
-      "domain": "www.linde.com"
-    },
-    "KLAC": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.kla.com&sz=128",
-      "summary_en": "KLA Corporation, together with its subsidiaries, designs, manufactures, and markets process control, process-enabling, and yield management solutions for the semiconductor and related electronics industries worldwide. The company operates through three segments: Semiconductor Process Control; Specialty Semiconductor Process; and PCB and Component Inspection. It offers inspection and review tools to identify, locate, characterize, review, and analyze defects on various surfaces of patterned and unpatterned wafers; metrology systems to measure pattern dimensions, film thickness, film stress, layer-to-layer alignment, pattern placement, surface topography, and electro-optical properties for wafers; chemical process control equipment; wired and wireless sensor wafers and reticles; wafer defect inspection, review, and metrology systems; reticle inspection and metrology systems; wafer inspection and metrology systems; and semiconductor software solutions that provide run-time process control, defect excursion identification, process corrections, and defect classification to accelerate yield learning rates and reduce production risk. The company also provides etch, plasma dicing, deposition, and other wafer processing technologies and solutions for the semiconductor and microelectronics industry. In addition, it offers direct imaging, inspection, optical shaping, inkjet and additive printing, and computer-aided manufacturing and engineering solutions for the PCB market and inspection and metrology systems for quality control and yield improvement in advanced and traditional semiconductor packaging markets. The company was formerly known as KLA-Tencor Corporation and changed its name to KLA Corporation in July 2019. KLA Corporation was incorporated in 1975 and is headquartered in Milpitas, California.",
-      "industry_en": "Semiconductor Equipment & Materials",
-      "industry": "Semiconductor Equipment & Materials",
-      "summary": "KLA Corporation, together with its subsidiaries, designs, manufactures, and markets process control, process-enabling, and yield management solutions for the semiconductor and related electronics indu",
-      "website": "https://www.kla.com",
-      "domain": "www.kla.com"
-    },
-    "C": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.citigroup.com&sz=128",
-      "summary_en": "Citigroup Inc., a diversified financial service holding company, provides various financial products and services to consumers, corporations, governments, and institutions. It operates through five segments: Services, Markets, Banking, U.S. Personal Banking, and Wealth. The Services segment includes treasury and trade solutions, which provides cash management, trade, and working capital solutions to multinational corporations, financial institutions, and public sector organizations; and securities services, such as cross-border support for clients, local market expertise, post-trade technologies, data solutions, and various securities services solutions. The Markets segment offers sales and trading services for equities, foreign exchange, rates, spread products, and commodities to corporate, institutional, and public sector clients; and market-making services, including asset classes, risk management solutions, financing, and prime brokerage. The Banking segment includes investment banking services comprising equity and debt capital markets-related strategic financing solutions; advisory services related to mergers and acquisitions, divestitures, restructurings, and corporate defense activities; and corporate lending consists of corporate and commercial banking. The U.S. Personal Banking segment provides proprietary and co-branded card portfolios; and traditional banking services to retail and small business customers. The Wealth segment offers financial services to high-net-worth clients through banking, lending, mortgages, investment, custody, and trust product offerings; professional industries, including law firms, consulting groups, accounting, and asset management; and affluent and high net worth clients. The company operates in North America, the United Kingdom, Japan, North and South Asia, Australia, Europe, the Middle East, and Africa. Citigroup Inc. was founded in 1812 and is headquartered in New York, New York.",
-      "industry_en": "Banks - Diversified",
-      "industry": "Banks - Diversified",
-      "summary": "Citigroup Inc., a diversified financial service holding company, provides various financial products and services to consumers, corporations, governments, and institutions. It operates through five se",
-      "website": "https://www.citigroup.com",
-      "domain": "www.citigroup.com"
-    },
-    "MCD": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.mcdonalds.com&sz=128",
-      "summary_en": "McDonald's Corporation owns, operates, and franchises restaurants under the McDonald's brand in the United States and internationally. It offers food and beverages, including hamburgers and cheeseburgers, various chicken sandwiches, fries, shakes, frozen desserts, sundaes, soft serve cones, cookies, pies, soft drinks, coffee, and other beverages; and full or limited breakfast, as well as sells various other products during limited-time promotions. The company owns and operates franchised restaurants under various structures, including conventional franchise, developmental license, or affiliate. McDonald's Corporation was founded in 1940 and is based in Chicago, Illinois.",
-      "industry_en": "Restaurants",
-      "industry": "Restaurants",
-      "summary": "McDonald's Corporation owns, operates, and franchises restaurants under the McDonald's brand in the United States and internationally. It offers food and beverages, including hamburgers and cheeseburg",
-      "website": "https://www.mcdonalds.com",
-      "domain": "www.mcdonalds.com"
+    "PM": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.pmi.com&sz=128",
+      "summary_en": "Philip Morris International Inc. operates as a tobacco company. The company offers cigarettes and smoke-free products, including heat-not-burn, e-vapor, and oral nicotine products under the IQOS, VEEV, and ZYN brands; and consumer accessories, such as lighters and matches. It also offers wellness products. The company was incorporated in 1987 and is headquartered in Stamford, Connecticut.",
+      "industry_en": "Tobacco",
+      "industry": "Tobacco",
+      "summary": "Philip Morris International Inc. operates as a tobacco company. The company offers cigarettes and smoke-free products, including heat-not-burn, e-vapor, and oral nicotine products under the IQOS, VEEV",
+      "website": "https://www.pmi.com",
+      "domain": "www.pmi.com"
     },
     "IBM": {
       "logo_url": "https://www.google.com/s2/favicons?domain=www.ibm.com&sz=128",
@@ -541,14 +487,41 @@
       "website": "https://www.ibm.com",
       "domain": "www.ibm.com"
     },
-    "TMUS": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.t-mobile.com&sz=128",
-      "summary_en": "T-Mobile US, Inc., together with its subsidiaries, provides wireless communications services in the United States, Puerto Rico, and the United States Virgin Islands. The company offers voice, messaging, and data services to postpaid, prepaid, and wholesale and other services customers. It also provides wireless devices, including smartphones, wearables, tablets, home broadband gateways, headsets, and other mobile communication devices, as well as accessories; financing through equipment installment plans; reinsurance for device insurance policies and extended warranty contracts. The company offers services under the T-Mobile, Metro by T-Mobile, and Mint Mobile brands through its owned and operated retail stores, customer care channels, national retailers, and its websites, as well as through T-Mobile, Metro by T-Mobile, and Mint Mobile apps. It also sells devices to dealers and other third-party distributors for resale through independent third-party retail outlets and various third-party websites. The company was founded in 1994 and is headquartered in Bellevue, Washington. T-Mobile US, Inc. operates as a subsidiary of Deutsche Telekom AG.",
-      "industry_en": "Telecom Services",
-      "industry": "Telecom Services",
-      "summary": "T-Mobile US, Inc., together with its subsidiaries, provides wireless communications services in the United States, Puerto Rico, and the United States Virgin Islands. The company offers voice, messagin",
-      "website": "https://www.t-mobile.com",
-      "domain": "www.t-mobile.com"
+    "KLAC": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.kla.com&sz=128",
+      "summary_en": "KLA Corporation, together with its subsidiaries, designs, manufactures, and markets process control, process-enabling, and yield management solutions for the semiconductor and related electronics industries worldwide. The company operates through three segments: Semiconductor Process Control; Specialty Semiconductor Process; and PCB and Component Inspection. It offers inspection and review tools to identify, locate, characterize, review, and analyze defects on various surfaces of patterned and unpatterned wafers; metrology systems to measure pattern dimensions, film thickness, film stress, layer-to-layer alignment, pattern placement, surface topography, and electro-optical properties for wafers; chemical process control equipment; wired and wireless sensor wafers and reticles; wafer defect inspection, review, and metrology systems; reticle inspection and metrology systems; wafer inspection and metrology systems; and semiconductor software solutions that provide run-time process control, defect excursion identification, process corrections, and defect classification to accelerate yield learning rates and reduce production risk. The company also provides etch, plasma dicing, deposition, and other wafer processing technologies and solutions for the semiconductor and microelectronics industry. In addition, it offers direct imaging, inspection, optical shaping, inkjet and additive printing, and computer-aided manufacturing and engineering solutions for the PCB market and inspection and metrology systems for quality control and yield improvement in advanced and traditional semiconductor packaging markets. The company was formerly known as KLA-Tencor Corporation and changed its name to KLA Corporation in July 2019. KLA Corporation was incorporated in 1975 and is headquartered in Milpitas, California.",
+      "industry_en": "Semiconductor Equipment & Materials",
+      "industry": "Semiconductor Equipment & Materials",
+      "summary": "KLA Corporation, together with its subsidiaries, designs, manufactures, and markets process control, process-enabling, and yield management solutions for the semiconductor and related electronics indu",
+      "website": "https://www.kla.com",
+      "domain": "www.kla.com"
+    },
+    "CCZ": {
+      "logo_url": "",
+      "summary_en": "",
+      "industry_en": "",
+      "industry": "",
+      "summary": "",
+      "website": "",
+      "domain": ""
+    },
+    "C": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.citigroup.com&sz=128",
+      "summary_en": "Citigroup Inc., a diversified financial service holding company, provides various financial products and services to consumers, corporations, governments, and institutions. It operates through five segments: Services, Markets, Banking, U.S. Personal Banking, and Wealth. The Services segment includes treasury and trade solutions, which provides cash management, trade, and working capital solutions to multinational corporations, financial institutions, and public sector organizations; and securities services, such as cross-border support for clients, local market expertise, post-trade technologies, data solutions, and various securities services solutions. The Markets segment offers sales and trading services for equities, foreign exchange, rates, spread products, and commodities to corporate, institutional, and public sector clients; and market-making services, including asset classes, risk management solutions, financing, and prime brokerage. The Banking segment includes investment banking services comprising equity and debt capital markets-related strategic financing solutions; advisory services related to mergers and acquisitions, divestitures, restructurings, and corporate defense activities; and corporate lending consists of corporate and commercial banking. The U.S. Personal Banking segment provides proprietary and co-branded card portfolios; and traditional banking services to retail and small business customers. The Wealth segment offers financial services to high-net-worth clients through banking, lending, mortgages, investment, custody, and trust product offerings; professional industries, including law firms, consulting groups, accounting, and asset management; and affluent and high net worth clients. The company operates in North America, the United Kingdom, Japan, North and South Asia, Australia, Europe, the Middle East, and Africa. Citigroup Inc. was founded in 1812 and is headquartered in New York, New York.",
+      "industry_en": "Banks - Diversified",
+      "industry": "Banks - Diversified",
+      "summary": "Citigroup Inc., a diversified financial service holding company, provides various financial products and services to consumers, corporations, governments, and institutions. It operates through five se",
+      "website": "https://www.citigroup.com",
+      "domain": "www.citigroup.com"
+    },
+    "LIN": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.linde.com&sz=128",
+      "summary_en": "Linde plc operates as an industrial gas company worldwide. It offers atmospheric gases, including oxygen, nitrogen, argon, and rare gases; and process gases, such as hydrogen, helium, carbon dioxide, carbon monoxide, electronic gases, specialty gases, and acetylene. The company also engages in designing and constructing of turnkey process plants for third-party customers, as well as for the gas businesses in various locations comprising air separation, hydrogen, synthesis, olefin, and natural gas plants. It serves healthcare, chemicals and energy, manufacturing, metals and mining, food and beverage, and electronics industries. The company operates in the United States, Brazil, Mexico, Canada, Germany, the Unted Kingdom, Eastern Europe, China, Australia, South Korea, And India. Linde plc was founded in 1879 and is based in Woking, the United Kingdom.",
+      "industry_en": "Specialty Chemicals",
+      "industry": "Specialty Chemicals",
+      "summary": "Linde plc operates as an industrial gas company worldwide. It offers atmospheric gases, including oxygen, nitrogen, argon, and rare gases; and process gases, such as hydrogen, helium, carbon dioxide, ",
+      "website": "https://www.linde.com",
+      "domain": "www.linde.com"
     },
     "AXP": {
       "logo_url": "https://www.google.com/s2/favicons?domain=www.americanexpress.com&sz=128",
@@ -559,14 +532,23 @@
       "website": "https://www.americanexpress.com",
       "domain": "www.americanexpress.com"
     },
-    "PEP": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.pepsico.com&sz=128",
-      "summary_en": "PepsiCo, Inc. engages in the manufacture, marketing, distribution, and sale of various beverages and convenient foods worldwide. The company operates through six segments: PepsiCo Foods North America; PepsiCo Beverages North America; International Beverages Franchise; Europe, Middle East and Africa; Latin America Foods; and Asia Pacific Foods. It offers cereals, chips, dips, granola bars, oatmeal, pasta, rice, and syrups and mixes; refrigerated dips and spreads; beverage concentrates, fountain syrups, and finished goods; and ready-to-drink tea and coffee products. The company also provides SodaStream sparkling water makers and related products, as well as various dairy products under the Agusha, Chudo, and Domik v Derevne brands. It serves wholesale and other distributors, foodservice customers, grocery stores, drug stores, convenience stores, discount/dollar stores, mass merchandisers, membership stores, hard discounters, e-commerce retailers and authorized independent bottlers, and others through a network of direct-store-delivery, customer warehouse, and distributor networks, as well as directly to consumers through e-commerce platforms and retailers. PepsiCo, Inc. was founded in 1898 and is based in Purchase, New York.",
-      "industry_en": "Beverages - Non-Alcoholic",
-      "industry": "Beverages - Non-Alcoholic",
-      "summary": "PepsiCo, Inc. engages in the manufacture, marketing, distribution, and sale of various beverages and convenient foods worldwide. The company operates through six segments: PepsiCo Foods North America;",
-      "website": "https://www.pepsico.com",
-      "domain": "www.pepsico.com"
+    "SAP": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.sap.com&sz=128",
+      "summary_en": "SAP SE, together with its subsidiaries, provides enterprise application and business solutions worldwide. It offers SAP Business AI; SAP S/4HANA that provides software capabilities for finance, risk and project management, procurement, manufacturing, supply chain and asset management, and research and development; SAP SuccessFactors solutions for human resources, including HR, time, payroll, talent and employee experience management, and analytics and planning; and spend management solutions that covers direct and indirect spend, travel and expense, and external workforce management. The company also provides SAP customer experience solutions; SAP Business Technology platform that enables customers and partners to build, integrate, and automate applications; and SAP Business Network, a business-to-business collaboration platform that helps digitalize key business processes across the supply chain and enables communication between trading partners. In addition, it offers SAP Signavio to help customers to discover, analyze, and understand business process operations; industry solutions that provide customers and partners with industry-specific solutions; and SAP LeanIX to visualize enterprise architecture, assess interdependencies and the potential impact of IT modernization, and manage the transition toward the target landscape. Further, the company provides WalkMe to execute workflows; SAP Enable Now, which offers e-learning content embedded in SAP workflows; Taulia solutions for working capital management; and sustainability solutions and services. Additionally, it provides services and support solutions. SAP SE was founded in 1972 and is headquartered in Walldorf, Germany.",
+      "industry_en": "Software - Application",
+      "industry": "Software - Application",
+      "summary": "SAP SE, together with its subsidiaries, provides enterprise application and business solutions worldwide. It offers SAP Business AI; SAP S/4HANA that provides software capabilities for finance, risk a",
+      "website": "https://www.sap.com",
+      "domain": "www.sap.com"
+    },
+    "MCD": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.mcdonalds.com&sz=128",
+      "summary_en": "McDonald's Corporation owns, operates, and franchises restaurants under the McDonald's brand in the United States and internationally. It offers food and beverages, including hamburgers and cheeseburgers, various chicken sandwiches, fries, shakes, frozen desserts, sundaes, soft serve cones, cookies, pies, soft drinks, coffee, and other beverages; and full or limited breakfast, as well as sells various other products during limited-time promotions. The company owns and operates franchised restaurants under various structures, including conventional franchise, developmental license, or affiliate. McDonald's Corporation was founded in 1940 and is based in Chicago, Illinois.",
+      "industry_en": "Restaurants",
+      "industry": "Restaurants",
+      "summary": "McDonald's Corporation owns, operates, and franchises restaurants under the McDonald's brand in the United States and internationally. It offers food and beverages, including hamburgers and cheeseburg",
+      "website": "https://www.mcdonalds.com",
+      "domain": "www.mcdonalds.com"
     },
     "MUFG": {
       "logo_url": "https://www.google.com/s2/favicons?domain=www.mufg.jp&sz=128",
@@ -577,23 +559,50 @@
       "website": "https://www.mufg.jp",
       "domain": "www.mufg.jp"
     },
-    "TTE": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=totalenergies.com&sz=128",
-      "summary_en": "TotalEnergies SE, an integrated energy company, produces and markets oil and biofuels, natural gas, biogas and low-carbon hydrogen, renewables, and electricity in France, the United States, Europe, Brazil, India, and internationally. The company was formerly known as TOTAL SE and changed its name to TotalEnergies SE in June 2021. TotalEnergies SE was incorporated in 1924 and is headquartered in Courbevoie, France.",
-      "industry_en": "Oil & Gas Integrated",
-      "industry": "Oil & Gas Integrated",
-      "summary": "TotalEnergies SE, an integrated energy company, produces and markets oil and biofuels, natural gas, biogas and low-carbon hydrogen, renewables, and electricity in France, the United States, Europe, Br",
-      "website": "https://totalenergies.com",
-      "domain": "totalenergies.com"
+    "TMUS": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.t-mobile.com&sz=128",
+      "summary_en": "T-Mobile US, Inc., together with its subsidiaries, provides wireless communications services in the United States, Puerto Rico, and the United States Virgin Islands. The company offers voice, messaging, and data services to postpaid, prepaid, and wholesale and other services customers. It also provides wireless devices, including smartphones, wearables, tablets, home broadband gateways, headsets, and other mobile communication devices, as well as accessories; financing through equipment installment plans; reinsurance for device insurance policies and extended warranty contracts. The company offers services under the T-Mobile, Metro by T-Mobile, and Mint Mobile brands through its owned and operated retail stores, customer care channels, national retailers, and its websites, as well as through T-Mobile, Metro by T-Mobile, and Mint Mobile apps. It also sells devices to dealers and other third-party distributors for resale through independent third-party retail outlets and various third-party websites. The company was founded in 1994 and is headquartered in Bellevue, Washington. T-Mobile US, Inc. operates as a subsidiary of Deutsche Telekom AG.",
+      "industry_en": "Telecom Services",
+      "industry": "Telecom Services",
+      "summary": "T-Mobile US, Inc., together with its subsidiaries, provides wireless communications services in the United States, Puerto Rico, and the United States Virgin Islands. The company offers voice, messagin",
+      "website": "https://www.t-mobile.com",
+      "domain": "www.t-mobile.com"
     },
-    "SAP": {
-      "logo_url": "https://www.google.com/s2/favicons?domain=www.sap.com&sz=128",
-      "summary_en": "SAP SE, together with its subsidiaries, provides enterprise application and business solutions worldwide. It offers SAP Business AI; SAP S/4HANA that provides software capabilities for finance, risk and project management, procurement, manufacturing, supply chain and asset management, and research and development; SAP SuccessFactors solutions for human resources, including HR, time, payroll, talent and employee experience management, and analytics and planning; and spend management solutions that covers direct and indirect spend, travel and expense, and external workforce management. The company also provides SAP customer experience solutions; SAP Business Technology platform that enables customers and partners to build, integrate, and automate applications; and SAP Business Network, a business-to-business collaboration platform that helps digitalize key business processes across the supply chain and enables communication between trading partners. In addition, it offers SAP Signavio to help customers to discover, analyze, and understand business process operations; industry solutions that provide customers and partners with industry-specific solutions; and SAP LeanIX to visualize enterprise architecture, assess interdependencies and the potential impact of IT modernization, and manage the transition toward the target landscape. Further, the company provides WalkMe to execute workflows; SAP Enable Now, which offers e-learning content embedded in SAP workflows; Taulia solutions for working capital management; and sustainability solutions and services. Additionally, it provides services and support solutions. SAP SE was founded in 1972 and is headquartered in Walldorf, Germany.",
-      "industry_en": "Software - Application",
-      "industry": "Software - Application",
-      "summary": "SAP SE, together with its subsidiaries, provides enterprise application and business solutions worldwide. It offers SAP Business AI; SAP S/4HANA that provides software capabilities for finance, risk a",
-      "website": "https://www.sap.com",
-      "domain": "www.sap.com"
+    "PEP": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.pepsico.com&sz=128",
+      "summary_en": "PepsiCo, Inc. engages in the manufacture, marketing, distribution, and sale of various beverages and convenient foods worldwide. The company operates through six segments: PepsiCo Foods North America; PepsiCo Beverages North America; International Beverages Franchise; Europe, Middle East and Africa; Latin America Foods; and Asia Pacific Foods. It offers cereals, chips, dips, granola bars, oatmeal, pasta, rice, and syrups and mixes; refrigerated dips and spreads; beverage concentrates, fountain syrups, and finished goods; and ready-to-drink tea and coffee products. The company also provides SodaStream sparkling water makers and related products, as well as various dairy products under the Agusha, Chudo, and Domik v Derevne brands. It serves wholesale and other distributors, foodservice customers, grocery stores, drug stores, convenience stores, discount/dollar stores, mass merchandisers, membership stores, hard discounters, e-commerce retailers and authorized independent bottlers, and others through a network of direct-store-delivery, customer warehouse, and distributor networks, as well as directly to consumers through e-commerce platforms and retailers. PepsiCo, Inc. was founded in 1898 and is based in Purchase, New York.",
+      "industry_en": "Beverages - Non-Alcoholic",
+      "industry": "Beverages - Non-Alcoholic",
+      "summary": "PepsiCo, Inc. engages in the manufacture, marketing, distribution, and sale of various beverages and convenient foods worldwide. The company operates through six segments: PepsiCo Foods North America;",
+      "website": "https://www.pepsico.com",
+      "domain": "www.pepsico.com"
+    },
+    "TXN": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.ti.com&sz=128",
+      "summary_en": "Texas Instruments Incorporated designs, manufactures, and sells semiconductors to electronics designers and manufacturers in the United States, China, the rest of Asia, Europe, the Middle East, Africa, Japan, and internationally. It operates through Analog and Embedded Processing segments. The Analog segment offers power products to manage power requirements across various voltage levels, including battery-management solutions, DC/DC switching regulators, AC/DC and isolated controllers and converters, power switches, linear regulators, voltage references, multiphase controllers and power stages, and lighting products. This segment also provides signal chain products that sense, condition, and measure real-world signals and convert them into data to be transferred or converted for further processing and control, such as amplifiers, data converters, interface products, motor drives, clocks, and logic and sensing products. The Embedded Processing segment offers microcontrollers, processors, wireless connectivity, and radar products; and applications processors for specific computing activity. It also provides DLP products primarily for use in projecting high-definition images; calculators; and application-specific integrated circuits. Its products are used in various markets, such as industrial, automotive, personal electronics, communications equipment, enterprise systems, calculators, and others. The company markets and sells its semiconductor products through direct sales and distributors, as well as through its website. Texas Instruments Incorporated was founded in 1930 and is headquartered in Dallas, Texas.",
+      "industry_en": "Semiconductors",
+      "industry": "Semiconductors",
+      "summary": "Texas Instruments Incorporated designs, manufactures, and sells semiconductors to electronics designers and manufacturers in the United States, China, the rest of Asia, Europe, the Middle East, Africa",
+      "website": "https://www.ti.com",
+      "domain": "www.ti.com"
+    },
+    "ANET": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.arista.com&sz=128",
+      "summary_en": "Arista Networks, Inc. engages in the development, marketing, and sale of data-driven, client to cloud networking solutions for AI, data center, campus, and routing environments in the Americas, Europe, the Middle East, Africa, and the Asia-Pacific. Its cloud networking solutions consist of Extensible Operating System (EOS), a publish-subscribe state-sharing networking operating system offered in combination with a set of network applications. The company offers data center, cloud and AI networking, cognitive adjacencies, and cognitive network software and services. It also provides post contract customer support services, such as technical support, hardware repair and replacement parts beyond standard warranty, bug fixes, patches, and upgrade services. The company serves a range of industries comprising internet companies, cloud service providers, financial services organizations, government agencies, media and entertainment, healthcare, oil and gas, education, manufacturing, industrial, and others. It markets and sells its products through distributors, system integrators, value-added resellers, and original equipment manufacturer partners, as well as through its direct sales force. Arista Networks, Inc. was formerly known as Arastra, Inc. and changed its name to Arista Networks, Inc. in October 2008. The company was incorporated in 2004 and is headquartered in Santa Clara, California.",
+      "industry_en": "Computer Hardware",
+      "industry": "Computer Hardware",
+      "summary": "Arista Networks, Inc. engages in the development, marketing, and sale of data-driven, client to cloud networking solutions for AI, data center, campus, and routing environments in the Americas, Europe",
+      "website": "https://www.arista.com",
+      "domain": "www.arista.com"
+    },
+    "BHP": {
+      "logo_url": "https://www.google.com/s2/favicons?domain=www.bhp.com&sz=128",
+      "summary_en": "BHP Group Limited operates as a resources company in Australia, Europe, China, Japan, India, South Korea, rest of Asia, North America, South America, and internationally. The company operates through Copper, Iron Ore, and Coal segments. It also engages in the mining of copper, uranium, gold, zinc, lead, molybdenum, silver, iron ore, cobalt, and metallurgical and energy coal. In addition, the company is involved in the mining, smelting, and refining of nickel, as well as potash development activities. Further, it provides towing, freight, marketing and trading, marketing support, finance, administrative, and other services. BHP Group Limited was founded in 1851 and is headquartered in Melbourne, Australia.",
+      "industry_en": "Other Industrial Metals & Mining",
+      "industry": "Other Industrial Metals & Mining",
+      "summary": "BHP Group Limited operates as a resources company in Australia, Europe, China, Japan, India, South Korea, rest of Asia, North America, South America, and internationally. The company operates through ",
+      "website": "https://www.bhp.com",
+      "domain": "www.bhp.com"
     }
   }
 }

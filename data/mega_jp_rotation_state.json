@@ -1,13 +1,13 @@
 {
-  "mode": "confirm-3",
+  "mode": "long-hold",
   "held_code": "5334",
   "held_name": "日本特殊陶業",
   "held_since": "2026-04-18",
   "confirm_candidate": null,
   "confirm_count": 0,
   "confirm_start": "2026-04-16",
-  "top_streak": 4,
-  "lh_entered": null,
+  "top_streak": 5,
+  "lh_entered": "2026-04-20",
   "buy_price": null,
-  "updated": "2026-04-18"
+  "updated": "2026-04-20"
 }
