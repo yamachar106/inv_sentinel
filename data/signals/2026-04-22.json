@@ -1,6 +1,9 @@
 {
   "date": "2026-04-22",
   "signals": {
+    "mega:US": [
+      "RY"
+    ],
     "mega:JP": [
       "5334",
       "8035",
@@ -43,6 +46,23 @@
     ]
   },
   "enriched": {
+    "mega:US": [
+      {
+        "code": "RY",
+        "signal": "pre_breakout",
+        "close": 176.38999938964844,
+        "high_52w": 180.80999755859375,
+        "distance_pct": -2.4445540781078527,
+        "volume_ratio": 3.123731974202413,
+        "rsi": 81.68055638380345,
+        "above_sma_50": true,
+        "above_sma_200": true,
+        "gc_status": true,
+        "sector": "Finance",
+        "name": "Royal Bank Of Canada Common Stock",
+        "market_cap": 249195878174.0
+      }
+    ],
     "mega:JP": [
       {
         "code": "5334",
@@ -1226,9 +1246,9 @@
   },
   "regime": {
     "trend": "BULL",
-    "price": 59585.859375,
-    "sma50": 55674.86875,
-    "sma200": 49149.01015625,
-    "description": "BULL: 日経225 59,586円 (SMA50: 55,675 > SMA200: 49,149)"
+    "price": 59349.171875,
+    "sma50": 55568.22515625,
+    "sma200": 49049.00375,
+    "description": "BULL: 日経225 59,349円 (SMA50: 55,568 > SMA200: 49,049)"
   }
 }

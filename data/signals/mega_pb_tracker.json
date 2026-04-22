@@ -4,5 +4,11 @@
     "last_notified": "2026-04-09",
     "signal_count": 2,
     "bo_history": []
+  },
+  "RY": {
+    "first_pb_date": "2026-04-22",
+    "last_notified": "2026-04-22",
+    "signal_count": 1,
+    "bo_history": []
   }
 }
