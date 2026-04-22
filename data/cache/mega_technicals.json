@@ -1,5 +1,5 @@
 {
-  "_date": "2026-04-21",
+  "_date": "2026-04-22",
   "rows": [
     {
       "ticker": "NVDA",
@@ -12,7 +12,7 @@
       "rsi": 91.3,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.61,
+      "vol_ratio": 0.62,
       "signal": "PB"
     },
     {
@@ -40,7 +40,7 @@
       "rsi": 82.5,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.72,
+      "vol_ratio": 0.73,
       "signal": "PB"
     },
     {
@@ -54,13 +54,13 @@
       "rsi": 63.4,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 1.15,
+      "vol_ratio": 1.17,
       "signal": "-"
     },
     {
       "ticker": "MSFT",
       "close": 424.1600036621094,
-      "high_52w": 539.8252563476562,
+      "high_52w": 539.8251953125,
       "dist_pct": -21.43,
       "sma20": 383.79,
       "sma50": 393.09,
@@ -68,7 +68,7 @@
       "rsi": 86.3,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.92,
+      "vol_ratio": 0.93,
       "signal": "-"
     },
     {
@@ -110,7 +110,7 @@
       "rsi": 68.9,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.63,
+      "vol_ratio": 0.74,
       "signal": "PB"
     },
     {
@@ -124,7 +124,7 @@
       "rsi": 82.6,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.58,
+      "vol_ratio": 0.59,
       "signal": "-"
     },
     {
@@ -152,7 +152,7 @@
       "rsi": 61.3,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.71,
+      "vol_ratio": 0.8,
       "signal": "PB"
     },
     {
@@ -166,7 +166,7 @@
       "rsi": 45.6,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 1.19,
+      "vol_ratio": 1.38,
       "signal": "-"
     },
     {
@@ -180,7 +180,7 @@
       "rsi": 72.0,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.47,
+      "vol_ratio": 0.69,
       "signal": "-"
     },
     {
@@ -208,7 +208,7 @@
       "rsi": 21.8,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.6,
+      "vol_ratio": 0.76,
       "signal": "-"
     },
     {
@@ -236,7 +236,7 @@
       "rsi": 17.8,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 1.39,
+      "vol_ratio": 1.41,
       "signal": "-"
     },
     {
@@ -264,7 +264,7 @@
       "rsi": 86.3,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.65,
+      "vol_ratio": 0.67,
       "signal": "PB"
     },
     {
@@ -278,7 +278,7 @@
       "rsi": 77.9,
       "gc": true,
       "above_sma200": false,
-      "vol_ratio": 1.24,
+      "vol_ratio": 1.37,
       "signal": "-"
     },
     {
@@ -306,7 +306,7 @@
       "rsi": 96.1,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 1.09,
+      "vol_ratio": 1.11,
       "signal": "-"
     },
     {
@@ -320,7 +320,7 @@
       "rsi": 53.4,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.7,
+      "vol_ratio": 0.73,
       "signal": "PB"
     },
     {
@@ -334,7 +334,7 @@
       "rsi": 43.7,
       "gc": true,
       "above_sma200": false,
-      "vol_ratio": 1.16,
+      "vol_ratio": 1.29,
       "signal": "-"
     },
     {
@@ -348,7 +348,7 @@
       "rsi": 81.0,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.59,
+      "vol_ratio": 0.81,
       "signal": "-"
     },
     {
@@ -362,7 +362,7 @@
       "rsi": 77.9,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.68,
+      "vol_ratio": 0.86,
       "signal": "-"
     },
     {
@@ -376,7 +376,7 @@
       "rsi": 34.4,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.86,
+      "vol_ratio": 1.13,
       "signal": "-"
     },
     {
@@ -446,7 +446,7 @@
       "rsi": 45.2,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 1.03,
+      "vol_ratio": 1.06,
       "signal": "-"
     },
     {
@@ -488,7 +488,7 @@
       "rsi": 42.8,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.49,
+      "vol_ratio": 0.71,
       "signal": "-"
     },
     {
@@ -502,7 +502,7 @@
       "rsi": 64.6,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 1.04,
+      "vol_ratio": 1.05,
       "signal": "-"
     },
     {
@@ -516,7 +516,7 @@
       "rsi": 51.3,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 2.15,
+      "vol_ratio": 2.31,
       "signal": "-"
     },
     {
@@ -558,13 +558,13 @@
       "rsi": 82.7,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.47,
+      "vol_ratio": 0.7,
       "signal": "PB"
     },
     {
       "ticker": "UNH",
       "close": 346.010009765625,
-      "high_52w": 416.2232360839844,
+      "high_52w": 416.2231750488281,
       "dist_pct": -16.87,
       "sma20": 295.58,
       "sma50": 287.98,
@@ -586,7 +586,7 @@
       "rsi": 33.8,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 1.02,
+      "vol_ratio": 1.24,
       "signal": "-"
     },
     {
@@ -614,7 +614,7 @@
       "rsi": 47.7,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 1.77,
+      "vol_ratio": 1.82,
       "signal": "-"
     },
     {
@@ -656,7 +656,7 @@
       "rsi": 41.0,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 1.17,
+      "vol_ratio": 1.32,
       "signal": "-"
     },
     {
@@ -670,7 +670,7 @@
       "rsi": 36.9,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.67,
+      "vol_ratio": 0.77,
       "signal": "-"
     },
     {
@@ -698,7 +698,7 @@
       "rsi": 87.2,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.86,
+      "vol_ratio": 0.91,
       "signal": "PB"
     },
     {
@@ -748,13 +748,13 @@
       "close": 65.0,
       "high_52w": 65.0,
       "dist_pct": 0.0,
-      "sma20": 64.28,
-      "sma50": 63.84,
-      "sma200": 61.54,
+      "sma20": 64.43,
+      "sma50": 63.87,
+      "sma200": 61.56,
       "rsi": 99.0,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0,
+      "vol_ratio": 0.0,
       "signal": "-"
     },
     {
@@ -810,7 +810,7 @@
       "rsi": 57.3,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.94,
+      "vol_ratio": 1.02,
       "signal": "-"
     },
     {
@@ -824,7 +824,7 @@
       "rsi": 38.8,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.65,
+      "vol_ratio": 0.83,
       "signal": "-"
     },
     {
@@ -844,7 +844,7 @@
     {
       "ticker": "TMUS",
       "close": 195.38999938964844,
-      "high_52w": 257.77569580078125,
+      "high_52w": 257.7757263183594,
       "dist_pct": -24.2,
       "sma20": 201.29,
       "sma50": 208.89,
@@ -866,7 +866,7 @@
       "rsi": 49.1,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.71,
+      "vol_ratio": 0.93,
       "signal": "-"
     },
     {
@@ -894,7 +894,7 @@
       "rsi": 99.1,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 1.19,
+      "vol_ratio": 1.2,
       "signal": "-"
     },
     {
