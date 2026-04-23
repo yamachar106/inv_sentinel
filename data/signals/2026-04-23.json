@@ -1,6 +1,9 @@
 {
   "date": "2026-04-23",
   "signals": {
+    "mega:US": [
+      "TXN"
+    ],
     "mega:JP": [
       "8035",
       "5334",
@@ -45,6 +48,23 @@
     ]
   },
   "enriched": {
+    "mega:US": [
+      {
+        "code": "TXN",
+        "signal": "breakout_overheated",
+        "close": 282.2300109863281,
+        "high_52w": 284.0899963378906,
+        "distance_pct": -0.654716947283942,
+        "volume_ratio": 3.691905643503753,
+        "rsi": 96.40883556924574,
+        "above_sma_50": true,
+        "above_sma_200": true,
+        "gc_status": true,
+        "sector": "Technology",
+        "name": "Texas Instruments Incorporated Common Stock",
+        "market_cap": 209242693302.0
+      }
+    ],
     "mega:JP": [
       {
         "code": "8035",
@@ -1290,9 +1310,9 @@
   },
   "regime": {
     "trend": "BULL",
-    "price": 59140.23046875,
-    "sma50": 55730.39453125,
-    "sma200": 49243.95736328125,
-    "description": "BULL: 日経225 59,140円 (SMA50: 55,730 > SMA200: 49,244)"
+    "price": 59585.859375,
+    "sma50": 55674.86875,
+    "sma200": 49149.01015625,
+    "description": "BULL: 日経225 59,586円 (SMA50: 55,675 > SMA200: 49,149)"
   }
 }
