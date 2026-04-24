@@ -1,6 +1,10 @@
 {
   "date": "2026-04-24",
   "signals": {
+    "mega:US": [
+      "INTC",
+      "TXN"
+    ],
     "mega:JP": [
       "8035",
       "5803",
@@ -45,6 +49,38 @@
     ]
   },
   "enriched": {
+    "mega:US": [
+      {
+        "code": "INTC",
+        "signal": "pre_breakout",
+        "close": 82.54000091552734,
+        "high_52w": 85.22000122070312,
+        "distance_pct": -3.144802002801085,
+        "volume_ratio": 2.3243389140686714,
+        "rsi": 87.73762979756005,
+        "above_sma_50": true,
+        "above_sma_200": true,
+        "gc_status": true,
+        "sector": "Technology",
+        "name": "Intel Corporation Common Stock",
+        "market_cap": 343412786955.0
+      },
+      {
+        "code": "TXN",
+        "signal": "pre_breakout",
+        "close": 277.1400146484375,
+        "high_52w": 287.8299865722656,
+        "distance_pct": -3.7139882647856735,
+        "volume_ratio": 1.9027289417148692,
+        "rsi": 91.05218727266367,
+        "above_sma_50": true,
+        "above_sma_200": true,
+        "gc_status": true,
+        "sector": "Technology",
+        "name": "Texas Instruments Incorporated Common Stock",
+        "market_cap": 209242693302.0
+      }
+    ],
     "mega:JP": [
       {
         "code": "8035",
@@ -1290,9 +1326,9 @@
   },
   "regime": {
     "trend": "BULL",
-    "price": 59716.1796875,
-    "sma50": 55771.70734375,
-    "sma200": 49340.10130859375,
-    "description": "BULL: 日経225 59,716円 (SMA50: 55,772 > SMA200: 49,340)"
+    "price": 59140.23046875,
+    "sma50": 55730.39453125,
+    "sma200": 49243.95736328125,
+    "description": "BULL: 日経225 59,140円 (SMA50: 55,730 > SMA200: 49,244)"
   }
 }

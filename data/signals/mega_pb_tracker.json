@@ -10,5 +10,17 @@
     "last_notified": "2026-04-22",
     "signal_count": 1,
     "bo_history": []
+  },
+  "INTC": {
+    "first_pb_date": "2026-04-24",
+    "last_notified": "2026-04-24",
+    "signal_count": 1,
+    "bo_history": []
+  },
+  "TXN": {
+    "first_pb_date": "2026-04-24",
+    "last_notified": "2026-04-24",
+    "signal_count": 1,
+    "bo_history": []
   }
 }
