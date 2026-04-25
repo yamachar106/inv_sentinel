@@ -1,5 +1,5 @@
 {
-  "_date": "2026-04-24",
+  "_date": "2026-04-25",
   "rows": [
     {
       "ticker": "NVDA",
@@ -42,6 +42,20 @@
       "above_sma200": true,
       "vol_ratio": 0.94,
       "signal": "PB"
+    },
+    {
+      "ticker": "AAPL",
+      "close": 271.05999755859375,
+      "high_52w": 285.9224548339844,
+      "dist_pct": -5.2,
+      "sma20": 261.4,
+      "sma50": 260.15,
+      "sma200": 253.34,
+      "rsi": 62.0,
+      "gc": true,
+      "above_sma200": true,
+      "vol_ratio": 0.89,
+      "signal": "-"
     },
     {
       "ticker": "MSFT",
@@ -734,13 +748,13 @@
       "close": 64.54000091552734,
       "high_52w": 65.0,
       "dist_pct": -0.71,
-      "sma20": 64.69,
-      "sma50": 63.91,
-      "sma200": 61.61,
+      "sma20": 64.79,
+      "sma50": 63.92,
+      "sma200": 61.64,
       "rsi": 0.0,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0,
+      "vol_ratio": 0.0,
       "signal": "PB"
     },
     {
@@ -830,7 +844,7 @@
     {
       "ticker": "TMUS",
       "close": 189.8000030517578,
-      "high_52w": 255.5989227294922,
+      "high_52w": 255.59890747070312,
       "dist_pct": -25.74,
       "sma20": 198.22,
       "sma50": 208.27,
