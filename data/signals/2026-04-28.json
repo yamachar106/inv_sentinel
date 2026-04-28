@@ -1,6 +1,9 @@
 {
   "date": "2026-04-28",
   "signals": {
+    "mega:US": [
+      "KO"
+    ],
     "mega:JP": [
       "5334",
       "6752",
@@ -49,6 +52,23 @@
     ]
   },
   "enriched": {
+    "mega:US": [
+      {
+        "code": "KO",
+        "signal": "pre_breakout",
+        "close": 78.3499984741211,
+        "high_52w": 81.44001888827108,
+        "distance_pct": -3.7942285087006673,
+        "volume_ratio": 2.2142216133493138,
+        "rsi": 54.54544859706681,
+        "above_sma_50": true,
+        "above_sma_200": true,
+        "gc_status": false,
+        "sector": "Consumer Staples",
+        "name": "Coca-Cola Company (The) Common Stock",
+        "market_cap": 329827234965.0
+      }
+    ],
     "mega:JP": [
       {
         "code": "5334",
@@ -1418,9 +1438,9 @@
   },
   "regime": {
     "trend": "BULL",
-    "price": 59917.4609375,
-    "sma50": 55889.167578125,
-    "sma200": 49543.6313671875,
-    "description": "BULL: 日経225 59,917円 (SMA50: 55,889 > SMA200: 49,544)"
+    "price": 60537.359375,
+    "sma50": 55829.657734375,
+    "sma200": 49442.85646484375,
+    "description": "BULL: 日経225 60,537円 (SMA50: 55,830 > SMA200: 49,443)"
   }
 }

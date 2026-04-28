@@ -22,5 +22,11 @@
     "last_notified": "2026-04-24",
     "signal_count": 1,
     "bo_history": []
+  },
+  "KO": {
+    "first_pb_date": "2026-04-28",
+    "last_notified": "2026-04-28",
+    "signal_count": 1,
+    "bo_history": []
   }
 }
