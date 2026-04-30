@@ -28,5 +28,11 @@
     "last_notified": "2026-04-28",
     "signal_count": 1,
     "bo_history": []
+  },
+  "AMZN": {
+    "first_pb_date": "2026-04-30",
+    "last_notified": "2026-04-30",
+    "signal_count": 1,
+    "bo_history": []
   }
 }
