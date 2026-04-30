@@ -1,5 +1,5 @@
 {
-  "_date": "2026-04-29",
+  "_date": "2026-04-30",
   "rows": [
     {
       "ticker": "NVDA",
@@ -12,7 +12,7 @@
       "rsi": 74.8,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.66,
+      "vol_ratio": 0.7,
       "signal": "PB"
     },
     {
@@ -26,7 +26,7 @@
       "rsi": 77.6,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 1.04,
+      "vol_ratio": 1.21,
       "signal": "PB"
     },
     {
@@ -40,7 +40,7 @@
       "rsi": 77.7,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 1.11,
+      "vol_ratio": 1.15,
       "signal": "PB"
     },
     {
@@ -54,7 +54,7 @@
       "rsi": 60.6,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.59,
+      "vol_ratio": 0.73,
       "signal": "-"
     },
     {
@@ -68,7 +68,7 @@
       "rsi": 73.5,
       "gc": true,
       "above_sma200": false,
-      "vol_ratio": 0.93,
+      "vol_ratio": 1.09,
       "signal": "-"
     },
     {
@@ -82,7 +82,7 @@
       "rsi": 83.3,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 1.23,
+      "vol_ratio": 1.51,
       "signal": "PB"
     },
     {
@@ -96,7 +96,7 @@
       "rsi": 63.3,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.75,
+      "vol_ratio": 0.76,
       "signal": "PB"
     },
     {
@@ -110,7 +110,7 @@
       "rsi": 71.9,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.46,
+      "vol_ratio": 0.63,
       "signal": "PB"
     },
     {
@@ -124,7 +124,7 @@
       "rsi": 65.6,
       "gc": true,
       "above_sma200": false,
-      "vol_ratio": 1.16,
+      "vol_ratio": 1.24,
       "signal": "-"
     },
     {
@@ -138,7 +138,7 @@
       "rsi": 63.5,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.68,
+      "vol_ratio": 0.71,
       "signal": "-"
     },
     {
@@ -166,7 +166,7 @@
       "rsi": 23.8,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 1.13,
+      "vol_ratio": 1.33,
       "signal": "-"
     },
     {
@@ -180,7 +180,7 @@
       "rsi": 48.6,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.8,
+      "vol_ratio": 0.82,
       "signal": "-"
     },
     {
@@ -222,7 +222,7 @@
       "rsi": 19.8,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 1.84,
+      "vol_ratio": 2.26,
       "signal": "-"
     },
     {
@@ -236,7 +236,7 @@
       "rsi": 82.1,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 1.16,
+      "vol_ratio": 1.18,
       "signal": "PB"
     },
     {
@@ -250,7 +250,7 @@
       "rsi": 43.9,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.72,
+      "vol_ratio": 0.73,
       "signal": "-"
     },
     {
@@ -264,7 +264,7 @@
       "rsi": 75.9,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.85,
+      "vol_ratio": 0.86,
       "signal": "PB"
     },
     {
@@ -278,7 +278,7 @@
       "rsi": 28.3,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.86,
+      "vol_ratio": 0.88,
       "signal": "-"
     },
     {
@@ -334,7 +334,7 @@
       "rsi": 87.3,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 2.18,
+      "vol_ratio": 2.2,
       "signal": "BO"
     },
     {
@@ -348,7 +348,7 @@
       "rsi": 29.8,
       "gc": true,
       "above_sma200": false,
-      "vol_ratio": 0.55,
+      "vol_ratio": 0.56,
       "signal": "-"
     },
     {
@@ -362,7 +362,7 @@
       "rsi": 60.0,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.91,
+      "vol_ratio": 1.03,
       "signal": "PB"
     },
     {
@@ -404,7 +404,7 @@
       "rsi": 70.6,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.71,
+      "vol_ratio": 0.72,
       "signal": "PB"
     },
     {
@@ -432,7 +432,7 @@
       "rsi": 51.9,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.83,
+      "vol_ratio": 0.87,
       "signal": "-"
     },
     {
@@ -446,7 +446,7 @@
       "rsi": 58.2,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.66,
+      "vol_ratio": 0.68,
       "signal": "-"
     },
     {
@@ -460,7 +460,7 @@
       "rsi": 35.2,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 1.03,
+      "vol_ratio": 1.04,
       "signal": "-"
     },
     {
@@ -488,7 +488,7 @@
       "rsi": 41.2,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.77,
+      "vol_ratio": 0.79,
       "signal": "-"
     },
     {
@@ -502,13 +502,13 @@
       "rsi": 53.1,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.79,
+      "vol_ratio": 1.16,
       "signal": "PB"
     },
     {
       "ticker": "UNH",
       "close": 370.739990234375,
-      "high_52w": 400.1562805175781,
+      "high_52w": 400.15631103515625,
       "dist_pct": -7.35,
       "sma20": 323.23,
       "sma50": 297.45,
@@ -516,7 +516,7 @@
       "rsi": 94.3,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.8,
+      "vol_ratio": 1.02,
       "signal": "-"
     },
     {
@@ -530,7 +530,7 @@
       "rsi": 53.9,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.53,
+      "vol_ratio": 0.6,
       "signal": "-"
     },
     {
@@ -600,7 +600,7 @@
       "rsi": 20.3,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.72,
+      "vol_ratio": 0.76,
       "signal": "-"
     },
     {
@@ -642,7 +642,7 @@
       "rsi": 43.1,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 1.71,
+      "vol_ratio": 1.77,
       "signal": "-"
     },
     {
@@ -656,7 +656,7 @@
       "rsi": 51.5,
       "gc": false,
       "above_sma200": true,
-      "vol_ratio": 0.74,
+      "vol_ratio": 0.77,
       "signal": "-"
     },
     {
@@ -670,7 +670,7 @@
       "rsi": 58.8,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 1.11,
+      "vol_ratio": 1.16,
       "signal": "-"
     },
     {
@@ -712,7 +712,7 @@
       "rsi": 70.0,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.83,
+      "vol_ratio": 0.84,
       "signal": "-"
     },
     {
@@ -726,7 +726,7 @@
       "rsi": 34.5,
       "gc": true,
       "above_sma200": false,
-      "vol_ratio": 0.95,
+      "vol_ratio": 1.13,
       "signal": "-"
     },
     {
@@ -740,7 +740,7 @@
       "rsi": 65.0,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.41,
+      "vol_ratio": 0.81,
       "signal": "PB"
     },
     {
@@ -754,7 +754,7 @@
       "rsi": 51.2,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.58,
+      "vol_ratio": 0.59,
       "signal": "PB"
     },
     {
@@ -768,7 +768,7 @@
       "rsi": 11.0,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.84,
+      "vol_ratio": 0.87,
       "signal": "-"
     },
     {
@@ -776,13 +776,13 @@
       "close": 64.54000091552734,
       "high_52w": 65.0,
       "dist_pct": -0.71,
-      "sma20": 64.88,
-      "sma50": 63.94,
-      "sma200": 61.69,
+      "sma20": 64.89,
+      "sma50": 63.96,
+      "sma200": 61.72,
       "rsi": 0.0,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0,
+      "vol_ratio": 0.0,
       "signal": "PB"
     },
     {
@@ -796,7 +796,7 @@
       "rsi": 56.2,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.83,
+      "vol_ratio": 0.91,
       "signal": "PB"
     },
     {
@@ -810,7 +810,7 @@
       "rsi": 70.1,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.88,
+      "vol_ratio": 0.89,
       "signal": "-"
     },
     {
@@ -824,7 +824,7 @@
       "rsi": 43.0,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 1.0,
+      "vol_ratio": 1.01,
       "signal": "-"
     },
     {
@@ -838,7 +838,7 @@
       "rsi": 48.3,
       "gc": true,
       "above_sma200": false,
-      "vol_ratio": 0.77,
+      "vol_ratio": 0.83,
       "signal": "-"
     },
     {
@@ -852,7 +852,7 @@
       "rsi": 54.8,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 1.01,
+      "vol_ratio": 1.03,
       "signal": "-"
     },
     {
@@ -866,7 +866,7 @@
       "rsi": 28.4,
       "gc": false,
       "above_sma200": false,
-      "vol_ratio": 0.7,
+      "vol_ratio": 1.09,
       "signal": "-"
     },
     {
@@ -908,7 +908,7 @@
       "rsi": 36.0,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.5,
+      "vol_ratio": 0.54,
       "signal": "-"
     },
     {
@@ -922,7 +922,7 @@
       "rsi": 49.4,
       "gc": true,
       "above_sma200": true,
-      "vol_ratio": 0.54,
+      "vol_ratio": 0.6,
       "signal": "-"
     }
   ]
