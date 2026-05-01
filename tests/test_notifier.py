@@ -222,6 +222,7 @@ class TestNotifySlack:
             result = notify_slack(df, "20260401")
             assert result is False
 
+    @patch("screener.config.SYSTEM_ENABLED", True)
     @patch("screener.notifier.urlopen")
     def test_successful_send(self, mock_urlopen):
         mock_resp = MagicMock()
@@ -240,6 +241,7 @@ class TestNotifySlack:
             assert result is True
             mock_urlopen.assert_called_once()
 
+    @patch("screener.config.SYSTEM_ENABLED", True)
     @patch("screener.notifier.urlopen", side_effect=Exception("Network error"))
     def test_network_error(self, mock_urlopen):
         with patch.dict(os.environ, {"SLACK_WEBHOOK_URL": "https://hooks.slack.com/test"}):

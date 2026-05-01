@@ -26,6 +26,11 @@ from screener.universe import load_universe
 
 
 def main():
+    from screener.config import SYSTEM_ENABLED
+    if not SYSTEM_ENABLED:
+        print(">> SYSTEM_ENABLED=False — パイプライン無効化中。終了します。")
+        return
+
     parser = argparse.ArgumentParser(description="新高値ブレイクアウト監視")
     parser.add_argument("--codes", type=str, default=None,
                         help="カンマ区切りの銘柄コード (例: 7974,6758 / AAPL,MSFT)")

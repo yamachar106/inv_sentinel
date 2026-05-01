@@ -81,6 +81,10 @@ def _resolve_webhook_url(strategy: str = "", market: str = "") -> str | None:
 
 def _send_slack(webhook_url: str, message: str, max_retries: int = 3) -> bool:
     """Slack Webhook にメッセージを送信する（リトライ付き）"""
+    from screener.config import SYSTEM_ENABLED
+    if not SYSTEM_ENABLED:
+        return True  # サイレントスキップ（エラーとして扱わない）
+
     import time as _time
     payload = json.dumps({"text": message}).encode("utf-8")
     req = Request(webhook_url, data=payload, headers={"Content-Type": "application/json"})

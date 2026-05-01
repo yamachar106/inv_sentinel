@@ -68,6 +68,7 @@ def check_slack(timeout: int = 10) -> tuple[bool, str]:
 def run_healthcheck(
     include_nasdaq: bool = True,
     verbose: bool = True,
+    _force: bool = False,
 ) -> bool:
     """
     全データソースのヘルスチェックを実行する。
@@ -79,6 +80,12 @@ def run_healthcheck(
     Returns:
         全チェック通過ならTrue
     """
+    from screener.config import SYSTEM_ENABLED
+    if not SYSTEM_ENABLED and not _force:
+        if verbose:
+            print("  [SKIP] SYSTEM_ENABLED=False — ヘルスチェック省略")
+        return True
+
     checks = [
         ("yfinance", check_yfinance),
         ("IR Bank", check_irbank),

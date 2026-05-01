@@ -40,6 +40,11 @@ def main(
     grade_notify: str | None = None,
     refresh_earnings: bool = False,
 ):
+    from screener.config import SYSTEM_ENABLED
+    if not SYSTEM_ENABLED:
+        print(">> SYSTEM_ENABLED=False — パイプライン無効化中。終了します。")
+        return
+
     target_date = date or datetime.today().strftime("%Y%m%d")
     print(f">> 黒字転換スクリーニング実行: {target_date}")
 

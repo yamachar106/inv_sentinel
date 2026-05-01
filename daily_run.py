@@ -977,6 +977,11 @@ def _run_new_strategy_scans(today: str, dry_run: bool = False, regime: str = "")
 
 
 def main():
+    from screener.config import SYSTEM_ENABLED
+    if not SYSTEM_ENABLED:
+        print(">> SYSTEM_ENABLED=False — パイプライン無効化中。終了します。")
+        return
+
     parser = argparse.ArgumentParser(description="MEGA BreakOut デイリーランナー")
     parser.add_argument("--universe", type=str, default="us_all",
                         help="USユニバース (デフォルト: us_all)")

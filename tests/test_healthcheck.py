@@ -102,14 +102,14 @@ class TestRunHealthcheck:
     @patch("screener.healthcheck.check_irbank", return_value=(True, "OK"))
     @patch("screener.healthcheck.check_yfinance", return_value=(True, "OK"))
     def test_all_pass(self, mock_yf, mock_ir, mock_slack):
-        result = run_healthcheck(include_nasdaq=False, verbose=False)
+        result = run_healthcheck(include_nasdaq=False, verbose=False, _force=True)
         assert result is True
 
     @patch("screener.healthcheck.check_slack", return_value=(True, "OK"))
     @patch("screener.healthcheck.check_irbank", return_value=(False, "NG"))
     @patch("screener.healthcheck.check_yfinance", return_value=(True, "OK"))
     def test_one_fail(self, mock_yf, mock_ir, mock_slack):
-        result = run_healthcheck(include_nasdaq=False, verbose=False)
+        result = run_healthcheck(include_nasdaq=False, verbose=False, _force=True)
         assert result is False
 
     @patch("screener.healthcheck.check_nasdaq_api", return_value=(True, "OK"))
@@ -117,5 +117,5 @@ class TestRunHealthcheck:
     @patch("screener.healthcheck.check_irbank", return_value=(True, "OK"))
     @patch("screener.healthcheck.check_yfinance", return_value=(True, "OK"))
     def test_with_nasdaq(self, mock_yf, mock_ir, mock_slack, mock_nasdaq):
-        result = run_healthcheck(include_nasdaq=True, verbose=False)
+        result = run_healthcheck(include_nasdaq=True, verbose=False, _force=True)
         assert result is True
